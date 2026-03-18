@@ -1,0 +1,36 @@
+---
+description: memobank memory protocol
+globs: ["**/*"]
+alwaysApply: false
+---
+
+# Memory Protocol
+
+This project uses memobank for persistent memory.
+
+## Before Starting Work
+
+Recall relevant project context:
+
+```bash
+memo recall "project context"
+```
+
+## After Finishing Work
+
+Capture learnings and insights:
+
+```bash
+memo capture --auto
+```
+
+## Useful Commands
+
+- `memo recall <query>` - Search and display relevant memories
+- `memo search <query>` - Debug search without updating MEMORY.md
+- `memo write <type>` - Manually create a new memory
+- `memo capture` - Extract memories from session text
+- `memo map` - Show memory summary
+- `memo review` - List memories due for review
+
+For more information, run: `memo --help`
