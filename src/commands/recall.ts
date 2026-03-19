@@ -1,14 +1,14 @@
 /**
  * Recall command
- * Hot path - called by memobank-skill before every session
+ * Search memories and write to MEMORY.md
  */
 
-import { recall as runRecall, writeRecallResults } from '../core/retriever';
-import { loadConfig } from '../config';
 import { findRepoRoot } from '../core/store';
+import { loadConfig } from '../config';
+import { recall, writeRecallResults } from '../core/retriever';
 import { TextEngine } from '../engines/text-engine';
 import { EmbeddingGenerator } from '../core/embedding';
-import { RecallResult } from '../types';
+import { MemoryScope } from '../types';
 
 export interface RecallOptions {
   top?: number;
@@ -16,20 +16,21 @@ export interface RecallOptions {
   format?: string;
   dryRun?: boolean;
   repo?: string;
+  scope?: string;
+  explain?: boolean;
 }
 
-export async function recall(query: string, options: RecallOptions = {}): Promise<void> {
-  const cwd = process.cwd();
-  const repoRoot = findRepoRoot(cwd, options.repo);
+export async function recallCommand(query: string, options: RecallOptions): Promise<void> {
+  const repoRoot = findRepoRoot(process.cwd(), options.repo);
   const config = loadConfig(repoRoot);
 
-  // Override config with options
-  const topK = options.top ?? config.memory.top_k;
-  const engineName = options.engine ?? config.embedding.engine;
+  if (options.top) { config.memory.top_k = parseInt(String(options.top), 10); }
 
-  // Get engine
-  let engine: any;
-  if (engineName === 'lancedb') {
+  const scope = (options.scope as MemoryScope) || 'all';
+  const explain = options.explain || false;
+
+  let engine;
+  if (options.engine === 'lancedb') {
     try {
       const { LanceDbEngine } = await import('../engines/lancedb-engine');
       const embedConfig = EmbeddingGenerator.fromMemoConfig(config);
@@ -37,29 +38,23 @@ export async function recall(query: string, options: RecallOptions = {}): Promis
         throw new Error('OPENAI_API_KEY not set or embedding config missing');
       }
       const embeddingGenerator = new EmbeddingGenerator(embedConfig);
-      const indexDir = findRepoRoot(cwd, options.repo);
-      engine = new LanceDbEngine(indexDir, embeddingGenerator);
-    } catch (e) {
-      console.error('LanceDB engine not available. Falling back to text engine.');
-      console.error(`Error: ${(e as Error).message}`);
+      engine = new LanceDbEngine(repoRoot, embeddingGenerator);
+    } catch {
+      console.warn('LanceDB not available, falling back to text engine.');
       engine = new TextEngine();
     }
-  } else {
-    engine = new TextEngine();
   }
 
-  // Run recall
-  const { results, markdown } = await runRecall(query, repoRoot, config, engine);
+  const { results, markdown } = await recall(query, repoRoot, config, engine, scope, explain);
 
-  // Write MEMORY.md unless dry-run
-  if (!options.dryRun) {
-    writeRecallResults(repoRoot, results, query, engineName);
-  }
-
-  // Output
   if (options.format === 'json') {
     console.log(JSON.stringify(results, null, 2));
-  } else {
-    console.log(markdown);
+    return;
+  }
+
+  console.log(markdown);
+
+  if (!options.dryRun) {
+    writeRecallResults(repoRoot, results, query, config.embedding.engine);
   }
 }

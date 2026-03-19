@@ -1,59 +1,61 @@
 /**
  * Retriever module
  * Orchestrates engine search and formats output for MEMORY.md injection
- * Tracks access patterns for lifecycle management
  */
 
-import { RecallResult, MemoConfig } from '../types';
+import { RecallResult, MemoConfig, MemoryScope } from '../types';
 import { EngineAdapter } from '../engines/engine-adapter';
-import { loadAll, writeMemoryMd, findRepoRoot } from './store';
+import { loadAll, writeMemoryMd } from './store';
 import { TextEngine } from '../engines/text-engine';
 import { recordAccess } from './lifecycle-manager';
 
-// Simple token estimation (rough approximation: ~4 chars per token)
 function estimateTokenCount(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
 /**
  * Recall memories for a query
- * Returns both the results and formatted markdown
- * Records access for lifecycle tracking
  */
 export async function recall(
   query: string,
   repoRoot: string,
   config: MemoConfig,
-  engine?: EngineAdapter
+  engine?: EngineAdapter,
+  scope: MemoryScope = 'all',
+  explain: boolean = false
 ): Promise<{ results: RecallResult[]; markdown: string }> {
-  // Load all memories
-  const memories = loadAll(repoRoot);
-
-  // Use provided engine or default to text engine
+  const memories = loadAll(repoRoot, scope);
   const searchEngine = engine || new TextEngine();
-
-  // Run search
   let results = await searchEngine.search(query, memories, config.memory.top_k);
 
-  // Record access for each recalled memory
+  // Attach scope from memory file to result
+  results = results.map(r => ({
+    ...r,
+    memory: { ...r.memory, scope: r.memory.scope },
+  }));
+
   for (const result of results) {
     recordAccess(repoRoot, result.memory.path, query);
   }
 
-  // Truncate if over token budget
-  let markdown = formatResultsAsMarkdown(results, query, config.embedding.engine, memories.length);
+  let markdown = formatResultsAsMarkdown(results, query, config.embedding.engine, memories.length, scope, explain);
   let tokenCount = estimateTokenCount(markdown);
 
   if (tokenCount > config.memory.token_budget) {
-    // Remove results until under budget
     while (results.length > 0 && tokenCount > config.memory.token_budget) {
       results.pop();
-      markdown = formatResultsAsMarkdown(results, query, config.embedding.engine, memories.length);
+      markdown = formatResultsAsMarkdown(results, query, config.embedding.engine, memories.length, scope, explain);
       tokenCount = estimateTokenCount(markdown);
     }
   }
 
   return { results, markdown };
+}
+
+function scopeLabel(scope?: MemoryScope | string): string {
+  if (scope === 'team') { return '👥 team'; }
+  if (scope === 'personal') { return '👤 personal'; }
+  return '';
 }
 
 /**
@@ -63,7 +65,9 @@ function formatResultsAsMarkdown(
   results: RecallResult[],
   query: string,
   engine: string,
-  totalMemories: number
+  totalMemories: number,
+  scope: MemoryScope = 'all',
+  explain: boolean = false
 ): string {
   let markdown = `<!-- Last updated: ${new Date().toISOString()} | query: "${query}" | engine: ${engine} | top ${results.length} of ${totalMemories} -->\n\n`;
   markdown += `## Recalled Memory\n\n`;
@@ -77,10 +81,22 @@ function formatResultsAsMarkdown(
       const tagStr = memory.tags.length > 0 ? ` · tags: ${memory.tags.join(', ')}` : '';
       const relativePath = memory.path.replace(/^.*\/memobank\//, '');
 
-      markdown += `### [${memory.type}] ${memory.name}${confidenceStr}\n`;
+      // Show scope label only when results come from both sources
+      const showScope = scope === 'all' && memory.scope !== undefined;
+      const sourcePart = showScope ? ` | ${scopeLabel(memory.scope)}` : '';
+
+      markdown += `### [score: ${score.toFixed(2)}${sourcePart}] ${memory.name}${confidenceStr}\n`;
+
+      if (explain && result.scoreBreakdown) {
+        const b = result.scoreBreakdown;
+        const parts = [`keyword(${b.keyword.toFixed(2)})`, `tags(${b.tags.toFixed(2)})`, `recency(${b.recency.toFixed(2)})`];
+        markdown += `  matched: ${parts.join(' + ')}\n`;
+      }
+
       markdown += `> ${memory.description}\n`;
       markdown += `> \`${relativePath}\`${tagStr}\n\n`;
     }
+    markdown += `---\n*To flag a result: memo correct <file> --reason "not relevant"*\n\n`;
   }
 
   const tokenCount = estimateTokenCount(markdown);

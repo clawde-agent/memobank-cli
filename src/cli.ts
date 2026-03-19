@@ -7,7 +7,7 @@
 
 import { Command } from 'commander';
 import { installCommand } from './commands/install';
-import { recall } from './commands/recall';
+import { recallCommand, RecallOptions } from './commands/recall';
 import { search } from './commands/search';
 import { capture } from './commands/capture';
 import { writeMemoryCommand } from './commands/write';
@@ -67,15 +67,11 @@ program
   .option('--format <format>', 'Output format (text|json)', 'text')
   .option('--dry-run', 'Print without writing MEMORY.md', false)
   .option('--repo <path>', 'Memobank repository path')
-  .action(async (query, options) => {
+  .option('--scope <scope>', 'Limit search scope: personal|team|all (default: all)')
+  .option('--explain', 'Show score breakdown for each result')
+  .action(async (query: string, options: RecallOptions) => {
     try {
-      await recall(query, {
-        top: parseInt(options.top),
-        engine: options.engine,
-        format: options.format,
-        dryRun: options.dryRun,
-        repo: options.repo,
-      });
+      await recallCommand(query, options);
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`);
       process.exit(1);
