@@ -8,7 +8,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { getTeamDir, migrateToPersonal, getPersonalDir } from '../core/store';
 import { loadConfig, writeConfig } from '../config';
 
@@ -110,7 +110,7 @@ export async function teamSync(repoRoot: string): Promise<void> {
   const branch = config.team.branch;
 
   console.log('Pulling from team remote...');
-  execSync(`git -C "${teamDir}" pull origin ${branch}`, { stdio: 'inherit' });
+  execFileSync('git', ['-C', teamDir, 'pull', 'origin', branch], { stdio: 'inherit' });
 
   execSync(`git -C "${teamDir}" add -A`, { stdio: 'pipe' });
 
@@ -128,7 +128,7 @@ export async function teamSync(repoRoot: string): Promise<void> {
       { stdio: 'inherit' }
     );
     console.log('Pushing...');
-    execSync(`git -C "${teamDir}" push origin ${branch}`, { stdio: 'inherit' });
+    execFileSync('git', ['-C', teamDir, 'push', 'origin', branch], { stdio: 'inherit' });
     console.log('✓ Sync complete.');
   } else {
     console.log('Nothing to commit. Repository is up to date.');
@@ -147,17 +147,20 @@ export async function teamPublish(filePath: string, repoRoot: string): Promise<v
   // import path to avoid compile-time module-not-found errors)
   try {
     const scanPath = './scan';
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const scanModule: any = await import(scanPath);
-    const findings: string[] = scanModule.scanFile(absoluteFile);
+    const { scanFile } = await import(scanPath);
+    const findings = (scanFile as (f: string) => string[])(absoluteFile);
     if (findings.length > 0) {
       console.error('⚠️  Potential secrets found — aborting publish:');
       findings.forEach((f: string) => console.error(`  ${f}`));
       console.error('→ Fix manually or run: memo scan --fix <file>');
       process.exit(1);
     }
-  } catch {
-    // scan module not yet available — skip scanning
+  } catch (e) {
+    const err = e as NodeJS.ErrnoException;
+    if (err.code !== 'MODULE_NOT_FOUND') {
+      throw e; // re-throw non-import errors
+    }
+    // scan module not yet available — skip scanning (will be created in Task 7)
   }
 
   const teamDir = getTeamDir(repoRoot);
@@ -180,11 +183,13 @@ export async function teamStatus(repoRoot: string): Promise<void> {
     return;
   }
   try {
-    const status = execSync(`git -C "${teamDir}" status --short`, { encoding: 'utf-8' });
-    const log = execSync(
-      `git -C "${teamDir}" log --oneline -5 2>/dev/null || echo "(no commits)"`,
-      { encoding: 'utf-8', shell: '/bin/sh' }
-    );
+    const status = execFileSync('git', ['-C', teamDir, 'status', '--short'], { encoding: 'utf-8' });
+    let log = '';
+    try {
+      log = execFileSync('git', ['-C', teamDir, 'log', '--oneline', '-5'], { encoding: 'utf-8' });
+    } catch {
+      log = '(no commits)';
+    }
     console.log('Team repository status:');
     console.log(status || '  (clean)');
     console.log('\nRecent commits:');
