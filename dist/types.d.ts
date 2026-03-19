@@ -4,6 +4,7 @@
 export type MemoryType = 'lesson' | 'decision' | 'workflow' | 'architecture';
 export type Engine = 'text' | 'lancedb';
 export type Confidence = 'low' | 'medium' | 'high';
+export type MemoryScope = 'personal' | 'team' | 'all';
 export interface MemoryFile {
     path: string;
     name: string;
@@ -15,10 +16,22 @@ export interface MemoryFile {
     review_after?: string;
     confidence?: Confidence;
     content: string;
+    scope?: MemoryScope;
+}
+export interface ScoreBreakdown {
+    keyword: number;
+    tags: number;
+    recency: number;
 }
 export interface RecallResult {
     memory: MemoryFile;
     score: number;
+    scoreBreakdown?: ScoreBreakdown;
+}
+export interface TeamConfig {
+    remote: string;
+    auto_sync: boolean;
+    branch: string;
 }
 export interface MemoConfig {
     project: {
@@ -43,6 +56,7 @@ export interface MemoConfig {
     review: {
         enabled: boolean;
     };
+    team?: TeamConfig;
 }
 export interface ExtractionResult {
     name: string;

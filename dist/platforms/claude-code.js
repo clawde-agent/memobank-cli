@@ -71,6 +71,19 @@ async function installClaudeCode(repoRoot) {
     }
     // Set autoMemoryDirectory
     settings.autoMemoryDirectory = path.join(repoRoot, 'memory');
+    // Add Stop hook for auto-capture
+    if (!settings.hooks) {
+        settings.hooks = {};
+    }
+    if (!settings.hooks.Stop) {
+        settings.hooks.Stop = [];
+    }
+    // Remove any existing memobank Stop hook to avoid duplicates
+    settings.hooks.Stop = settings.hooks.Stop.filter((h) => !(h.hooks?.[0]?.command?.includes('memo capture')));
+    settings.hooks.Stop.push({
+        matcher: '',
+        hooks: [{ type: 'command', command: 'memo capture --auto --silent' }],
+    });
     // Write settings
     try {
         fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');

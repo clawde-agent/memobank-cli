@@ -8,6 +8,7 @@ export interface InstallOptions {
     codex?: boolean;
     cursor?: boolean;
     all?: boolean;
+    platform?: string;
 }
 /**
  * Install memobank

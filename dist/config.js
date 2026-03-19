@@ -107,6 +107,7 @@ function loadConfig(repoRoot) {
                 ...DEFAULT_CONFIG.review,
                 ...loaded?.review,
             },
+            ...(loaded?.team ? { team: loaded.team } : {}),
         };
     }
     catch (error) {

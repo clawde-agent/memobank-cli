@@ -41,9 +41,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.findRepoRoot = findRepoRoot;
+exports.getPersonalDir = getPersonalDir;
+exports.getTeamDir = getTeamDir;
 exports.loadAll = loadAll;
 exports.loadFile = loadFile;
 exports.writeMemory = writeMemory;
+exports.migrateToPersonal = migrateToPersonal;
 exports.writeMemoryMd = writeMemoryMd;
 exports.readMemoryMd = readMemoryMd;
 const fs = __importStar(require("fs"));
@@ -51,26 +54,14 @@ const path = __importStar(require("path"));
 const gray_matter_1 = __importDefault(require("gray-matter"));
 const glob_1 = require("glob");
 const MEMORY_TYPES = ['lesson', 'decision', 'workflow', 'architecture'];
-/**
- * Find memobank root directory
- * Resolution order:
- * 1. --repo CLI flag (passed as parameter)
- * 2. MEMOBANK_REPO env var
- * 3. meta/config.yaml in cwd or parent dirs (walk up)
- * 4. ~/.memobank/<git-repo-name>/
- * 5. ~/.memobank/default/
- */
 function findRepoRoot(cwd, repoFlag) {
-    // 1. CLI flag
     if (repoFlag) {
         return path.resolve(repoFlag);
     }
-    // 2. Environment variable
     const envRepo = process.env.MEMOBANK_REPO;
     if (envRepo) {
         return path.resolve(envRepo);
     }
-    // 3. Walk up looking for meta/config.yaml
     let current = cwd;
     while (current !== path.dirname(current)) {
         const configPath = path.join(current, 'meta', 'config.yaml');
@@ -79,12 +70,9 @@ function findRepoRoot(cwd, repoFlag) {
         }
         current = path.dirname(current);
     }
-    // 4. Try to detect git repo name for ~/.memobank/<project>/
     try {
-        // Check if we're in a git repo
         const gitRoot = path.join(cwd, '.git');
         if (fs.existsSync(gitRoot)) {
-            // Try to get repo name from remote or use directory name
             const repoName = path.basename(cwd);
             const memobankPath = path.join(osHomeDir(), '.memobank', repoName);
             if (fs.existsSync(memobankPath)) {
@@ -92,36 +80,53 @@ function findRepoRoot(cwd, repoFlag) {
             }
         }
     }
-    catch (e) {
-        // Ignore git detection errors
-    }
-    // 5. Default: ~/.memobank/default/
+    catch (e) { /* ignore */ }
     return path.join(osHomeDir(), '.memobank', 'default');
 }
-/**
- * Get home directory across platforms
- */
 function osHomeDir() {
     return process.env.HOME || process.env.USERPROFILE || '';
 }
-/**
- * Load all memory files from a repo
- */
-function loadAll(repoRoot) {
+function getPersonalDir(repoRoot) {
+    return path.join(repoRoot, 'personal');
+}
+function getTeamDir(repoRoot) {
+    return path.join(repoRoot, 'team');
+}
+function loadFromDir(baseDir, scope) {
     const memories = [];
     for (const type of MEMORY_TYPES) {
-        const pattern = path.join(repoRoot, type, '**', '*.md');
+        const pattern = path.join(baseDir, type, '**', '*.md');
         const files = glob_1.glob.sync(pattern);
         for (const filePath of files) {
             try {
                 const memory = loadFile(filePath);
+                if (scope) {
+                    memory.scope = scope;
+                }
                 memories.push(memory);
             }
             catch (e) {
-                // Skip files that can't be parsed
                 console.warn(`Warning: Could not load ${filePath}: ${e.message}`);
             }
         }
+    }
+    return memories;
+}
+function loadAll(repoRoot, scope = 'all') {
+    const personalDir = getPersonalDir(repoRoot);
+    const teamDir = getTeamDir(repoRoot);
+    const hasPersonal = fs.existsSync(personalDir);
+    const hasTeam = fs.existsSync(teamDir);
+    // Legacy fallback: memories at root level
+    if (!hasPersonal && !hasTeam) {
+        return loadFromDir(repoRoot);
+    }
+    const memories = [];
+    if ((scope === 'all' || scope === 'personal') && hasPersonal) {
+        memories.push(...loadFromDir(personalDir, 'personal'));
+    }
+    if ((scope === 'all' || scope === 'team') && hasTeam) {
+        memories.push(...loadFromDir(teamDir, 'team'));
     }
     return memories;
 }
@@ -132,14 +137,13 @@ function loadFile(filePath) {
     const fileContent = fs.readFileSync(filePath, 'utf-8');
     const parsed = (0, gray_matter_1.default)(fileContent);
     const data = parsed.data;
-    // Validate required fields
     if (!data.name || !data.type || !data.description || !data.created) {
         throw new Error(`Missing required frontmatter fields in ${filePath}`);
     }
     if (!MEMORY_TYPES.includes(data.type)) {
         throw new Error(`Invalid memory type "${data.type}" in ${filePath}`);
     }
-    const memory = {
+    return {
         path: filePath,
         name: data.name,
         type: data.type,
@@ -151,19 +155,14 @@ function loadFile(filePath) {
         confidence: data.confidence,
         content: parsed.content,
     };
-    return memory;
 }
-/**
- * Write a new memory file
- * Creates filename from name + created date
- */
 function writeMemory(repoRoot, memory) {
-    const typeDir = path.join(repoRoot, memory.type);
-    // Ensure directory exists
+    const personalDir = getPersonalDir(repoRoot);
+    const baseDir = fs.existsSync(personalDir) ? personalDir : repoRoot;
+    const typeDir = path.join(baseDir, memory.type);
     if (!fs.existsSync(typeDir)) {
         fs.mkdirSync(typeDir, { recursive: true });
     }
-    // Generate filename: YYYY-MM-DD-name.md
     const date = new Date(memory.created);
     const dateStr = date.toISOString().split('T')[0];
     const slug = memory.name
@@ -172,7 +171,6 @@ function writeMemory(repoRoot, memory) {
         .replace(/[^a-z0-9-]/g, '');
     const filename = `${dateStr}-${slug}.md`;
     const filePath = path.join(typeDir, filename);
-    // Build frontmatter
     const frontmatter = {
         name: memory.name,
         type: memory.type,
@@ -180,16 +178,43 @@ function writeMemory(repoRoot, memory) {
         tags: memory.tags,
         created: memory.created,
     };
-    if (memory.updated)
+    if (memory.updated) {
         frontmatter.updated = memory.updated;
-    if (memory.review_after)
+    }
+    if (memory.review_after) {
         frontmatter.review_after = memory.review_after;
-    if (memory.confidence)
+    }
+    if (memory.confidence) {
         frontmatter.confidence = memory.confidence;
-    // Write file
+    }
     const fileContent = gray_matter_1.default.stringify(memory.content, frontmatter);
     fs.writeFileSync(filePath, fileContent, 'utf-8');
     return filePath;
+}
+function migrateToPersonal(repoRoot) {
+    const migrated = [];
+    const skipped = [];
+    const personalDir = getPersonalDir(repoRoot);
+    for (const type of MEMORY_TYPES) {
+        const srcTypeDir = path.join(repoRoot, type);
+        if (!fs.existsSync(srcTypeDir)) {
+            continue;
+        }
+        const dstTypeDir = path.join(personalDir, type);
+        const files = glob_1.glob.sync(path.join(srcTypeDir, '*.md'));
+        for (const srcFile of files) {
+            const filename = path.basename(srcFile);
+            const dstFile = path.join(dstTypeDir, filename);
+            if (fs.existsSync(dstFile)) {
+                skipped.push(srcFile);
+                continue;
+            }
+            fs.mkdirSync(dstTypeDir, { recursive: true });
+            fs.renameSync(srcFile, dstFile);
+            migrated.push(srcFile);
+        }
+    }
+    return { migrated, skipped };
 }
 /**
  * Update MEMORY.md with recall results

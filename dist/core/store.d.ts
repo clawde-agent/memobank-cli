@@ -2,30 +2,20 @@
  * File I/O layer for memobank
  * Reads and writes .md files with YAML frontmatter
  */
-import { MemoryFile } from '../types';
-/**
- * Find memobank root directory
- * Resolution order:
- * 1. --repo CLI flag (passed as parameter)
- * 2. MEMOBANK_REPO env var
- * 3. meta/config.yaml in cwd or parent dirs (walk up)
- * 4. ~/.memobank/<git-repo-name>/
- * 5. ~/.memobank/default/
- */
+import { MemoryFile, MemoryScope } from '../types';
 export declare function findRepoRoot(cwd: string, repoFlag?: string): string;
-/**
- * Load all memory files from a repo
- */
-export declare function loadAll(repoRoot: string): MemoryFile[];
+export declare function getPersonalDir(repoRoot: string): string;
+export declare function getTeamDir(repoRoot: string): string;
+export declare function loadAll(repoRoot: string, scope?: MemoryScope): MemoryFile[];
 /**
  * Load a single memory file
  */
 export declare function loadFile(filePath: string): MemoryFile;
-/**
- * Write a new memory file
- * Creates filename from name + created date
- */
-export declare function writeMemory(repoRoot: string, memory: Omit<MemoryFile, 'path'>): string;
+export declare function writeMemory(repoRoot: string, memory: Omit<MemoryFile, 'path' | 'scope'>): string;
+export declare function migrateToPersonal(repoRoot: string): {
+    migrated: string[];
+    skipped: string[];
+};
 /**
  * Update MEMORY.md with recall results
  */

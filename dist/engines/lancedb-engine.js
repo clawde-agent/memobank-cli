@@ -39,6 +39,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LanceDbEngine = void 0;
 const path = __importStar(require("path"));
+const crypto_1 = require("crypto");
 const decay_engine_1 = require("../core/decay-engine");
 // LanceDB types (dynamic import)
 let lancedb = null;
@@ -233,7 +234,7 @@ class LanceDbEngine {
      * Generate unique memory ID
      */
     memoryId(memory) {
-        const hash = require('crypto').createHash('md5').update(memory.path).digest('hex');
+        const hash = (0, crypto_1.createHash)('md5').update(memory.path).digest('hex');
         return hash.slice(0, 16);
     }
     /**

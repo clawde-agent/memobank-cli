@@ -19,7 +19,12 @@ import { installGemini, detectGemini } from '../platforms/gemini';
 import { installQwen, detectQwen } from '../platforms/qwen';
 import { installCursor } from '../platforms/cursor';
 import { teamInit } from './team';
-import type { MultiSelectItem } from '../components/MultiSelect';
+interface MultiSelectItem {
+  label: string;
+  value: string;
+  hint?: string;
+  disabled?: boolean;
+}
 
 /** Detect git repo name from cwd */
 function detectProjectName(): string {

@@ -17,16 +17,20 @@ const map_1 = require("./commands/map");
 const import_1 = require("./commands/import");
 const onboarding_1 = require("./commands/onboarding");
 const lifecycle_1 = require("./commands/lifecycle");
+const team_1 = require("./commands/team");
+const scan_1 = require("./commands/scan");
+const store_1 = require("./core/store");
 const program = new commander_1.Command();
 program
     .name('memo')
     .description('memobank CLI - persistent memory for AI coding sessions')
-    .version('0.1.0');
+    .version('0.3.0');
 // Install command - simplified, just creates directory structure
 program
     .command('install')
     .description('Set up memobank directory structure (use "memo onboarding" for interactive setup)')
     .option('--repo <path>', 'Point to an existing memobank repo')
+    .option('--platform <name>', 'Install adapter for specific platform: claude-code|codex|gemini|qwen|cursor|all')
     .action(async (options) => {
     try {
         await (0, install_1.installCommand)(options);
@@ -41,11 +45,10 @@ program
     .command('onboarding')
     .alias('init')
     .alias('setup')
-    .description('Interactive setup wizard with menu navigation (recommended)')
-    .option('--repo <path>', 'Memobank repository path')
-    .action(async (options) => {
+    .description('Interactive setup wizard (recommended for first-time setup)')
+    .action(async () => {
     try {
-        await (0, onboarding_1.onboardingCommand)(options.repo);
+        await (0, onboarding_1.onboardingCommand)();
     }
     catch (error) {
         console.error(`Error: ${error.message}`);
@@ -61,15 +64,11 @@ program
     .option('--format <format>', 'Output format (text|json)', 'text')
     .option('--dry-run', 'Print without writing MEMORY.md', false)
     .option('--repo <path>', 'Memobank repository path')
+    .option('--scope <scope>', 'Limit search scope: personal|team|all (default: all)')
+    .option('--explain', 'Show score breakdown for each result')
     .action(async (query, options) => {
     try {
-        await (0, recall_1.recall)(query, {
-            top: parseInt(options.top),
-            engine: options.engine,
-            format: options.format,
-            dryRun: options.dryRun,
-            repo: options.repo,
-        });
+        await (0, recall_1.recallCommand)(query, options);
     }
     catch (error) {
         console.error(`Error: ${error.message}`);
@@ -282,6 +281,88 @@ program
         await (0, lifecycle_1.correctCommand)(memoryPath, {
             repo: options.repo,
             reason: options.reason,
+        });
+    }
+    catch (error) {
+        console.error(`Error: ${error.message}`);
+        process.exit(1);
+    }
+});
+// Team commands
+const team = program
+    .command('team')
+    .description('Team memory sharing commands');
+team
+    .command('init <remote-url>')
+    .description('Set up shared team memory repository')
+    .option('--repo <path>', 'Memobank repository path')
+    .action(async (remoteUrl, options) => {
+    try {
+        const repoRoot = (0, store_1.findRepoRoot)(process.cwd(), options.repo);
+        await (0, team_1.teamInit)(remoteUrl, repoRoot);
+    }
+    catch (error) {
+        console.error(`Error: ${error.message}`);
+        process.exit(1);
+    }
+});
+team
+    .command('sync')
+    .description('Pull and push team memories')
+    .option('--repo <path>', 'Memobank repository path')
+    .action(async (options) => {
+    try {
+        const repoRoot = (0, store_1.findRepoRoot)(process.cwd(), options.repo);
+        await (0, team_1.teamSync)(repoRoot);
+    }
+    catch (error) {
+        console.error(`Error: ${error.message}`);
+        process.exit(1);
+    }
+});
+team
+    .command('publish <file>')
+    .description('Promote a personal memory to team')
+    .option('--repo <path>', 'Memobank repository path')
+    .action(async (file, options) => {
+    try {
+        const repoRoot = (0, store_1.findRepoRoot)(process.cwd(), options.repo);
+        await (0, team_1.teamPublish)(file, repoRoot);
+    }
+    catch (error) {
+        console.error(`Error: ${error.message}`);
+        process.exit(1);
+    }
+});
+team
+    .command('status')
+    .description('Show team repository status')
+    .option('--repo <path>', 'Memobank repository path')
+    .action(async (options) => {
+    try {
+        const repoRoot = (0, store_1.findRepoRoot)(process.cwd(), options.repo);
+        await (0, team_1.teamStatus)(repoRoot);
+    }
+    catch (error) {
+        console.error(`Error: ${error.message}`);
+        process.exit(1);
+    }
+});
+// Scan command
+program
+    .command('scan [path]')
+    .description('Scan memory files for secrets')
+    .option('--staged', 'Scan git-staged files only (used by pre-commit hook)')
+    .option('--fail-on-secrets', 'Exit with code 1 if secrets found')
+    .option('--fix', 'Auto-redact secrets in-place and re-stage')
+    .option('--repo <path>', 'Memobank repository path')
+    .action(async (scanPath, options) => {
+    try {
+        await (0, scan_1.scanCommand)(scanPath, {
+            staged: options.staged,
+            failOnSecrets: options.failOnSecrets,
+            fix: options.fix,
+            repo: options.repo,
         });
     }
     catch (error) {

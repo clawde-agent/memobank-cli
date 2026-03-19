@@ -47,6 +47,8 @@ const config_1 = require("../config");
 const claude_code_1 = require("../platforms/claude-code");
 const codex_1 = require("../platforms/codex");
 const cursor_1 = require("../platforms/cursor");
+const gemini_1 = require("../platforms/gemini");
+const qwen_1 = require("../platforms/qwen");
 const execAsync = (0, util_1.promisify)(child_process_1.exec);
 const MEMORY_TYPES = ['lesson', 'decision', 'workflow', 'architecture'];
 /**
@@ -67,22 +69,60 @@ async function detectGitRepoName(cwd) {
  * Create directory structure
  */
 function createDirectoryStructure(repoRoot) {
-    // Create memory type directories
+    const personalDir = path.join(repoRoot, 'personal');
     for (const type of MEMORY_TYPES) {
-        const typeDir = path.join(repoRoot, type);
+        const typeDir = path.join(personalDir, type);
         if (!fs.existsSync(typeDir)) {
             fs.mkdirSync(typeDir, { recursive: true });
         }
     }
-    // Create memory directory
     const memoryDir = path.join(repoRoot, 'memory');
     if (!fs.existsSync(memoryDir)) {
         fs.mkdirSync(memoryDir, { recursive: true });
     }
-    // Create meta directory
     const metaDir = path.join(repoRoot, 'meta');
     if (!fs.existsSync(metaDir)) {
         fs.mkdirSync(metaDir, { recursive: true });
+    }
+}
+/**
+ * Install adapter for a specific platform
+ */
+async function installPlatform(platform, repoRoot) {
+    const { installClaudeCode: installCC } = await Promise.resolve().then(() => __importStar(require('../platforms/claude-code')));
+    const { installCodex: installCx } = await Promise.resolve().then(() => __importStar(require('../platforms/codex')));
+    const { installGemini: installGem, detectGemini: detectGem } = await Promise.resolve().then(() => __importStar(require('../platforms/gemini')));
+    const { installQwen: installQw, detectQwen: detectQw } = await Promise.resolve().then(() => __importStar(require('../platforms/qwen')));
+    const { installCursor: installCur } = await Promise.resolve().then(() => __importStar(require('../platforms/cursor')));
+    switch (platform) {
+        case 'claude-code':
+            await installCC(repoRoot);
+            break;
+        case 'codex':
+            await installCx(process.cwd());
+            break;
+        case 'gemini':
+            await installGem();
+            break;
+        case 'qwen':
+            await installQw();
+            break;
+        case 'cursor':
+            await installCur(process.cwd());
+            break;
+        case 'all':
+            await installCC(repoRoot);
+            await installCx(process.cwd());
+            if (detectGem()) {
+                await installGem();
+            }
+            if (detectQw()) {
+                await installQw();
+            }
+            await installCur(process.cwd());
+            break;
+        default:
+            console.error(`Unknown platform: ${platform}. Valid: claude-code, codex, gemini, qwen, cursor, all`);
     }
 }
 /**
@@ -102,6 +142,10 @@ async function installCommand(options = {}) {
         // Mode B: Auto-detect or use ~/.memobank/<project>/
         projectName = await detectGitRepoName(cwd);
         repoRoot = path.join(os.homedir(), '.memobank', projectName);
+    }
+    if (options.platform) {
+        await installPlatform(options.platform, repoRoot);
+        return;
     }
     console.log(`Setting up memobank at: ${repoRoot}`);
     // Create directory structure
@@ -126,6 +170,14 @@ async function installCommand(options = {}) {
     }
     if (allPlatforms || options.cursor) {
         await (0, cursor_1.installCursor)(cwd);
+    }
+    if (allPlatforms) {
+        if ((0, gemini_1.detectGemini)()) {
+            await (0, gemini_1.installGemini)();
+        }
+        if ((0, qwen_1.detectQwen)()) {
+            await (0, qwen_1.installQwen)();
+        }
     }
     // Print success summary
     console.log();

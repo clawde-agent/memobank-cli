@@ -1,16 +1,13 @@
 /**
  * Retriever module
  * Orchestrates engine search and formats output for MEMORY.md injection
- * Tracks access patterns for lifecycle management
  */
-import { RecallResult, MemoConfig } from '../types';
+import { RecallResult, MemoConfig, MemoryScope } from '../types';
 import { EngineAdapter } from '../engines/engine-adapter';
 /**
  * Recall memories for a query
- * Returns both the results and formatted markdown
- * Records access for lifecycle tracking
  */
-export declare function recall(query: string, repoRoot: string, config: MemoConfig, engine?: EngineAdapter): Promise<{
+export declare function recall(query: string, repoRoot: string, config: MemoConfig, engine?: EngineAdapter, scope?: MemoryScope, explain?: boolean): Promise<{
     results: RecallResult[];
     markdown: string;
 }>;

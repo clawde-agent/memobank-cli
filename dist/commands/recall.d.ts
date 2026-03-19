@@ -1,6 +1,6 @@
 /**
  * Recall command
- * Hot path - called by memobank-skill before every session
+ * Search memories and write to MEMORY.md
  */
 export interface RecallOptions {
     top?: number;
@@ -8,6 +8,8 @@ export interface RecallOptions {
     format?: string;
     dryRun?: boolean;
     repo?: string;
+    scope?: string;
+    explain?: boolean;
 }
-export declare function recall(query: string, options?: RecallOptions): Promise<void>;
+export declare function recallCommand(query: string, options: RecallOptions): Promise<void>;
 //# sourceMappingURL=recall.d.ts.map
