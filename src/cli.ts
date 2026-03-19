@@ -21,13 +21,21 @@ import { teamInit, teamSync, teamPublish, teamStatus } from './commands/team';
 import { scanCommand } from './commands/scan';
 import { findRepoRoot } from './core/store';
 import { MemoryType } from './types';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const program = new Command();
+
+// Get version from package.json
+const packageJsonPath = path.join(__dirname, '..', 'package.json');
+const version = fs.existsSync(packageJsonPath)
+  ? JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8')).version
+  : '0.4.0';
 
 program
   .name('memo')
   .description('memobank CLI - persistent memory for AI coding sessions')
-  .version('0.3.0');
+  .version(version);
 
 // Install command - simplified, just creates directory structure
 program

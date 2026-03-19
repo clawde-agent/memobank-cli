@@ -108,6 +108,7 @@ function loadConfig(repoRoot) {
                 ...loaded?.review,
             },
             ...(loaded?.team ? { team: loaded.team } : {}),
+            ...(loaded?.reranker ? { reranker: loaded.reranker } : {}),
         };
     }
     catch (error) {

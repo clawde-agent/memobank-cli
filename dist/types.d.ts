@@ -57,6 +57,12 @@ export interface MemoConfig {
         enabled: boolean;
     };
     team?: TeamConfig;
+    reranker?: {
+        enabled: boolean;
+        provider: 'jina' | 'cohere';
+        model?: string;
+        top_n?: number;
+    };
 }
 export interface ExtractionResult {
     name: string;
