@@ -41,24 +41,28 @@ The project is designed as a cross-platform tool (Claude Code, Codex, Gemini, Qw
     └── config.yaml    # Gains a `team:` section
 ```
 
-Existing memories (currently at root level) are migrated to `personal/` during `memo init` or when running `memo team init` on an existing install.
+Existing memories (currently at root level) are migrated to `personal/` automatically during `memo init` (with a confirmation prompt before moving files). No separate `memo migrate` command is needed.
+
+`memo team init` also checks whether `personal/` exists. If it does not (i.e., the user has an older memobank install that predates this spec), `memo team init` triggers the same migration with a confirmation prompt before proceeding to set up the team remote.
 
 ### Config Changes
 
 ```yaml
 team:
   remote: "git@github.com:your-org/team-memories.git"
-  auto_sync: false    # If true, pull before each recall
+  auto_sync: false    # If true, git pull on team/ before each recall (pull only, never auto-push)
   branch: main
 ```
+
+`auto_sync: true` only pulls before `memo recall`. It never auto-pushes — pushes always require explicit `memo team sync` to avoid unintended secret exposure.
 
 ### New Commands
 
 | Command | Description |
 |---------|-------------|
-| `memo team init <remote-url>` | Clone remote into `team/`, write config |
-| `memo team sync` | `git pull` + `git push` on `team/` directory |
-| `memo team publish <file>` | Copy a personal memory into `team/`, run sanitizer, stage for commit |
+| `memo team init <remote-url>` | Clone remote into `team/` (or init + push if remote is empty), write config, install pre-commit hook |
+| `memo team sync` | On `team/`: `git pull` (merge conflicts → user resolves), then `git commit` any staged-but-uncommitted changes (with auto-generated message), then `git push` |
+| `memo team publish <file>` | Run `memo scan` on the file; if secrets found, print warnings and abort — user must fix manually or run `memo scan --fix` first. If clean, copy to `team/` and `git add` (does not commit automatically). |
 | `memo team status` | Show `team/` git status (ahead/behind/conflicts) |
 
 ### Recall Behavior
@@ -67,7 +71,7 @@ team:
 - `👤 personal` — from personal memory
 - `👥 team` — from team memory
 
-Scope can be limited with `--scope personal` or `--scope team`.
+Scope can be limited with `--scope personal` or `--scope team`. When a scope filter is active, the source label (`👤 personal` / `👥 team`) is omitted from results as redundant.
 
 ### Conflict Handling
 
@@ -103,23 +107,27 @@ Additions to `src/core/sanitizer.ts`:
 
 - Semantic patterns: `password\s*(is|=|:)\s*\S+`, `secret\s*(is|=|:)\s*\S+`, `token\s*(is|=|:)\s*\S+`
 - Chinese-language patterns: `密码[是为：:]\s*\S+`, `密钥[是为：:]\s*\S+`
-- Private IP ranges: `192\.168\.`, `10\.`, `172\.(1[6-9]|2\d|3[01])\.`
+- Private IP ranges (full octet patterns to avoid false positives on version numbers/dates): `\b192\.168\.\d{1,3}\.\d{1,3}\b`, `\b10\.\d{1,3}\.\d{1,3}\.\d{1,3}\b`, `\b172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}\b`
 
 ### New Command: `memo scan`
 
 ```
-memo scan [path]              # Scan given path (default: current memory repo)
-memo scan --staged            # Scan only git-staged files
-memo scan --fail-on-secrets   # Exit with code 1 if secrets found
-memo scan --fix               # Auto-redact detectable secrets via sanitizer
+memo scan [path]              # Scan given path (default: team/ under current repo)
+memo scan --staged            # Scan git-staged files in the repo at cwd (used by pre-commit hook)
+memo scan --fail-on-secrets   # Exit with code 1 if secrets found (used by pre-commit hook)
+memo scan --fix               # Auto-redact detectable secrets in-place, then re-stage affected files
 ```
+
+`memo scan` resolves its target repo from the current working directory (cwd). The pre-commit hook is installed inside `team/.git/hooks/pre-commit`, so when Git invokes it, cwd is the `team/` directory — `--staged` scans that repo's staging area. When called manually from the project root, `memo scan` defaults to scanning the `team/` subdirectory as a path argument. No separate `--repo` or `--cwd` flag is needed.
+
+`--fix` behavior: modifies files in-place using the sanitizer (replaces detected secrets with `[REDACTED]`), then runs `git add` on each modified file so they are re-staged with clean content. Prints a summary of redactions made.
 
 Output format:
 ```
 ⚠️  Potential secrets found:
   team/lesson/2026-03-19-db-setup.md:12
     > password is myS3cr3t!
-  → Run: memo scan --fix to auto-redact
+  → Run: memo scan --fix to auto-redact and re-stage
 ```
 
 ---
@@ -144,9 +152,9 @@ Each result shows its score breakdown:
   > ...
 ```
 
-Results include a feedback hint at the bottom:
+Results include a feedback hint at the bottom (the existing `memo correct` command, already in the codebase):
 ```
-Rate results: memo correct <file> --reason "not relevant"
+To flag a result: memo correct <file> --reason "not relevant"
 ```
 
 ### Cross-Platform Auto-Capture
@@ -177,7 +185,7 @@ memo install --platform all           # Detect and install all found platforms
 
 #### `--silent` Mode for `memo capture`
 
-`memo capture --auto --silent` runs without any terminal output. Capture activity is logged to `meta/capture-log.json` and is visible via `memo map`.
+`memo capture --auto --silent` runs without any terminal output. Capture activity is logged to the top-level `~/.memobank/<project>/meta/capture-log.json` (same directory as `config.yaml`) and is visible via `memo map`.
 
 ---
 
@@ -189,7 +197,7 @@ memo install --platform all           # Detect and install all found platforms
 memo init
 ```
 
-`memo onboarding`, `memo install`, and `memo setup` are consolidated under `memo init`. Old commands are kept as aliases for backwards compatibility.
+`memo onboarding` and `memo setup` become aliases for `memo init`. `memo install` is **not** merged into `memo init` — it retains its own identity as a lower-level command used programmatically and via `memo install --platform <x>` (see Section 3). `memo init` calls `memo install` internally but users interact with `memo init` for onboarding.
 
 ### 4-Step TUI Flow
 
@@ -264,8 +272,10 @@ memo init
       └─ searches personal/ + team/
       └─ (--explain) shows score breakdown
   └─ memo team sync
-      └─ pre-commit hook: memo scan --staged --fail-on-secrets
-      └─ git pull + push team/
+      └─ git pull team/ (merge conflicts → user resolves manually)
+      └─ git commit (staged changes, if any) → pre-commit hook fires: memo scan --staged --fail-on-secrets
+         └─ secrets found → commit blocked, user runs memo scan --fix then retries sync
+         └─ clean → commit succeeds → git push team/
 ```
 
 ---
@@ -279,7 +289,9 @@ memo init
 
 ---
 
-## Open Questions
+## Resolved Decisions
 
-1. When migrating existing memories to `personal/` during `memo team init`, should the migration be automatic (with a confirmation prompt) or require an explicit `memo migrate` command?
-2. Should `auto_sync: true` also push after `memo capture`, or only pull before `memo recall`?
+1. **Migration trigger**: `memo init` automatically migrates existing root-level memories to `personal/` with a confirmation prompt. No `memo migrate` command needed.
+2. **`auto_sync` scope**: Pull-only before `memo recall`. Never auto-pushes, to keep secret exposure risk under explicit user control.
+3. **`memo team init` with empty remote**: If the remote has no commits, `memo team init` runs `git init` inside `team/`, sets the remote, creates `.gitkeep` files in each of `team/lesson/`, `team/decision/`, `team/workflow/`, `team/architecture/`, and `team/meta/`, stages them, commits with message "chore: initialize team memory repo", and pushes. If the remote has commits, it clones normally into `team/`.
+4. **`memo install` vs `memo init`**: `memo install` stays as a separate low-level command. `memo init` is the user-facing onboarding entry point that calls `memo install` internally.
