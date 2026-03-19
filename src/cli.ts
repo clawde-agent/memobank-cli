@@ -27,7 +27,7 @@ const program = new Command();
 program
   .name('memo')
   .description('memobank CLI - persistent memory for AI coding sessions')
-  .version('0.1.0');
+  .version('0.3.0');
 
 // Install command - simplified, just creates directory structure
 program
@@ -49,11 +49,10 @@ program
   .command('onboarding')
   .alias('init')
   .alias('setup')
-  .description('Interactive setup wizard with menu navigation (recommended)')
-  .option('--repo <path>', 'Memobank repository path')
-  .action(async (options) => {
+  .description('Interactive setup wizard (recommended for first-time setup)')
+  .action(async () => {
     try {
-      await onboardingCommand(options.repo);
+      await onboardingCommand();
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`);
       process.exit(1);
