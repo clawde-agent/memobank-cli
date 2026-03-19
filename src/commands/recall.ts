@@ -24,7 +24,7 @@ export async function recallCommand(query: string, options: RecallOptions): Prom
   const repoRoot = findRepoRoot(process.cwd(), options.repo);
   const config = loadConfig(repoRoot);
 
-  if (options.top) { config.memory.top_k = parseInt(String(options.top), 10); }
+  if (options.top) { config.memory.top_k = options.top; }
 
   const scope = (options.scope as MemoryScope) || 'all';
   const explain = options.explain || false;

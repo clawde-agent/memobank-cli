@@ -28,14 +28,12 @@ export async function recall(
   const searchEngine = engine || new TextEngine();
   let results = await searchEngine.search(query, memories, config.memory.top_k);
 
-  // Attach scope from memory file to result
-  results = results.map(r => ({
-    ...r,
-    memory: { ...r.memory, scope: r.memory.scope },
-  }));
-
   for (const result of results) {
     recordAccess(repoRoot, result.memory.path, query);
+  }
+
+  if (explain && results.length > 0 && results.every(r => !r.scoreBreakdown)) {
+    console.warn('--explain: score breakdown not available for the current engine.');
   }
 
   let markdown = formatResultsAsMarkdown(results, query, config.embedding.engine, memories.length, scope, explain);
