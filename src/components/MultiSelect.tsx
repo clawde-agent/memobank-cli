@@ -37,7 +37,7 @@ export function MultiSelect({ label, items, defaultSelected = [], onSubmit }: Mu
       }
     }
     if (key.return) {
-      onSubmit([...selected]);
+      setSelected(prev => { onSubmit([...prev]); return prev; });
     }
   });
 

@@ -170,6 +170,9 @@ function OnboardingApp({ repoRoot }: { repoRoot: string }) {
               runSetup(finalState, repoRoot).then(lines => {
                 setSummary(lines);
                 setDone(true);
+              }).catch((err: Error) => {
+                setSummary([`Setup failed: ${err.message}`]);
+                setDone(true);
               });
             }}
           />
