@@ -18,6 +18,7 @@ import { importMemories } from './commands/import';
 import { onboardingCommand } from './commands/onboarding';
 import { lifecycleCommand, correctCommand } from './commands/lifecycle';
 import { teamInit, teamSync, teamPublish, teamStatus } from './commands/team';
+import { scanCommand } from './commands/scan';
 import { findRepoRoot } from './core/store';
 import { MemoryType } from './types';
 
@@ -346,6 +347,28 @@ team
     try {
       const repoRoot = findRepoRoot(process.cwd(), options.repo);
       await teamStatus(repoRoot);
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+// Scan command
+program
+  .command('scan [path]')
+  .description('Scan memory files for secrets')
+  .option('--staged', 'Scan git-staged files only (used by pre-commit hook)')
+  .option('--fail-on-secrets', 'Exit with code 1 if secrets found')
+  .option('--fix', 'Auto-redact secrets in-place and re-stage')
+  .option('--repo <path>', 'Memobank repository path')
+  .action(async (scanPath: string | undefined, options) => {
+    try {
+      await scanCommand(scanPath, {
+        staged: options.staged,
+        failOnSecrets: options.failOnSecrets,
+        fix: options.fix,
+        repo: options.repo,
+      });
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`);
       process.exit(1);
