@@ -1,12 +1,14 @@
 /**
  * Retriever module
  * Orchestrates engine search and formats output for MEMORY.md injection
+ * Tracks access patterns for lifecycle management
  */
 
 import { RecallResult, MemoConfig } from '../types';
 import { EngineAdapter } from '../engines/engine-adapter';
-import { loadAll, writeMemoryMd } from './store';
+import { loadAll, writeMemoryMd, findRepoRoot } from './store';
 import { TextEngine } from '../engines/text-engine';
+import { recordAccess } from './lifecycle-manager';
 
 // Simple token estimation (rough approximation: ~4 chars per token)
 function estimateTokenCount(text: string): number {
@@ -16,6 +18,7 @@ function estimateTokenCount(text: string): number {
 /**
  * Recall memories for a query
  * Returns both the results and formatted markdown
+ * Records access for lifecycle tracking
  */
 export async function recall(
   query: string,
@@ -31,6 +34,11 @@ export async function recall(
 
   // Run search
   let results = await searchEngine.search(query, memories, config.memory.top_k);
+
+  // Record access for each recalled memory
+  for (const result of results) {
+    recordAccess(repoRoot, result.memory.path, query);
+  }
 
   // Truncate if over token budget
   let markdown = formatResultsAsMarkdown(results, query, config.embedding.engine, memories.length);

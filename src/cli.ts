@@ -16,6 +16,7 @@ import { reviewCommand } from './commands/review';
 import { mapCommand } from './commands/map';
 import { importMemories } from './commands/import';
 import { setupWizard } from './commands/setup';
+import { lifecycleCommand, correctCommand } from './commands/lifecycle';
 import { MemoryType } from './types';
 
 const program = new Command();
@@ -235,6 +236,58 @@ program
         qwen: options.qwen,
         all: options.all || (!options.claude && !options.gemini && !options.qwen),
         dryRun: options.dryRun,
+      });
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+// Lifecycle command
+program
+  .command('lifecycle [action]')
+  .description('Manage memory lifecycle (tiers, archival, corrections)')
+  .option('--report', 'Generate lifecycle report')
+  .option('--tier <tier>', 'Filter by tier (core|working|peripheral)')
+  .option('--archive', 'Show archival candidates')
+  .option('--delete', 'Delete memory (requires --path)')
+  .option('--flagged', 'Show memories flagged for review')
+  .option('--path <path>', 'Memory file path')
+  .option('--repo <path>', 'Memobank repository path')
+  .action(async (action, options) => {
+    try {
+      if (action === 'correct' && options.path) {
+        await correctCommand(options.path, {
+          repo: options.repo,
+          reason: options.reason,
+        });
+      } else {
+        await lifecycleCommand({
+          repo: options.repo,
+          report: options.report,
+          archive: options.archive,
+          delete: options.delete,
+          flagged: options.flagged,
+          tier: options.tier,
+        });
+      }
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+// Correct command (alias)
+program
+  .command('correct <memory-path>')
+  .description('Record a correction for a memory')
+  .option('--reason <text>', 'Reason for correction')
+  .option('--repo <path>', 'Memobank repository path')
+  .action(async (memoryPath, options) => {
+    try {
+      await correctCommand(memoryPath, {
+        repo: options.repo,
+        reason: options.reason,
       });
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`);

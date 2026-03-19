@@ -2,12 +2,14 @@
 /**
  * Retriever module
  * Orchestrates engine search and formats output for MEMORY.md injection
+ * Tracks access patterns for lifecycle management
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.recall = recall;
 exports.writeRecallResults = writeRecallResults;
 const store_1 = require("./store");
 const text_engine_1 = require("../engines/text-engine");
+const lifecycle_manager_1 = require("./lifecycle-manager");
 // Simple token estimation (rough approximation: ~4 chars per token)
 function estimateTokenCount(text) {
     return Math.ceil(text.length / 4);
@@ -15,6 +17,7 @@ function estimateTokenCount(text) {
 /**
  * Recall memories for a query
  * Returns both the results and formatted markdown
+ * Records access for lifecycle tracking
  */
 async function recall(query, repoRoot, config, engine) {
     // Load all memories
@@ -23,6 +26,10 @@ async function recall(query, repoRoot, config, engine) {
     const searchEngine = engine || new text_engine_1.TextEngine();
     // Run search
     let results = await searchEngine.search(query, memories, config.memory.top_k);
+    // Record access for each recalled memory
+    for (const result of results) {
+        (0, lifecycle_manager_1.recordAccess)(repoRoot, result.memory.path, query);
+    }
     // Truncate if over token budget
     let markdown = formatResultsAsMarkdown(results, query, config.embedding.engine, memories.length);
     let tokenCount = estimateTokenCount(markdown);
