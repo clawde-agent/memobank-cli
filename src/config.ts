@@ -6,7 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { MemoConfig, Engine } from './types';
+import { MemoConfig, Engine, TeamConfig } from './types';
 
 const DEFAULT_CONFIG: MemoConfig = {
   project: {
@@ -77,6 +77,7 @@ export function loadConfig(repoRoot: string): MemoConfig {
         ...DEFAULT_CONFIG.review,
         ...loaded?.review,
       },
+      ...(loaded?.team ? { team: loaded.team as TeamConfig } : {}),
     };
   } catch (error) {
     console.warn(`Could not load config: ${(error as Error).message}`);
