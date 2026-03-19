@@ -45,6 +45,8 @@ Existing memories (currently at root level) are migrated to `personal/` automati
 
 `memo team init` also checks whether `personal/` exists. If it does not (i.e., the user has an older memobank install that predates this spec), `memo team init` triggers the same migration with a confirmation prompt before proceeding to set up the team remote.
 
+**Partial migration case**: If `personal/` already exists alongside remaining root-level memory files (e.g., from a previous interrupted migration), `memo init` and `memo team init` both move only the root-level files that do not already exist in `personal/`. If a file with the same name already exists in `personal/`, the root-level file is left in place and a warning is printed listing the skipped files for the user to resolve manually. No silent overwrites.
+
 ### Config Changes
 
 ```yaml
@@ -61,7 +63,7 @@ team:
 | Command | Description |
 |---------|-------------|
 | `memo team init <remote-url>` | Clone remote into `team/` (or init + push if remote is empty), write config, install pre-commit hook |
-| `memo team sync` | On `team/`: `git pull` (merge conflicts → user resolves), then `git commit` any staged-but-uncommitted changes (with auto-generated message), then `git push` |
+| `memo team sync` | On `team/`: (1) `git pull` — merge conflicts → user resolves manually; (2) `git add -A` to stage all tracked modifications and new files in `team/`; (3) if anything is staged, `git commit` with auto-message `"chore: sync memories [memo team sync]"`; (4) `git push`. Untracked files outside the `team/` directory are never touched. If there is nothing to commit, step 3 is skipped. |
 | `memo team publish <file>` | Run `memo scan` on the file; if secrets found, print warnings and abort — user must fix manually or run `memo scan --fix` first. If clean, copy to `team/` and `git add` (does not commit automatically). |
 | `memo team status` | Show `team/` git status (ahead/behind/conflicts) |
 
@@ -118,7 +120,9 @@ memo scan --fail-on-secrets   # Exit with code 1 if secrets found (used by pre-c
 memo scan --fix               # Auto-redact detectable secrets in-place, then re-stage affected files
 ```
 
-`memo scan` resolves its target repo from the current working directory (cwd). The pre-commit hook is installed inside `team/.git/hooks/pre-commit`, so when Git invokes it, cwd is the `team/` directory — `--staged` scans that repo's staging area. When called manually from the project root, `memo scan` defaults to scanning the `team/` subdirectory as a path argument. No separate `--repo` or `--cwd` flag is needed.
+`memo scan` path resolution:
+- **Pre-commit hook context**: The hook lives at `team/.git/hooks/pre-commit`. Git sets cwd to the repository root (`team/`) when invoking hooks. So `memo scan --staged` reads the staging area of the `team/` git repo directly — no path ambiguity.
+- **Manual invocation**: `memo scan` (no path) looks up the memobank config directory (same resolution as all other memo commands: walks up from cwd or uses `MEMOBANK_REPO` env var), then scans the `team/` subdirectory within it. The user should run `memo scan` from their project directory, not from inside `team/`.
 
 `--fix` behavior: modifies files in-place using the sanitizer (replaces detected secrets with `[REDACTED]`), then runs `git add` on each modified file so they are re-staged with clean content. Prints a summary of redactions made.
 
@@ -140,15 +144,21 @@ Output format:
 memo recall "redis timeout" --explain
 ```
 
-Each result shows its score breakdown:
+Each result shows its score breakdown. The scoring components are defined in the existing `src/core/retriever.ts` and `src/engines/text-engine.ts`:
+
+- **keyword**: weighted keyword match score (0–1), from `text-engine.ts` field weights (name×1.0, tags×0.9, description×0.8, content×0.5)
+- **recency**: Weibull decay score (0–1) from `src/core/decay-engine.ts` — decays over ~90-day half-life
+- **tags**: tag-match sub-score when tags overlap with query tokens (0–1)
+
+The `--explain` flag reads the intermediate score components already computed by the retriever and formats them. No new scoring logic is added.
 
 ```
 [score: 0.82 | 👥 team] Redis Connection Pooling
-  matched: tags(redis=0.9) + keyword(timeout=0.6) + recency(0.7)
+  matched: keyword(0.6) + tags(0.9) + recency(0.7)
   > Use connection pool size ≥ 10 for high-concurrency services...
 
 [score: 0.61 | 👤 personal] Database Retry Logic
-  matched: keyword(redis=0.5) + recency(0.8)
+  matched: keyword(0.5) + recency(0.8)
   > ...
 ```
 
