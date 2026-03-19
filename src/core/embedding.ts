@@ -6,7 +6,7 @@
 
 import { OpenAI } from 'openai';
 
-export type EmbeddingProvider = 'openai' | 'azure' | 'ollama' | 'custom';
+export type EmbeddingProvider = 'openai' | 'azure' | 'ollama' | 'jina' | 'custom';
 
 export interface EmbeddingConfig {
   provider: EmbeddingProvider;
@@ -41,6 +41,8 @@ export class EmbeddingGenerator {
         return 'http://localhost:11434/v1';
       case 'azure':
         return 'https://api.openai.com/v1'; // Azure uses different format
+      case 'jina':
+        return 'https://api.jina.ai/v1';
       default:
         return 'https://api.openai.com/v1';
     }
@@ -125,6 +127,9 @@ export class EmbeddingGenerator {
     if (provider === 'ollama') {
       // Ollama doesn't require an API key
       apiKey = undefined;
+    } else if (provider === 'jina') {
+      apiKey = process.env.JINA_API_KEY;
+      if (!apiKey) return null;
     } else {
       // OpenAI, Azure, etc. need API key from environment
       apiKey = process.env.OPENAI_API_KEY || process.env.AZURE_API_KEY;
@@ -160,6 +165,8 @@ export class EmbeddingGenerator {
         return 'mxbai-embed-large'; // Popular Ollama embedding model
       case 'azure':
         return 'text-embedding-ada-002';
+      case 'jina':
+        return 'jina-embeddings-v3';
       default:
         return 'text-embedding-3-small';
     }
@@ -179,6 +186,10 @@ export class EmbeddingGenerator {
       'nomic-embed-text': 768,
       'all-minilm': 384,
       'all-mpnet-base-v2': 768,
+      // Jina
+      'jina-embeddings-v3': 1024,
+      'jina-embeddings-v2-base-en': 768,
+      'jina-embeddings-v2-small-en': 512,
     };
 
     // Try exact match first

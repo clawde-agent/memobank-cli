@@ -80,7 +80,7 @@ function getDetectedPlatforms(items: MultiSelectItem[]): string[] {
   return items.filter(i => i.hint?.includes('✓')).map(i => i.value);
 }
 
-type Step = 'project-name' | 'platforms' | 'team-repo' | 'search-engine' | 'embedding-provider' | 'ollama-url' | 'openai-key' | 'done';
+type Step = 'project-name' | 'platforms' | 'team-repo' | 'search-engine' | 'embedding-provider' | 'ollama-url' | 'openai-key' | 'jina-key' | 'done';
 
 interface OnboardingState {
   step: Step;
@@ -159,6 +159,19 @@ async function runSetup(state: OnboardingState, repoRoot: string): Promise<strin
         if (!existing.includes('OPENAI_API_KEY=')) {
           fs.writeFileSync(envPath, existing + envLine, 'utf-8');
           summaryLines.push(`OpenAI API key saved to ${envPath}`);
+        }
+      }
+    } else if (state.embeddingProvider === 'jina') {
+      config.embedding.provider = 'jina';
+      config.embedding.model = 'jina-embeddings-v3';
+      config.embedding.dimensions = 1024;
+      if (state.embeddingApiKey.trim()) {
+        const envPath = path.join(repoRoot, '.env');
+        const envLine = `JINA_API_KEY=${state.embeddingApiKey.trim()}\n`;
+        const existing = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : '';
+        if (!existing.includes('JINA_API_KEY=')) {
+          fs.writeFileSync(envPath, existing + envLine, 'utf-8');
+          summaryLines.push(`Jina API key saved to ${envPath}`);
         }
       }
     }
@@ -262,6 +275,7 @@ export async function onboardingCommand(): Promise<void> {
     const [teamInput, setTeamInput] = useState('');
     const [ollamaUrlInput, setOllamaUrlInput] = useState('http://localhost:11434');
     const [openaiKeyInput, setOpenaiKeyInput] = useState('');
+    const [jinaKeyInput, setJinaKeyInput] = useState('');
     const [done, setDone] = useState(false);
     const [summary, setSummary] = useState<string[]>([]);
     // Prevent double-submission
@@ -344,13 +358,16 @@ export async function onboardingCommand(): Promise<void> {
           items: [
             { label: 'Ollama (local, no API key needed)', value: 'ollama' },
             { label: 'OpenAI (cloud, requires API key)', value: 'openai' },
+            { label: 'Jina AI (cloud, requires API key)', value: 'jina' },
           ],
           onSelect: (item: { label: string; value: unknown }) => {
             const provider = String(item.value);
             if (provider === 'ollama') {
               setState(s => ({ ...s, step: 'ollama-url', embeddingProvider: provider }));
-            } else {
+            } else if (provider === 'openai') {
               setState(s => ({ ...s, step: 'openai-key', embeddingProvider: provider }));
+            } else {
+              setState(s => ({ ...s, step: 'jina-key', embeddingProvider: provider }));
             }
           },
         }),
@@ -384,6 +401,28 @@ export async function onboardingCommand(): Promise<void> {
         React.createElement(TextInput, {
           value: openaiKeyInput,
           onChange: setOpenaiKeyInput,
+          onSubmit: (value: string) => {
+            if (setupRunning.current) return;
+            setupRunning.current = true;
+            const finalState = { ...state, step: 'done' as Step, embeddingApiKey: value };
+            setState(finalState);
+            runSetup(finalState, repoRoot).then(lines => {
+              setSummary(lines);
+              setDone(true);
+            }).catch((err: Error) => {
+              setSummary([`Setup failed: ${err.message}`]);
+              setDone(true);
+            });
+          },
+        }),
+      ) : null,
+
+      state.step === 'jina-key' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, null, 'Jina API key:'),
+        React.createElement(Text, { dimColor: true }, '  (will be saved to .env — press Enter to skip and set JINA_API_KEY manually)'),
+        React.createElement(TextInput, {
+          value: jinaKeyInput,
+          onChange: setJinaKeyInput,
           onSubmit: (value: string) => {
             if (setupRunning.current) return;
             setupRunning.current = true;
