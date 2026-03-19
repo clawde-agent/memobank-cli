@@ -5,6 +5,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 
 const QWEN_PROTOCOL = `
 ## Memobank Memory Protocol
@@ -27,8 +28,6 @@ export function detectQwen(): boolean {
 }
 
 function isInPath(cmd: string): boolean {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { execSync } = require('child_process') as typeof import('child_process');
   try {
     execSync(`which ${cmd}`, { stdio: 'pipe' });
     return true;
