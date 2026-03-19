@@ -34,6 +34,7 @@ program
   .command('install')
   .description('Set up memobank directory structure (use "memo onboarding" for interactive setup)')
   .option('--repo <path>', 'Point to an existing memobank repo')
+  .option('--platform <name>', 'Install adapter for specific platform: claude-code|codex|gemini|qwen|cursor|all')
   .action(async (options) => {
     try {
       await installCommand(options);
