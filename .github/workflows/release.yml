@@ -33,6 +33,14 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Debug token
+        run: |
+          echo "NPM_TOKEN length: ${#NPM_TOKEN}"
+          npm whoami || echo "whoami failed"
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish to npm (Trusted Publisher)
         run: npm publish --access public --provenance
         env:
