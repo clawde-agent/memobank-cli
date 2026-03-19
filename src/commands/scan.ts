@@ -8,7 +8,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { glob } from 'glob';
 import { scanForSecrets, sanitize } from '../core/sanitizer';
 import { findRepoRoot, getTeamDir } from '../core/store';
@@ -119,7 +119,7 @@ export async function scanCommand(scanPath: string | undefined, options: ScanCom
       // Re-stage the file if in a git repo
       try {
         const dir = path.dirname(file);
-        execSync(`git add "${file}"`, { cwd: dir, stdio: 'pipe' });
+        execFileSync('git', ['add', file], { cwd: dir, stdio: 'pipe' });
       } catch {
         /* not in a git repo, skip */
       }
