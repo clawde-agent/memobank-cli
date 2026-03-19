@@ -17,7 +17,13 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": false,
-    "noImplicitOverride": true
+    "noImplicitOverride": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "ink": ["./node_modules/ink/build/index.d.ts"],
+      "ink-text-input": ["./node_modules/ink-text-input/build/index.d.ts"],
+      "ink-select-input": ["./node_modules/ink-select-input/build/index.d.ts"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "tests"]
