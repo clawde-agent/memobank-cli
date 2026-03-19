@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as readline from 'readline';
+import { exec } from 'child_process';
 import { findRepoRoot } from '../core/store';
 import { loadConfig, writeConfig } from '../config';
 import { detectAvailableTools, importMemories } from './import';
@@ -117,8 +118,7 @@ async function askScope(rl: readline.Interface, toolName: string): Promise<'glob
  */
 async function checkOllama(): Promise<{ installed: boolean; models: string[] }> {
   return new Promise((resolve) => {
-    const { exec } = require('child_process');
-    exec('ollama list', (error: Error, stdout: string) => {
+    exec('ollama list', (error: Error | null, stdout: string) => {
       if (error) {
         resolve({ installed: false, models: [] });
       } else {

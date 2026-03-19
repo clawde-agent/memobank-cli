@@ -1,16 +1,16 @@
 /**
  * Onboarding command (memo init)
  * 4-step interactive TUI setup wizard using Ink
+ *
+ * ink, ink-text-input, and ink-select-input are ESM-only packages that cannot be
+ * require()'d from a CommonJS bundle. All imports of those packages are done via
+ * a Function-constructor-based dynamic import() so TypeScript does not rewrite
+ * them to require() calls.
  */
 
-import React, { useState } from 'react';
-import { render, Box, Text } from 'ink';
-import TextInput from 'ink-text-input';
-import SelectInput from 'ink-select-input';
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import { MultiSelect, MultiSelectItem } from '../components/MultiSelect';
 import { findRepoRoot, getPersonalDir, migrateToPersonal } from '../core/store';
 import { loadConfig, writeConfig, initConfig } from '../config';
 import { installClaudeCode } from '../platforms/claude-code';
@@ -19,6 +19,7 @@ import { installGemini, detectGemini } from '../platforms/gemini';
 import { installQwen, detectQwen } from '../platforms/qwen';
 import { installCursor } from '../platforms/cursor';
 import { teamInit } from './team';
+import type { MultiSelectItem } from '../components/MultiSelect';
 
 /** Detect git repo name from cwd */
 function detectProjectName(): string {
@@ -84,104 +85,6 @@ interface OnboardingState {
   searchEngine: string;
 }
 
-function OnboardingApp({ repoRoot }: { repoRoot: string }) {
-  const defaultName = detectProjectName();
-  const platformItems = detectPlatforms();
-  const detectedPlatforms = getDetectedPlatforms(platformItems);
-
-  const [state, setState] = useState<OnboardingState>({
-    step: 'project-name',
-    projectName: defaultName,
-    platforms: detectedPlatforms,
-    teamRepo: '',
-    searchEngine: 'text',
-  });
-  const [nameInput, setNameInput] = useState(defaultName);
-  const [teamInput, setTeamInput] = useState('');
-  const [done, setDone] = useState(false);
-  const [summary, setSummary] = useState<string[]>([]);
-
-  const searchEngineItems = [
-    { label: 'Text (recommended, zero setup)', value: 'text' },
-    { label: 'Vector / LanceDB (better recall, requires Ollama or OpenAI)', value: 'lancedb' },
-  ];
-
-  if (done) {
-    return (
-      <Box flexDirection="column" marginTop={1}>
-        <Text color="green" bold>✓ memobank initialized!</Text>
-        {summary.map((line, i) => <Text key={i} dimColor>  {line}</Text>)}
-        <Text dimColor>Run: memo recall "anything" to test</Text>
-      </Box>
-    );
-  }
-
-  return (
-    <Box flexDirection="column" padding={1}>
-      <Text bold color="cyan">🧠  Memobank Setup</Text>
-      <Text> </Text>
-
-      {state.step === 'project-name' && (
-        <Box flexDirection="column">
-          <Text>Project name:</Text>
-          <TextInput
-            value={nameInput}
-            onChange={setNameInput}
-            onSubmit={(value) => {
-              setState(s => ({ ...s, step: 'platforms', projectName: value || defaultName }));
-            }}
-          />
-        </Box>
-      )}
-
-      {state.step === 'platforms' && (
-        <MultiSelect
-          label="Select platforms to integrate:"
-          items={platformItems}
-          defaultSelected={detectedPlatforms}
-          onSubmit={(selected) => {
-            setState(s => ({ ...s, step: 'team-repo', platforms: selected }));
-          }}
-        />
-      )}
-
-      {state.step === 'team-repo' && (
-        <Box flexDirection="column">
-          <Text>Team memory repo <Text dimColor>(optional — Enter to skip):</Text></Text>
-          <TextInput
-            value={teamInput}
-            onChange={setTeamInput}
-            onSubmit={(value) => {
-              setState(s => ({ ...s, step: 'search-engine', teamRepo: value }));
-            }}
-          />
-        </Box>
-      )}
-
-      {state.step === 'search-engine' && (
-        <Box flexDirection="column">
-          <Text bold>Search engine:</Text>
-          <SelectInput
-            items={searchEngineItems}
-            onSelect={(item) => {
-              const finalState = { ...state, searchEngine: item.value };
-              setState({ ...finalState, step: 'done' });
-              // Run setup asynchronously
-              runSetup(finalState, repoRoot).then(lines => {
-                setSummary(lines);
-                setDone(true);
-              }).catch((err: Error) => {
-                setSummary([`Setup failed: ${err.message}`]);
-                setDone(true);
-              });
-            }}
-          />
-        </Box>
-      )}
-    </Box>
-  );
-}
-
 async function runSetup(state: OnboardingState, repoRoot: string): Promise<string[]> {
   const summaryLines: string[] = [];
 
@@ -239,6 +142,167 @@ async function runSetup(state: OnboardingState, repoRoot: string): Promise<strin
 
 export async function onboardingCommand(): Promise<void> {
   const repoRoot = findRepoRoot(process.cwd());
-  const { waitUntilExit } = render(<OnboardingApp repoRoot={repoRoot} />);
+
+  // Use Function constructor to bypass TypeScript's import() -> require() transform.
+  // ink, ink-text-input, ink-select-input are ESM-only packages that cannot be
+  // require()'d from a CommonJS bundle; this ensures Node uses its ESM loader.
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  const esmImport = new Function('specifier', 'return import(specifier)') as (s: string) => Promise<unknown>;
+
+  const reactMod = await esmImport('react') as typeof import('react') & { default: typeof import('react') };
+  const React = (reactMod.default ?? reactMod) as typeof import('react');
+  const { useState, useRef } = React;
+
+  const inkMod = await esmImport('ink') as typeof import('ink');
+  const { render, Box, Text, useInput } = inkMod;
+  type Key = Parameters<Parameters<typeof useInput>[0]>[1];
+
+  type TextInputProps = { value: string; onChange: (v: string) => void; onSubmit: (v: string) => void };
+  const inkTextInputMod = await esmImport('ink-text-input') as { default: unknown };
+  const TextInput = inkTextInputMod.default as React.ComponentType<TextInputProps>;
+
+  type SelectItem = { label: string; value: string };
+  type SelectInputProps = { items: SelectItem[]; onSelect: (item: { label: string; value: unknown }) => void };
+  const inkSelectInputMod = await esmImport('ink-select-input') as { default: unknown };
+  const SelectInput = inkSelectInputMod.default as React.ComponentType<SelectInputProps>;
+
+  const defaultName = detectProjectName();
+  const platformItems = detectPlatforms();
+  const detectedPlatforms = getDetectedPlatforms(platformItems);
+
+  const searchEngineItems: SelectItem[] = [
+    { label: 'Text (recommended, zero setup)', value: 'text' },
+    { label: 'Vector / LanceDB (better recall, requires Ollama or OpenAI)', value: 'lancedb' },
+  ];
+
+  // Inline MultiSelect component (avoids a separate module that would need ink imports)
+  interface InlineMultiSelectProps {
+    label: string;
+    items: MultiSelectItem[];
+    defaultSelected?: string[];
+    onSubmit: (selected: string[]) => void;
+  }
+
+  function InlineMultiSelect({ label, items, defaultSelected = [], onSubmit }: InlineMultiSelectProps) {
+    const [cursor, setCursor] = useState(0);
+    const [selected, setSelected] = useState<Set<string>>(new Set(defaultSelected));
+
+    useInput((input: string, key: Key) => {
+      if (key.upArrow) { setCursor(c => Math.max(0, c - 1)); }
+      if (key.downArrow) { setCursor(c => Math.min(items.length - 1, c + 1)); }
+      if (input === ' ') {
+        const item = items[cursor];
+        if (item && !item.disabled) {
+          setSelected(prev => {
+            const next = new Set(prev);
+            if (next.has(item.value)) { next.delete(item.value); } else { next.add(item.value); }
+            return next;
+          });
+        }
+      }
+      if (key.return) {
+        setSelected(prev => { onSubmit([...prev]); return prev; });
+      }
+    });
+
+    return React.createElement(Box, { flexDirection: 'column', marginBottom: 1 },
+      React.createElement(Text, { bold: true }, label),
+      React.createElement(Text, { dimColor: true }, '  (↑↓ navigate · Space toggle · Enter confirm)'),
+      ...items.map((item, i) =>
+        React.createElement(Box, { key: item.value },
+          React.createElement(Text, { color: (i === cursor ? 'cyan' : undefined) as 'cyan' | undefined },
+            `  ${selected.has(item.value) ? '◉' : '◯'} ${item.label}`,
+            item.hint ? React.createElement(Text, { dimColor: true }, `  ${item.hint}`) : null,
+          ),
+        ),
+      ),
+    );
+  }
+
+  function OnboardingApp() {
+    const [state, setState] = useState<OnboardingState>({
+      step: 'project-name',
+      projectName: defaultName,
+      platforms: detectedPlatforms,
+      teamRepo: '',
+      searchEngine: 'text',
+    });
+    const [nameInput, setNameInput] = useState(defaultName);
+    const [teamInput, setTeamInput] = useState('');
+    const [done, setDone] = useState(false);
+    const [summary, setSummary] = useState<string[]>([]);
+    // Prevent double-submission
+    const setupRunning = useRef(false);
+
+    if (done) {
+      return React.createElement(Box, { flexDirection: 'column', marginTop: 1 },
+        React.createElement(Text, { color: 'green', bold: true }, '✓ memobank initialized!'),
+        ...summary.map((line, i) => React.createElement(Text, { key: i, dimColor: true }, `  ${line}`)),
+        React.createElement(Text, { dimColor: true }, 'Run: memo recall "anything" to test'),
+      );
+    }
+
+    return React.createElement(Box, { flexDirection: 'column', padding: 1 },
+      React.createElement(Text, { bold: true, color: 'cyan' }, '🧠  Memobank Setup'),
+      React.createElement(Text, null, ' '),
+
+      state.step === 'project-name' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, null, 'Project name:'),
+        React.createElement(TextInput, {
+          value: nameInput,
+          onChange: setNameInput,
+          onSubmit: (value: string) => {
+            setState(s => ({ ...s, step: 'platforms', projectName: value || defaultName }));
+          },
+        }),
+      ) : null,
+
+      state.step === 'platforms' ? React.createElement(InlineMultiSelect, {
+        label: 'Select platforms to integrate:',
+        items: platformItems,
+        defaultSelected: detectedPlatforms,
+        onSubmit: (selected: string[]) => {
+          setState(s => ({ ...s, step: 'team-repo', platforms: selected }));
+        },
+      }) : null,
+
+      state.step === 'team-repo' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, null,
+          'Team memory repo ',
+          React.createElement(Text, { dimColor: true }, '(optional — Enter to skip):'),
+        ),
+        React.createElement(TextInput, {
+          value: teamInput,
+          onChange: setTeamInput,
+          onSubmit: (value: string) => {
+            setState(s => ({ ...s, step: 'search-engine', teamRepo: value }));
+          },
+        }),
+      ) : null,
+
+      state.step === 'search-engine' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, { bold: true }, 'Search engine:'),
+        React.createElement(SelectInput, {
+          items: searchEngineItems,
+          onSelect: (item: { label: string; value: unknown }) => {
+            if (setupRunning.current) return;
+            setupRunning.current = true;
+            const engine = String(item.value);
+            const finalState = { ...state, step: 'done' as Step, searchEngine: engine };
+            setState(finalState);
+            runSetup(finalState, repoRoot).then(lines => {
+              setSummary(lines);
+              setDone(true);
+            }).catch((err: Error) => {
+              setSummary([`Setup failed: ${err.message}`]);
+              setDone(true);
+            });
+          },
+        }),
+      ) : null,
+    );
+  }
+
+  const { waitUntilExit } = render(React.createElement(OnboardingApp));
   await waitUntilExit();
 }

@@ -6,6 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { createHash } from 'crypto';
 import { MemoryFile, RecallResult } from '../types';
 import { EngineAdapter } from './engine-adapter';
 import { EmbeddingGenerator } from '../core/embedding';
@@ -249,7 +250,7 @@ export class LanceDbEngine implements EngineAdapter {
    * Generate unique memory ID
    */
   private memoryId(memory: MemoryFile): string {
-    const hash = require('crypto').createHash('md5').update(memory.path).digest('hex');
+    const hash = createHash('md5').update(memory.path).digest('hex');
     return hash.slice(0, 16);
   }
 
