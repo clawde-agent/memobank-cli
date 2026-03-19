@@ -15,25 +15,37 @@ const index_1 = require("./commands/index");
 const review_1 = require("./commands/review");
 const map_1 = require("./commands/map");
 const import_1 = require("./commands/import");
-const setup_1 = require("./commands/setup");
+const onboarding_1 = require("./commands/onboarding");
 const lifecycle_1 = require("./commands/lifecycle");
 const program = new commander_1.Command();
 program
     .name('memo')
     .description('memobank CLI - persistent memory for AI coding sessions')
     .version('0.1.0');
-// Install command
+// Install command - simplified, just creates directory structure
 program
     .command('install')
-    .description('Set up memobank directory structure and platform integrations')
+    .description('Set up memobank directory structure (use "memo onboarding" for interactive setup)')
     .option('--repo <path>', 'Point to an existing memobank repo')
-    .option('--claude-code', 'Configure Claude Code')
-    .option('--codex', 'Configure Codex')
-    .option('--cursor', 'Configure Cursor')
-    .option('--all', 'Configure all platforms (default)')
     .action(async (options) => {
     try {
         await (0, install_1.installCommand)(options);
+    }
+    catch (error) {
+        console.error(`Error: ${error.message}`);
+        process.exit(1);
+    }
+});
+// Onboarding command - new interactive setup
+program
+    .command('onboarding')
+    .alias('init')
+    .alias('setup')
+    .description('Interactive setup wizard with menu navigation (recommended)')
+    .option('--repo <path>', 'Memobank repository path')
+    .action(async (options) => {
+    try {
+        await (0, onboarding_1.onboardingCommand)(options.repo);
     }
     catch (error) {
         console.error(`Error: ${error.message}`);
@@ -198,20 +210,6 @@ program
         process.exit(1);
     }
 });
-// Setup command (interactive wizard)
-program
-    .command('setup')
-    .description('Interactive setup wizard for memobank configuration')
-    .option('--repo <path>', 'Memobank repository path')
-    .action(async (options) => {
-    try {
-        await (0, setup_1.setupWizard)(options.repo);
-    }
-    catch (error) {
-        console.error(`Error: ${error.message}`);
-        process.exit(1);
-    }
-});
 // Import command
 program
     .command('import')
@@ -260,7 +258,7 @@ program
         else {
             await (0, lifecycle_1.lifecycleCommand)({
                 repo: options.repo,
-                report: options.report,
+                report: options.report || (!options.tier && !options.archive && !options.delete && !options.flagged),
                 archive: options.archive,
                 delete: options.delete,
                 flagged: options.flagged,
