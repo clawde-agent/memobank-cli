@@ -80,7 +80,7 @@ function getDetectedPlatforms(items: MultiSelectItem[]): string[] {
   return items.filter(i => i.hint?.includes('✓')).map(i => i.value);
 }
 
-type Step = 'project-name' | 'platforms' | 'team-repo' | 'search-engine' | 'done';
+type Step = 'project-name' | 'platforms' | 'team-repo' | 'search-engine' | 'embedding-provider' | 'ollama-url' | 'openai-key' | 'done';
 
 interface OnboardingState {
   step: Step;
@@ -88,6 +88,9 @@ interface OnboardingState {
   platforms: string[];
   teamRepo: string;
   searchEngine: string;
+  embeddingProvider: string;
+  embeddingUrl: string;
+  embeddingApiKey: string;
 }
 
 async function runSetup(state: OnboardingState, repoRoot: string): Promise<string[]> {
@@ -139,6 +142,26 @@ async function runSetup(state: OnboardingState, repoRoot: string): Promise<strin
   if (state.searchEngine === 'lancedb') {
     const config = loadConfig(repoRoot);
     config.embedding.engine = 'lancedb';
+    if (state.embeddingProvider === 'ollama') {
+      config.embedding.provider = 'ollama';
+      config.embedding.base_url = state.embeddingUrl || 'http://localhost:11434';
+      config.embedding.model = 'mxbai-embed-large';
+      config.embedding.dimensions = 1024;
+    } else if (state.embeddingProvider === 'openai') {
+      config.embedding.provider = 'openai';
+      config.embedding.model = 'text-embedding-3-small';
+      config.embedding.dimensions = 1536;
+      // Save API key to env file (not config.yaml for security)
+      if (state.embeddingApiKey.trim()) {
+        const envPath = path.join(repoRoot, '.env');
+        const envLine = `OPENAI_API_KEY=${state.embeddingApiKey.trim()}\n`;
+        const existing = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : '';
+        if (!existing.includes('OPENAI_API_KEY=')) {
+          fs.writeFileSync(envPath, existing + envLine, 'utf-8');
+          summaryLines.push(`OpenAI API key saved to ${envPath}`);
+        }
+      }
+    }
     writeConfig(repoRoot, config);
   }
 
@@ -231,9 +254,14 @@ export async function onboardingCommand(): Promise<void> {
       platforms: detectedPlatforms,
       teamRepo: '',
       searchEngine: 'text',
+      embeddingProvider: '',
+      embeddingUrl: 'http://localhost:11434',
+      embeddingApiKey: '',
     });
     const [nameInput, setNameInput] = useState(defaultName);
     const [teamInput, setTeamInput] = useState('');
+    const [ollamaUrlInput, setOllamaUrlInput] = useState('http://localhost:11434');
+    const [openaiKeyInput, setOpenaiKeyInput] = useState('');
     const [done, setDone] = useState(false);
     const [summary, setSummary] = useState<string[]>([]);
     // Prevent double-submission
@@ -290,10 +318,76 @@ export async function onboardingCommand(): Promise<void> {
         React.createElement(SelectInput, {
           items: searchEngineItems,
           onSelect: (item: { label: string; value: unknown }) => {
+            const engine = String(item.value);
+            if (engine === 'lancedb') {
+              setState(s => ({ ...s, step: 'embedding-provider', searchEngine: engine }));
+            } else {
+              if (setupRunning.current) return;
+              setupRunning.current = true;
+              const finalState = { ...state, step: 'done' as Step, searchEngine: engine };
+              setState(finalState);
+              runSetup(finalState, repoRoot).then(lines => {
+                setSummary(lines);
+                setDone(true);
+              }).catch((err: Error) => {
+                setSummary([`Setup failed: ${err.message}`]);
+                setDone(true);
+              });
+            }
+          },
+        }),
+      ) : null,
+
+      state.step === 'embedding-provider' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, { bold: true }, 'Embedding provider:'),
+        React.createElement(SelectInput, {
+          items: [
+            { label: 'Ollama (local, no API key needed)', value: 'ollama' },
+            { label: 'OpenAI (cloud, requires API key)', value: 'openai' },
+          ],
+          onSelect: (item: { label: string; value: unknown }) => {
+            const provider = String(item.value);
+            if (provider === 'ollama') {
+              setState(s => ({ ...s, step: 'ollama-url', embeddingProvider: provider }));
+            } else {
+              setState(s => ({ ...s, step: 'openai-key', embeddingProvider: provider }));
+            }
+          },
+        }),
+      ) : null,
+
+      state.step === 'ollama-url' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, null, 'Ollama base URL:'),
+        React.createElement(Text, { dimColor: true }, '  (default: http://localhost:11434 — press Enter to confirm)'),
+        React.createElement(TextInput, {
+          value: ollamaUrlInput,
+          onChange: setOllamaUrlInput,
+          onSubmit: (value: string) => {
             if (setupRunning.current) return;
             setupRunning.current = true;
-            const engine = String(item.value);
-            const finalState = { ...state, step: 'done' as Step, searchEngine: engine };
+            const finalState = { ...state, step: 'done' as Step, embeddingUrl: value || 'http://localhost:11434' };
+            setState(finalState);
+            runSetup(finalState, repoRoot).then(lines => {
+              setSummary(lines);
+              setDone(true);
+            }).catch((err: Error) => {
+              setSummary([`Setup failed: ${err.message}`]);
+              setDone(true);
+            });
+          },
+        }),
+      ) : null,
+
+      state.step === 'openai-key' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, null, 'OpenAI API key:'),
+        React.createElement(Text, { dimColor: true }, '  (will be saved to .env — press Enter to skip and set OPENAI_API_KEY manually)'),
+        React.createElement(TextInput, {
+          value: openaiKeyInput,
+          onChange: setOpenaiKeyInput,
+          onSubmit: (value: string) => {
+            if (setupRunning.current) return;
+            setupRunning.current = true;
+            const finalState = { ...state, step: 'done' as Step, embeddingApiKey: value };
             setState(finalState);
             runSetup(finalState, repoRoot).then(lines => {
               setSummary(lines);

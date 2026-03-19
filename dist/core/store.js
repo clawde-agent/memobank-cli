@@ -74,10 +74,7 @@ function findRepoRoot(cwd, repoFlag) {
         const gitRoot = path.join(cwd, '.git');
         if (fs.existsSync(gitRoot)) {
             const repoName = path.basename(cwd);
-            const memobankPath = path.join(osHomeDir(), '.memobank', repoName);
-            if (fs.existsSync(memobankPath)) {
-                return memobankPath;
-            }
+            return path.join(osHomeDir(), '.memobank', repoName);
         }
     }
     catch (e) { /* ignore */ }
