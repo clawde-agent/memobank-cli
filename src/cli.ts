@@ -303,9 +303,10 @@ const team = program
 team
   .command('init <remote-url>')
   .description('Set up shared team memory repository')
-  .action(async (remoteUrl: string) => {
+  .option('--repo <path>', 'Memobank repository path')
+  .action(async (remoteUrl: string, options) => {
     try {
-      const repoRoot = findRepoRoot(process.cwd());
+      const repoRoot = findRepoRoot(process.cwd(), options.repo);
       await teamInit(remoteUrl, repoRoot);
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`);
@@ -316,9 +317,10 @@ team
 team
   .command('sync')
   .description('Pull and push team memories')
-  .action(async () => {
+  .option('--repo <path>', 'Memobank repository path')
+  .action(async (options) => {
     try {
-      const repoRoot = findRepoRoot(process.cwd());
+      const repoRoot = findRepoRoot(process.cwd(), options.repo);
       await teamSync(repoRoot);
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`);
@@ -329,9 +331,10 @@ team
 team
   .command('publish <file>')
   .description('Promote a personal memory to team')
-  .action(async (file: string) => {
+  .option('--repo <path>', 'Memobank repository path')
+  .action(async (file: string, options) => {
     try {
-      const repoRoot = findRepoRoot(process.cwd());
+      const repoRoot = findRepoRoot(process.cwd(), options.repo);
       await teamPublish(file, repoRoot);
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`);
@@ -342,9 +345,10 @@ team
 team
   .command('status')
   .description('Show team repository status')
-  .action(async () => {
+  .option('--repo <path>', 'Memobank repository path')
+  .action(async (options) => {
     try {
-      const repoRoot = findRepoRoot(process.cwd());
+      const repoRoot = findRepoRoot(process.cwd(), options.repo);
       await teamStatus(repoRoot);
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`);
