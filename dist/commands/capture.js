@@ -56,7 +56,7 @@ function hashString(str) {
  */
 function isDuplicate(name, existingMemories) {
     const hash = hashString(name);
-    return existingMemories.some(m => hashString(m.name) === hash);
+    return existingMemories.some((m) => hashString(m.name) === hash);
 }
 async function capture(options = {}) {
     const cwd = process.cwd();
@@ -68,15 +68,16 @@ async function capture(options = {}) {
         // Read from Claude auto-memory directory
         const claudeMemoryDir = path.join(process.env.HOME || '', '.claude', 'projects', config.project.name, 'memory');
         if (fs.existsSync(claudeMemoryDir)) {
-            const files = fs.readdirSync(claudeMemoryDir)
-                .filter(f => f.endsWith('.md'))
-                .map(f => path.join(claudeMemoryDir, f))
+            const files = fs
+                .readdirSync(claudeMemoryDir)
+                .filter((f) => f.endsWith('.md'))
+                .map((f) => path.join(claudeMemoryDir, f))
                 .sort((a, b) => {
                 const statA = fs.statSync(a);
                 const statB = fs.statSync(b);
                 return statB.mtimeMs - statA.mtimeMs;
             });
-            if (files.length > 0) {
+            if (files.length > 0 && files[0]) {
                 sessionText = fs.readFileSync(files[0], 'utf-8');
                 console.log(`Read from: ${files[0]}`);
             }

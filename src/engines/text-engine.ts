@@ -17,19 +17,19 @@ export class TextEngine implements EngineAdapter {
     const queryTokens = this.tokenize(query);
 
     if (queryTokens.length === 0) {
-      return memories.slice(0, topK).map(memory => ({
+      return memories.slice(0, topK).map((memory) => ({
         memory,
         score: computeDecayScore(memory),
       }));
     }
 
     // 2. Score each memory
-    const scored = memories.map(memory => {
+    const scored = memories.map((memory) => {
       const textScore = this.computeTextScore(memory, queryTokens);
       const decayScore = computeDecayScore(memory);
 
       // Final: (text_score × 0.6) + (decay_score × 0.4)
-      const finalScore = (textScore * 0.6) + (decayScore * 0.4);
+      const finalScore = textScore * 0.6 + decayScore * 0.4;
 
       return { memory, score: finalScore };
     });
@@ -49,7 +49,7 @@ export class TextEngine implements EngineAdapter {
       .toLowerCase()
       .replace(/[^\w\s-]/g, ' ')
       .split(/\s+/)
-      .filter(token => token.length > 0);
+      .filter((token) => token.length > 0);
   }
 
   /**

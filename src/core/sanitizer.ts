@@ -24,10 +24,12 @@ export function sanitize(content: string): string {
   sanitized = sanitized.replace(/\b\d{1,3}(\.\d{1,3}){3}\b/g, (match) => {
     const parts = match.split('.');
     // Check if it's a valid IP (all parts 0-255)
-    if (parts.every(part => {
-      const num = parseInt(part, 10);
-      return num >= 0 && num <= 255;
-    })) {
+    if (
+      parts.every((part) => {
+        const num = parseInt(part, 10);
+        return num >= 0 && num <= 255;
+      })
+    ) {
       return '[REDACTED]';
     }
     return match;
@@ -37,7 +39,10 @@ export function sanitize(content: string): string {
   sanitized = sanitized.replace(/\b([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b/g, '[REDACTED]');
 
   // 3. JWT tokens
-  sanitized = sanitized.replace(/eyJ[A-Za-z0-9._-]{50,}\.[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+/g, '[REDACTED]');
+  sanitized = sanitized.replace(
+    /eyJ[A-Za-z0-9._-]{50,}\.[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+/g,
+    '[REDACTED]'
+  );
 
   // 4. .env-style variables with long values
   sanitized = sanitized.replace(/[A-Z_]+=["']?[A-Za-z0-9/+]{20,}["']?/g, (match) => {

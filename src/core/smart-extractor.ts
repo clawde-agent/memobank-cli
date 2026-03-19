@@ -62,7 +62,7 @@ export async function extract(
       return [];
     }
 
-    const data = await response.json() as any;
+    const data = (await response.json()) as any;
     const content = data.content[0]?.text || '';
 
     // Parse JSON from response
@@ -75,7 +75,7 @@ export async function extract(
     const extracted = JSON.parse(jsonMatch[0]) as ExtractionResult[];
 
     // Validate and filter
-    return extracted.filter(item => {
+    return extracted.filter((item) => {
       return (
         item.name &&
         item.type &&

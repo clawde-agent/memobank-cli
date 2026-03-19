@@ -54,7 +54,7 @@ async function extract(sessionText, apiKey, model = 'claude-3-5-sonnet-20241022'
             console.error(`LLM extraction failed: ${error}`);
             return [];
         }
-        const data = await response.json();
+        const data = (await response.json());
         const content = data.content[0]?.text || '';
         // Parse JSON from response
         const jsonMatch = content.match(/\[[\s\S]*\]/);
@@ -64,7 +64,7 @@ async function extract(sessionText, apiKey, model = 'claude-3-5-sonnet-20241022'
         }
         const extracted = JSON.parse(jsonMatch[0]);
         // Validate and filter
-        return extracted.filter(item => {
+        return extracted.filter((item) => {
             return (item.name &&
                 item.type &&
                 item.description &&

@@ -44,55 +44,59 @@ const os = __importStar(require("os"));
 const child_process_1 = require("child_process");
 const util_1 = require("util");
 const store_1 = require("../core/store");
+const memory_template_1 = require("../core/memory-template");
 const execAsync = (0, util_1.promisify)(child_process_1.exec);
 /**
  * Memory template for editor
  */
 function getTemplate(type) {
+    const baseTemplate = (0, memory_template_1.getTemplateByType)(type);
     return `---
-name: 
+name: ${(0, memory_template_1.generateMemorySlug)('your-memory-name')}
 type: ${type}
-description: 
-tags: []
+description: One-sentence summary
+tags: [topic, technology]
 confidence: medium
 created: ${new Date().toISOString()}
 ---
 
-## Problem
-What problem or challenge are you addressing?
+${baseTemplate}
 
-## Solution
-What did you learn or decide?
-
-## Context
-Any relevant background information?
-
-## References
-Links to related resources or code?
+---
+# SECURITY CHECKLIST (remove this section before saving)
+# - [ ] No API keys, passwords, or tokens
+# - [ ] No IP addresses or hostnames
+# - [ ] No email addresses or phone numbers
+# - [ ] No database connection strings
+# - [ ] No private keys or certificates
+# - [ ] Content is at appropriate abstraction level (high/medium)
 `;
 }
 /**
  * Parse content from edited template
  */
 function parseTemplate(content, type) {
+    // Find frontmatter boundaries
     const lines = content.split('\n');
     let frontmatter = '';
     let body = '';
     let inFrontmatter = false;
+    let foundFirstDash = false;
     for (const line of lines) {
         if (line === '---') {
-            if (!inFrontmatter) {
+            if (!foundFirstDash) {
+                foundFirstDash = true;
                 inFrontmatter = true;
             }
-            else {
+            else if (inFrontmatter) {
                 inFrontmatter = false;
-                continue;
             }
+            continue;
         }
-        else if (inFrontmatter) {
+        if (inFrontmatter) {
             frontmatter += line + '\n';
         }
-        else {
+        else if (!line.startsWith('# SECURITY CHECKLIST')) {
             body += line + '\n';
         }
     }
@@ -107,14 +111,19 @@ function parseTemplate(content, type) {
     };
     for (const line of frontmatter.split('\n')) {
         const match = line.match(/^(\w+):\s*(.*)$/);
-        if (match) {
+        if (match?.[1]) {
             const key = match[1];
-            let value = match[2];
+            const value = match[2]?.trim() ?? '';
             if (key === 'tags') {
-                const tagArray = value.replace(/^\[|\]$/g, '').split(',').map(t => t.trim().replace(/[\'"]/g, ''));
+                // Parse array format: [tag1, tag2]
+                const tagArray = value
+                    .replace(/^\[|\]$/g, '')
+                    .split(',')
+                    .map((t) => t.trim().replace(/['"]/g, ''))
+                    .filter((t) => t.length > 0);
                 data[key] = tagArray;
             }
-            else {
+            else if (value) {
                 data[key] = value;
             }
         }
@@ -126,9 +135,7 @@ async function writeMemoryCommand(type, options = {}) {
     const cwd = process.cwd();
     const repoRoot = (0, store_1.findRepoRoot)(cwd, options.repo);
     // Check if non-interactive mode
-    const isNonInteractive = options.name &&
-        options.description &&
-        options.content;
+    const isNonInteractive = options.name && options.description && options.content;
     let memoryData;
     if (isNonInteractive) {
         // Non-interactive mode
@@ -136,7 +143,7 @@ async function writeMemoryCommand(type, options = {}) {
             name: options.name,
             type,
             description: options.description,
-            tags: options.tags ? options.tags.split(',').map(t => t.trim()) : [],
+            tags: options.tags ? options.tags.split(',').map((t) => t.trim()) : [],
             confidence: 'medium',
             content: options.content || '',
             created: new Date().toISOString(),
@@ -149,6 +156,11 @@ async function writeMemoryCommand(type, options = {}) {
         fs.writeFileSync(tmpFile, template, 'utf-8');
         const editor = process.env.EDITOR || 'vi';
         console.log(`Opening ${editor}...`);
+        console.log('\n📝 Security Guidelines:');
+        console.log('   • Do NOT include API keys, passwords, or tokens');
+        console.log('   • Do NOT include IP addresses or hostnames');
+        console.log('   • Do NOT include email addresses or phone numbers');
+        console.log('   • Keep content at high/medium abstraction level\n');
         try {
             await execAsync(`${editor} "${tmpFile}"`);
             const editedContent = fs.readFileSync(tmpFile, 'utf-8');
@@ -163,7 +175,7 @@ async function writeMemoryCommand(type, options = {}) {
             fs.unlinkSync(tmpFile);
         }
     }
-    // Validate
+    // Validate required fields
     if (!memoryData.name) {
         console.error('Error: name is required');
         return;
@@ -176,10 +188,57 @@ async function writeMemoryCommand(type, options = {}) {
         console.error('Error: content is required');
         return;
     }
+    // Security validation
+    console.log('\n🔒 Security check...');
+    const { sanitized, redacted } = (0, memory_template_1.sanitizeContent)(memoryData.content);
+    if (redacted.length > 0) {
+        console.log('⚠️  Found sensitive information that will be redacted:');
+        redacted.forEach((item) => console.log(`   • ${item}`));
+        console.log('');
+        // Auto-sanitize
+        memoryData.content = sanitized;
+        console.log('✓ Content has been automatically sanitized\n');
+    }
+    // Validate content
+    const validation = (0, memory_template_1.validateMemoryContent)(memoryData.content);
+    if (validation.errors.length > 0) {
+        console.error('❌ Validation errors:');
+        validation.errors.forEach((err) => console.error(`   • ${err}`));
+        console.error('\nPlease remove sensitive information and try again.');
+        return;
+    }
+    if (validation.warnings.length > 0) {
+        console.log('⚠️  Warnings:');
+        validation.warnings.forEach((warn) => console.log(`   • ${warn}`));
+        console.log('');
+    }
+    // Check abstraction level
+    const abstractionLevel = (0, memory_template_1.checkAbstractionLevel)(memoryData.content);
+    if (abstractionLevel === 'too-specific') {
+        console.error('⚠️  Content appears too specific.');
+        console.error('   Please document at a higher abstraction level.');
+        console.error('   Focus on patterns, principles, and decisions rather than:');
+        console.error('   • Specific IP addresses or hostnames');
+        console.error('   • User-specific file paths');
+        console.error('   • Hard-coded values that may change\n');
+        return;
+    }
+    console.log(`✓ Abstraction level: ${abstractionLevel}\n`);
     // Write memory
     try {
+        const { fileName, content: fileContent } = (0, memory_template_1.generateMemoryFile)({
+            name: memoryData.name,
+            type: memoryData.type,
+            description: memoryData.description,
+            tags: memoryData.tags,
+            created: memoryData.created,
+            content: memoryData.content,
+            confidence: memoryData.confidence,
+        });
+        // Update memoryData with generated file name
+        memoryData.name = fileName.replace('.md', '').replace(/^\d{4}-\d{2}-\d{2}-/, '');
         const filePath = (0, store_1.writeMemory)(repoRoot, memoryData);
-        console.log(`Created: ${filePath}`);
+        console.log(`✅ Created: ${filePath}`);
     }
     catch (error) {
         console.error(`Error writing memory: ${error.message}`);

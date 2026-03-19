@@ -19,7 +19,7 @@ export async function reviewCommand(options: ReviewOptions = {}): Promise<void> 
   const memories = loadAll(repoRoot);
 
   const now = new Date();
-  const dueMemories = memories.filter(m => isReviewDue(m, now));
+  const dueMemories = memories.filter((m) => isReviewDue(m, now));
 
   if (options.due) {
     // Show only overdue items
@@ -38,8 +38,8 @@ export async function reviewCommand(options: ReviewOptions = {}): Promise<void> 
     }
   } else {
     // Show all with review schedule
-    const withReview = memories.filter(m => m.review_after);
-    const withoutReview = memories.filter(m => !m.review_after);
+    const withReview = memories.filter((m) => m.review_after);
+    const withoutReview = memories.filter((m) => !m.review_after);
 
     console.log(`## Review Status\n`);
     console.log(`Total memories: ${memories.length}`);
@@ -57,11 +57,13 @@ export async function reviewCommand(options: ReviewOptions = {}): Promise<void> 
     }
 
     if (withReview.length > dueMemories.length) {
-      const upcoming = withReview.filter(m => !isReviewDue(m, now));
+      const upcoming = withReview.filter((m) => !isReviewDue(m, now));
       console.log(`### Upcoming Reviews (${upcoming.length})\n`);
       for (const memory of upcoming.slice(0, 10)) {
         const relativePath = memory.path.replace(repoRoot + '/', '');
-        console.log(`- [${memory.type}] ${memory.name} (\`${relativePath}\`) · review: ${memory.review_after}`);
+        console.log(
+          `- [${memory.type}] ${memory.name} (\`${relativePath}\`) · review: ${memory.review_after}`
+        );
       }
       if (upcoming.length > 10) {
         console.log(`... and ${upcoming.length - 10} more`);

@@ -30,7 +30,7 @@ function hashString(str: string): string {
  */
 function isDuplicate(name: string, existingMemories: MemoryFile[]): boolean {
   const hash = hashString(name);
-  return existingMemories.some(m => hashString(m.name) === hash);
+  return existingMemories.some((m) => hashString(m.name) === hash);
 }
 
 export async function capture(options: CaptureOptions = {}): Promise<void> {
@@ -43,18 +43,25 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
 
   if (options.auto) {
     // Read from Claude auto-memory directory
-    const claudeMemoryDir = path.join(process.env.HOME || '', '.claude', 'projects', config.project.name, 'memory');
+    const claudeMemoryDir = path.join(
+      process.env.HOME || '',
+      '.claude',
+      'projects',
+      config.project.name,
+      'memory'
+    );
     if (fs.existsSync(claudeMemoryDir)) {
-      const files = fs.readdirSync(claudeMemoryDir)
-        .filter(f => f.endsWith('.md'))
-        .map(f => path.join(claudeMemoryDir, f))
+      const files = fs
+        .readdirSync(claudeMemoryDir)
+        .filter((f) => f.endsWith('.md'))
+        .map((f) => path.join(claudeMemoryDir, f))
         .sort((a, b) => {
           const statA = fs.statSync(a);
           const statB = fs.statSync(b);
           return statB.mtimeMs - statA.mtimeMs;
         });
 
-      if (files.length > 0) {
+      if (files.length > 0 && files[0]) {
         sessionText = fs.readFileSync(files[0], 'utf-8');
         console.log(`Read from: ${files[0]}`);
       } else {

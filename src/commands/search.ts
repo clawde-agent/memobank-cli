@@ -7,6 +7,7 @@ import { recall as runRecall } from '../core/retriever';
 import { loadConfig } from '../config';
 import { findRepoRoot, loadAll } from '../core/store';
 import { TextEngine } from '../engines/text-engine';
+import { EmbeddingGenerator } from '../core/embedding';
 import { MemoryFile } from '../types';
 
 export interface SearchOptions {
@@ -27,11 +28,11 @@ export async function search(query: string, options: SearchOptions = {}): Promis
 
   // Apply filters
   if (options.tag) {
-    memories = memories.filter(m => m.tags.includes(options.tag!));
+    memories = memories.filter((m) => m.tags.includes(options.tag!));
   }
 
   if (options.type) {
-    memories = memories.filter(m => m.type === options.type);
+    memories = memories.filter((m) => m.type === options.type);
   }
 
   // Get engine
@@ -40,10 +41,15 @@ export async function search(query: string, options: SearchOptions = {}): Promis
   if (engineName === 'lancedb') {
     try {
       const { LanceDbEngine } = await import('../engines/lancedb-engine');
-      engine = new LanceDbEngine();
+      const embedConfig = EmbeddingGenerator.fromMemoConfig(config);
+      if (!embedConfig) {
+        throw new Error('OPENAI_API_KEY not set or embedding config missing');
+      }
+      const embeddingGenerator = new EmbeddingGenerator(embedConfig);
+      engine = new LanceDbEngine(repoRoot, embeddingGenerator);
     } catch (e) {
       console.error('LanceDB engine not available. Falling back to text engine.');
-      console.error('To use LanceDB: npm install vectordb openai');
+      console.error(`Error: ${(e as Error).message}`);
       engine = new TextEngine();
     }
   } else {

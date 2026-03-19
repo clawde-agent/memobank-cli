@@ -7,6 +7,7 @@ import { recall as runRecall, writeRecallResults } from '../core/retriever';
 import { loadConfig } from '../config';
 import { findRepoRoot } from '../core/store';
 import { TextEngine } from '../engines/text-engine';
+import { EmbeddingGenerator } from '../core/embedding';
 import { RecallResult } from '../types';
 
 export interface RecallOptions {
@@ -31,10 +32,16 @@ export async function recall(query: string, options: RecallOptions = {}): Promis
   if (engineName === 'lancedb') {
     try {
       const { LanceDbEngine } = await import('../engines/lancedb-engine');
-      engine = new LanceDbEngine();
+      const embedConfig = EmbeddingGenerator.fromMemoConfig(config);
+      if (!embedConfig) {
+        throw new Error('OPENAI_API_KEY not set or embedding config missing');
+      }
+      const embeddingGenerator = new EmbeddingGenerator(embedConfig);
+      const indexDir = findRepoRoot(cwd, options.repo);
+      engine = new LanceDbEngine(indexDir, embeddingGenerator);
     } catch (e) {
       console.error('LanceDB engine not available. Falling back to text engine.');
-      console.error('To use LanceDB: npm install vectordb openai');
+      console.error(`Error: ${(e as Error).message}`);
       engine = new TextEngine();
     }
   } else {

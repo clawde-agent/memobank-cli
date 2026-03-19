@@ -15,17 +15,17 @@ class TextEngine {
         // 1. Tokenize query
         const queryTokens = this.tokenize(query);
         if (queryTokens.length === 0) {
-            return memories.slice(0, topK).map(memory => ({
+            return memories.slice(0, topK).map((memory) => ({
                 memory,
                 score: (0, decay_engine_1.computeDecayScore)(memory),
             }));
         }
         // 2. Score each memory
-        const scored = memories.map(memory => {
+        const scored = memories.map((memory) => {
             const textScore = this.computeTextScore(memory, queryTokens);
             const decayScore = (0, decay_engine_1.computeDecayScore)(memory);
             // Final: (text_score × 0.6) + (decay_score × 0.4)
-            const finalScore = (textScore * 0.6) + (decayScore * 0.4);
+            const finalScore = textScore * 0.6 + decayScore * 0.4;
             return { memory, score: finalScore };
         });
         // 3. Sort by score descending
@@ -41,7 +41,7 @@ class TextEngine {
             .toLowerCase()
             .replace(/[^\w\s-]/g, ' ')
             .split(/\s+/)
-            .filter(token => token.length > 0);
+            .filter((token) => token.length > 0);
     }
     /**
      * Compute text match score for a memory (0-1)

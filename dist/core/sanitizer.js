@@ -22,7 +22,7 @@ function sanitize(content) {
     sanitized = sanitized.replace(/\b\d{1,3}(\.\d{1,3}){3}\b/g, (match) => {
         const parts = match.split('.');
         // Check if it's a valid IP (all parts 0-255)
-        if (parts.every(part => {
+        if (parts.every((part) => {
             const num = parseInt(part, 10);
             return num >= 0 && num <= 255;
         })) {

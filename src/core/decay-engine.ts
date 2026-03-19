@@ -79,13 +79,13 @@ export function isReviewDue(memory: MemoryFile, now: Date = new Date()): boolean
  */
 function parseReviewDuration(duration: string): number {
   const match = duration.match(/^(\d+)([dwmy])$/);
-  if (!match) {
+  if (!match?.[1]) {
     // Default to 90 days if format is invalid
     return 90 * 24 * 60 * 60 * 1000;
   }
 
   const value = parseInt(match[1], 10);
-  const unit = match[2];
+  const unit = match[2] as string;
 
   const msPerDay = 24 * 60 * 60 * 1000;
 

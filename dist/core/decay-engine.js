@@ -68,7 +68,7 @@ function isReviewDue(memory, now = new Date()) {
  */
 function parseReviewDuration(duration) {
     const match = duration.match(/^(\d+)([dwmy])$/);
-    if (!match) {
+    if (!match?.[1]) {
         // Default to 90 days if format is invalid
         return 90 * 24 * 60 * 60 * 1000;
     }

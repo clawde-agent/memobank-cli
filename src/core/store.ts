@@ -141,7 +141,10 @@ export function writeMemory(repoRoot: string, memory: Omit<MemoryFile, 'path'>):
   // Generate filename: YYYY-MM-DD-name.md
   const date = new Date(memory.created);
   const dateStr = date.toISOString().split('T')[0];
-  const slug = memory.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  const slug = memory.name
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '');
   const filename = `${dateStr}-${slug}.md`;
   const filePath = path.join(typeDir, filename);
 
@@ -168,7 +171,12 @@ export function writeMemory(repoRoot: string, memory: Omit<MemoryFile, 'path'>):
 /**
  * Update MEMORY.md with recall results
  */
-export function writeMemoryMd(repoRoot: string, results: Array<{ memory: MemoryFile; score: number }>, query: string, engine: string): void {
+export function writeMemoryMd(
+  repoRoot: string,
+  results: Array<{ memory: MemoryFile; score: number }>,
+  query: string,
+  engine: string
+): void {
   const memoryDir = path.join(repoRoot, 'memory');
   if (!fs.existsSync(memoryDir)) {
     fs.mkdirSync(memoryDir, { recursive: true });

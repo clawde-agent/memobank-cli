@@ -12,7 +12,7 @@ async function reviewCommand(options = {}) {
     const repoRoot = (0, store_1.findRepoRoot)(cwd, options.repo);
     const memories = (0, store_1.loadAll)(repoRoot);
     const now = new Date();
-    const dueMemories = memories.filter(m => (0, decay_engine_1.isReviewDue)(m, now));
+    const dueMemories = memories.filter((m) => (0, decay_engine_1.isReviewDue)(m, now));
     if (options.due) {
         // Show only overdue items
         if (dueMemories.length === 0) {
@@ -31,8 +31,8 @@ async function reviewCommand(options = {}) {
     }
     else {
         // Show all with review schedule
-        const withReview = memories.filter(m => m.review_after);
-        const withoutReview = memories.filter(m => !m.review_after);
+        const withReview = memories.filter((m) => m.review_after);
+        const withoutReview = memories.filter((m) => !m.review_after);
         console.log(`## Review Status\n`);
         console.log(`Total memories: ${memories.length}`);
         console.log(`Due for review: ${dueMemories.length}`);
@@ -47,7 +47,7 @@ async function reviewCommand(options = {}) {
             console.log();
         }
         if (withReview.length > dueMemories.length) {
-            const upcoming = withReview.filter(m => !(0, decay_engine_1.isReviewDue)(m, now));
+            const upcoming = withReview.filter((m) => !(0, decay_engine_1.isReviewDue)(m, now));
             console.log(`### Upcoming Reviews (${upcoming.length})\n`);
             for (const memory of upcoming.slice(0, 10)) {
                 const relativePath = memory.path.replace(repoRoot + '/', '');

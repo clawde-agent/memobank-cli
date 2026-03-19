@@ -54,6 +54,10 @@ const DEFAULT_CONFIG = {
     },
     embedding: {
         engine: 'text',
+        provider: 'openai',
+        model: 'text-embedding-3-small',
+        dimensions: 1536,
+        base_url: undefined,
     },
     search: {
         use_tags: true,

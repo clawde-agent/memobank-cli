@@ -18,7 +18,7 @@ export async function mapCommand(options: MapOptions = {}): Promise<void> {
 
   // Filter by type if specified
   if (options.type) {
-    memories = memories.filter(m => m.type === options.type);
+    memories = memories.filter((m) => m.type === options.type);
   }
 
   if (memories.length === 0) {
@@ -34,14 +34,14 @@ export async function mapCommand(options: MapOptions = {}): Promise<void> {
     architecture: 0,
   };
 
-  memories.forEach(m => {
+  memories.forEach((m) => {
     typeCounts[m.type]++;
   });
 
   // Count tags
   const tagCounts: Record<string, number> = {};
-  memories.forEach(m => {
-    m.tags.forEach(tag => {
+  memories.forEach((m) => {
+    m.tags.forEach((tag) => {
       tagCounts[tag] = (tagCounts[tag] || 0) + 1;
     });
   });

@@ -1,0 +1,47 @@
+# Build output
+dist/
+*.tsbuildinfo
+
+# Dependencies
+node_modules/
+
+# LanceDB index (rebuilt locally)
+meta/index/
+meta/.lancedb/
+.lancedb/
+**/.lancedb/
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Testing
+coverage/
+.turbo/
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# Test memories (for development)
+test-memobank/

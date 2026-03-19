@@ -132,7 +132,9 @@ async function installCommand(options = {}) {
     console.log(`✓ memobank ready at ${repoRoot}`);
     console.log();
     console.log('Next steps:');
-    console.log(`  memo recall "project context"    # Test recall`);
+    console.log(`  memo setup                      # Interactive configuration`);
+    console.log(`  memo import                     # Import memories from other AI tools`);
+    console.log(`  memo recall "project context"   # Test recall`);
     console.log(`  memo write lesson               # Create a memory`);
     console.log(`  memo map                        # View memory summary`);
     console.log(`  memo --help                     # See all commands`);

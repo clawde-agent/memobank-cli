@@ -166,7 +166,10 @@ function writeMemory(repoRoot, memory) {
     // Generate filename: YYYY-MM-DD-name.md
     const date = new Date(memory.created);
     const dateStr = date.toISOString().split('T')[0];
-    const slug = memory.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const slug = memory.name
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]/g, '');
     const filename = `${dateStr}-${slug}.md`;
     const filePath = path.join(typeDir, filename);
     // Build frontmatter

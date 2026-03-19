@@ -12,7 +12,7 @@ async function mapCommand(options = {}) {
     let memories = (0, store_1.loadAll)(repoRoot);
     // Filter by type if specified
     if (options.type) {
-        memories = memories.filter(m => m.type === options.type);
+        memories = memories.filter((m) => m.type === options.type);
     }
     if (memories.length === 0) {
         console.log('No memories found');
@@ -25,13 +25,13 @@ async function mapCommand(options = {}) {
         workflow: 0,
         architecture: 0,
     };
-    memories.forEach(m => {
+    memories.forEach((m) => {
         typeCounts[m.type]++;
     });
     // Count tags
     const tagCounts = {};
-    memories.forEach(m => {
-        m.tags.forEach(tag => {
+    memories.forEach((m) => {
+        m.tags.forEach((tag) => {
             tagCounts[tag] = (tagCounts[tag] || 0) + 1;
         });
     });

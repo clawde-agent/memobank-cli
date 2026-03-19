@@ -14,6 +14,8 @@ const write_1 = require("./commands/write");
 const index_1 = require("./commands/index");
 const review_1 = require("./commands/review");
 const map_1 = require("./commands/map");
+const import_1 = require("./commands/import");
+const setup_1 = require("./commands/setup");
 const program = new commander_1.Command();
 program
     .name('memo')
@@ -188,6 +190,46 @@ program
         await (0, map_1.mapCommand)({
             type: options.type,
             repo: options.repo,
+        });
+    }
+    catch (error) {
+        console.error(`Error: ${error.message}`);
+        process.exit(1);
+    }
+});
+// Setup command (interactive wizard)
+program
+    .command('setup')
+    .description('Interactive setup wizard for memobank configuration')
+    .option('--repo <path>', 'Memobank repository path')
+    .action(async (options) => {
+    try {
+        await (0, setup_1.setupWizard)(options.repo);
+    }
+    catch (error) {
+        console.error(`Error: ${error.message}`);
+        process.exit(1);
+    }
+});
+// Import command
+program
+    .command('import')
+    .description('Import memories from other AI tools (Claude Code, Gemini CLI, Qwen Code)')
+    .option('--claude', 'Import from Claude Code only')
+    .option('--gemini', 'Import from Gemini CLI only')
+    .option('--qwen', 'Import from Qwen Code only')
+    .option('--all', 'Import from all available tools (default)')
+    .option('--repo <path>', 'Memobank repository path')
+    .option('--dry-run', 'Show what would be imported without writing')
+    .action(async (options) => {
+    try {
+        await (0, import_1.importMemories)({
+            repo: options.repo,
+            claude: options.claude,
+            gemini: options.gemini,
+            qwen: options.qwen,
+            all: options.all || (!options.claude && !options.gemini && !options.qwen),
+            dryRun: options.dryRun,
         });
     }
     catch (error) {

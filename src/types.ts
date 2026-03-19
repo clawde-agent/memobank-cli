@@ -7,21 +7,21 @@ export type Engine = 'text' | 'lancedb';
 export type Confidence = 'low' | 'medium' | 'high';
 
 export interface MemoryFile {
-  path: string;           // absolute path to .md file
-  name: string;           // frontmatter slug
+  path: string; // absolute path to .md file
+  name: string; // frontmatter slug
   type: MemoryType;
-  description: string;    // one-sentence summary
+  description: string; // one-sentence summary
   tags: string[];
-  created: string;        // ISO date
+  created: string; // ISO date
   updated?: string;
-  review_after?: string;  // e.g. "90d"
+  review_after?: string; // e.g. "90d"
   confidence?: Confidence;
-  content: string;        // Markdown body (below ---)
+  content: string; // Markdown body (below ---)
 }
 
 export interface RecallResult {
   memory: MemoryFile;
-  score: number;          // final composite score (0-1)
+  score: number; // final composite score (0-1)
 }
 
 export interface MemoConfig {

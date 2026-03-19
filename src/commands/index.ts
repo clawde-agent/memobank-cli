@@ -6,6 +6,7 @@
 import { loadAll, findRepoRoot } from '../core/store';
 import { loadConfig } from '../config';
 import { TextEngine } from '../engines/text-engine';
+import { EmbeddingGenerator } from '../core/embedding';
 
 export interface IndexOptions {
   incremental?: boolean;
@@ -33,7 +34,12 @@ export async function indexCommand(options: IndexOptions = {}): Promise<void> {
   if (engineName === 'lancedb') {
     try {
       const { LanceDbEngine } = await import('../engines/lancedb-engine');
-      const engine = new LanceDbEngine();
+      const embedConfig = EmbeddingGenerator.fromMemoConfig(config);
+      if (!embedConfig) {
+        throw new Error('OPENAI_API_KEY not set or embedding config missing');
+      }
+      const embeddingGenerator = new EmbeddingGenerator(embedConfig);
+      const engine = new LanceDbEngine(repoRoot, embeddingGenerator);
 
       const memories = loadAll(repoRoot);
       console.log(`Indexing ${memories.length} memories...`);
@@ -43,7 +49,7 @@ export async function indexCommand(options: IndexOptions = {}): Promise<void> {
       console.log('Index updated successfully');
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'MODULE_NOT_FOUND') {
-        console.error('LanceDB engine requires: npm install vectordb openai');
+        console.error('LanceDB engine requires: npm install @lancedb/lancedb @lancedb/core openai');
         console.error('Or use the default text engine (no setup needed).');
       } else {
         console.error(`Index error: ${(error as Error).message}`);
