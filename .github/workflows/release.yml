@@ -33,7 +33,9 @@ jobs:
         run: npm test
 
       - name: Publish to npm (Trusted Publisher)
-        run: npm publish --access public --provenance
+        run: |
+          npm config delete //registry.npmjs.org/:_authToken 2>/dev/null || true
+          npm publish --access public --provenance
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
