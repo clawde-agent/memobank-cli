@@ -7,6 +7,7 @@ export interface CaptureOptions {
     session?: string;
     auto?: boolean;
     repo?: string;
+    silent?: boolean;
 }
 export declare function capture(options?: CaptureOptions): Promise<void>;
 //# sourceMappingURL=capture.d.ts.map

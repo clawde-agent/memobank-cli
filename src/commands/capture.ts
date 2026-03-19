@@ -24,6 +24,7 @@ export interface CaptureOptions {
   session?: string;
   auto?: boolean;
   repo?: string;
+  silent?: boolean;
 }
 
 /**
@@ -45,6 +46,16 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
   const cwd = process.cwd();
   const repoRoot = findRepoRoot(cwd, options.repo);
   const config = loadConfig(repoRoot);
+  
+  // Silent mode for hooks
+  const isSilent = options.silent || process.env.SILENT === '1';
+  
+  const log = (...args: any[]) => {
+    if (!isSilent) console.log(...args);
+  };
+  const error = (...args: any[]) => {
+    if (!isSilent) console.error(...args);
+  };
 
   // 1. Get session text
   let sessionText = '';
@@ -71,13 +82,13 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
 
       if (files.length > 0 && files[0]) {
         sessionText = fs.readFileSync(files[0], 'utf-8');
-        console.log(`Read from: ${files[0]}`);
+        log(`Read from: ${files[0]}`);
       } else {
-        console.log('No recent memory files found in Claude directory');
+        log('No recent memory files found in Claude directory');
         return;
       }
     } else {
-      console.log('Claude memory directory not found');
+      log('Claude memory directory not found');
       return;
     }
   } else if (options.session) {
@@ -91,7 +102,7 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
       sessionText = options.session;
     }
   } else {
-    console.log('No session text provided. Use --session=<text> or --auto');
+    error('No session text provided. Use --session=<text> or --auto');
     return;
   }
 

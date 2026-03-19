@@ -82,12 +82,14 @@ program
     .option('--session <text>', 'Session text to extract from (use - for stdin)')
     .option('--auto', 'Read from Claude auto-memory directory')
     .option('--repo <path>', 'Memobank repository path')
+    .option('--silent', 'Suppress output (for hooks)')
     .action(async (options) => {
     try {
         await (0, capture_1.capture)({
             session: options.session,
             auto: options.auto,
             repo: options.repo,
+            silent: options.silent,
         });
     }
     catch (error) {
