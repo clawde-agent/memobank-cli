@@ -2,6 +2,7 @@
 /**
  * Capture command
  * Extracts learnings from session text and writes to memory files
+ * Uses noise filtering and value scoring to determine what's worth remembering
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -45,6 +46,7 @@ const smart_extractor_1 = require("../core/smart-extractor");
 const sanitizer_1 = require("../core/sanitizer");
 const store_1 = require("../core/store");
 const config_1 = require("../config");
+const noise_filter_1 = require("../core/noise-filter");
 /**
  * Hash a string for deduplication
  */
@@ -120,11 +122,33 @@ async function capture(options = {}) {
         console.log('No memories extracted from session');
         return;
     }
-    // 4. Load existing memories for deduplication
+    console.log(`\n📊 Extracted ${extracted.length} potential memories, evaluating value...\n`);
+    // 4. Evaluate and filter by value
+    const memoriesWithValue = extracted.map((item) => ({
+        ...item,
+        valueScore: (0, noise_filter_1.calculateValueScore)(item.content),
+        recommendation: (0, noise_filter_1.getCaptureRecommendation)((0, noise_filter_1.calculateValueScore)(item.content)),
+    }));
+    // Display evaluation
+    memoriesWithValue.forEach((item, i) => {
+        const { valueScore, recommendation } = item;
+        const icon = valueScore >= 0.7 ? '✅' : valueScore >= 0.5 ? '⚠️' : '❌';
+        console.log(`${icon} [${i + 1}] ${item.name}`);
+        console.log(`   Score: ${valueScore.toFixed(2)} | ${recommendation.reason}`);
+        console.log(`   Confidence: ${recommendation.confidence}\n`);
+    });
+    // Filter out low-value memories
+    const highValueMemories = memoriesWithValue.filter((item) => item.valueScore >= 0.5 || item.recommendation.shouldCapture);
+    if (highValueMemories.length === 0) {
+        console.log('⊘ All memories filtered out due to low value.');
+        return;
+    }
+    console.log(`✓ ${highValueMemories.length} memories passed value filter\n`);
+    // 5. Load existing memories for deduplication
     const existingMemories = (0, store_1.loadAll)(repoRoot);
-    // 5. Deduplicate and write
+    // 6. Deduplicate and write
     let written = 0;
-    for (const item of extracted) {
+    for (const item of highValueMemories) {
         if (isDuplicate(item.name, existingMemories)) {
             console.log(`Skipping duplicate: ${item.name}`);
             continue;
@@ -142,8 +166,9 @@ async function capture(options = {}) {
         console.log(`Created: ${filePath}`);
         written++;
     }
-    // 6. Print summary
-    console.log(`\nCaptured ${written} memories`);
+    // 7. Print summary
+    console.log(`\n📝 Captured ${written} high-value memories`);
+    console.log(`   Skipped ${extracted.length - written} low-value or duplicate items\n`);
     // 7. Note: index update is no-op for text engine
     if (config.embedding.engine === 'lancedb') {
         console.log('Run: memo index --incremental to update LanceDB');

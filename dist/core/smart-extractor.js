@@ -16,6 +16,27 @@ Return a JSON array. Each item:
   "confidence": "low|medium|high",
   "content": "markdown body with the full insight"
 }
+
+## Extraction Criteria
+
+### DO Extract (High Value):
+- Problems solved and solutions found
+- Architectural decisions and rationale
+- Workflows and processes discovered
+- Best practices and patterns learned
+- Bug fixes with root cause analysis
+- Performance optimizations
+- Security considerations
+- Trade-offs and their reasoning
+
+### DO NOT Extract (Low Value):
+- Simple file operations (opened, closed, saved)
+- Running commands (test, build, lint)
+- Greetings and acknowledgments
+- Trivial changes (typos, formatting)
+- Questions without answers
+- Meta-discussions about the AI
+
 Extract only significant learnings. Skip trivial actions. Max 3 items per session.`;
 /**
  * Extract memories from session text using LLM
