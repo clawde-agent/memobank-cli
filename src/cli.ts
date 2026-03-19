@@ -17,6 +17,8 @@ import { mapCommand } from './commands/map';
 import { importMemories } from './commands/import';
 import { onboardingCommand } from './commands/onboarding';
 import { lifecycleCommand, correctCommand } from './commands/lifecycle';
+import { teamInit, teamSync, teamPublish, teamStatus } from './commands/team';
+import { findRepoRoot } from './core/store';
 import { MemoryType } from './types';
 
 const program = new Command();
@@ -287,6 +289,63 @@ program
         repo: options.repo,
         reason: options.reason,
       });
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+// Team commands
+const team = program
+  .command('team')
+  .description('Team memory sharing commands');
+
+team
+  .command('init <remote-url>')
+  .description('Set up shared team memory repository')
+  .action(async (remoteUrl: string) => {
+    try {
+      const repoRoot = findRepoRoot(process.cwd());
+      await teamInit(remoteUrl, repoRoot);
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+team
+  .command('sync')
+  .description('Pull and push team memories')
+  .action(async () => {
+    try {
+      const repoRoot = findRepoRoot(process.cwd());
+      await teamSync(repoRoot);
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+team
+  .command('publish <file>')
+  .description('Promote a personal memory to team')
+  .action(async (file: string) => {
+    try {
+      const repoRoot = findRepoRoot(process.cwd());
+      await teamPublish(file, repoRoot);
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+team
+  .command('status')
+  .description('Show team repository status')
+  .action(async () => {
+    try {
+      const repoRoot = findRepoRoot(process.cwd());
+      await teamStatus(repoRoot);
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`);
       process.exit(1);
