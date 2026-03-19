@@ -1,29 +1,55 @@
-import { MemoryFile } from '../types';
+/**
+ * LanceDB Engine
+ * Vector search engine using LanceDB with hybrid BM25 + vector search
+ */
+import { MemoryFile, RecallResult } from '../types';
 import { EngineAdapter } from './engine-adapter';
-export declare class LanceDBEngine implements EngineAdapter {
+import { EmbeddingGenerator } from '../core/embedding';
+export declare class LanceDbEngine implements EngineAdapter {
+    private dbPath;
+    private embeddingGenerator;
     private db;
     private table;
-    private openai;
-    private embeddingDimensions;
-    private embeddingModel;
-    private embeddingProvider;
-    private embeddingBaseUrl;
-    private tableName;
-    constructor();
-    private loadConfig;
-    private getOpenAIClient;
-    private getEmbedding;
-    private ensureTable;
+    private readonly tableName;
+    private readonly indexDirName;
+    constructor(dbPath: string, embeddingGenerator: EmbeddingGenerator);
+    /**
+     * Initialize LanceDB connection and table
+     */
+    private init;
+    /**
+     * Index memories into LanceDB
+     * @param memories - Memories to index
+     * @param incremental - Whether to update incrementally or rebuild
+     */
     index(memories: MemoryFile[], incremental: boolean): Promise<void>;
     /**
-     * Simple BM25 implementation
+     * Search for memories using hybrid vector + BM25 search
+     * @param query - Search query string
+     * @param memories - All memories (fallback for text search)
+     * @param topK - Maximum number of results
+     * @returns Array of recall results sorted by score
      */
-    private computeBM25Scores;
-    const totalDocs: any;
-    const avgDocLength: number;
-    const k1: number;
-    const b: number;
-    const scores: Map<string, number>;
-    for(: any, mem: any, of: any, memories: any): void;
+    search(query: string, memories: MemoryFile[], topK: number): Promise<RecallResult[]>;
+    /**
+     * Get combined text for embedding generation
+     */
+    private getEmbeddingText;
+    /**
+     * Generate unique memory ID
+     */
+    private memoryId;
+    /**
+     * Check if memory has been updated since last indexing
+     */
+    private isMemoryUpdated;
+    /**
+     * Convert LanceDB row to MemoryFile
+     */
+    private rowToMemory;
+    /**
+     * Infer memory type from name/path
+     */
+    private inferType;
 }
 //# sourceMappingURL=lancedb-engine.d.ts.map

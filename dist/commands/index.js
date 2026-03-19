@@ -40,6 +40,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.indexCommand = indexCommand;
 const store_1 = require("../core/store");
 const config_1 = require("../config");
+const embedding_1 = require("../core/embedding");
 async function indexCommand(options = {}) {
     const cwd = process.cwd();
     const repoRoot = (0, store_1.findRepoRoot)(cwd, options.repo);
@@ -55,8 +56,13 @@ async function indexCommand(options = {}) {
     // LanceDB engine
     if (engineName === 'lancedb') {
         try {
-            const { LanceDBEngine } = await Promise.resolve().then(() => __importStar(require('../engines/lancedb-engine')));
-            const engine = new LanceDBEngine();
+            const { LanceDbEngine } = await Promise.resolve().then(() => __importStar(require('../engines/lancedb-engine')));
+            const embedConfig = embedding_1.EmbeddingGenerator.fromMemoConfig(config);
+            if (!embedConfig) {
+                throw new Error('OPENAI_API_KEY not set or embedding config missing');
+            }
+            const embeddingGenerator = new embedding_1.EmbeddingGenerator(embedConfig);
+            const engine = new LanceDbEngine(repoRoot, embeddingGenerator);
             const memories = (0, store_1.loadAll)(repoRoot);
             console.log(`Indexing ${memories.length} memories...`);
             await engine.index(memories, options.incremental ?? false);
@@ -64,7 +70,7 @@ async function indexCommand(options = {}) {
         }
         catch (error) {
             if (error.code === 'MODULE_NOT_FOUND') {
-                console.error('LanceDB engine requires: npm install vectordb openai');
+                console.error('LanceDB engine requires: npm install @lancedb/lancedb @lancedb/core openai');
                 console.error('Or use the default text engine (no setup needed).');
             }
             else {
