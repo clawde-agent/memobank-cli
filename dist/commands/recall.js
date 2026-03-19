@@ -42,7 +42,6 @@ const retriever_1 = require("../core/retriever");
 const config_1 = require("../config");
 const store_1 = require("../core/store");
 const text_engine_1 = require("../engines/text-engine");
-const embedding_1 = require("../core/embedding");
 async function recall(query, options = {}) {
     const cwd = process.cwd();
     const repoRoot = (0, store_1.findRepoRoot)(cwd, options.repo);
@@ -54,18 +53,12 @@ async function recall(query, options = {}) {
     let engine;
     if (engineName === 'lancedb') {
         try {
-            const { LanceDbEngine } = await Promise.resolve().then(() => __importStar(require('../engines/lancedb-engine')));
-            const embedConfig = embedding_1.EmbeddingGenerator.fromMemoConfig(config);
-            if (!embedConfig) {
-                throw new Error('OPENAI_API_KEY not set or embedding config missing');
-            }
-            const embeddingGenerator = new embedding_1.EmbeddingGenerator(embedConfig);
-            const indexDir = (0, store_1.findRepoRoot)(cwd, options.repo);
-            engine = new LanceDbEngine(indexDir, embeddingGenerator);
+            const { LanceDBEngine } = await Promise.resolve().then(() => __importStar(require('../engines/lancedb-engine')));
+            engine = new LanceDBEngine();
         }
         catch (e) {
             console.error('LanceDB engine not available. Falling back to text engine.');
-            console.error(`Error: ${e.message}`);
+            console.error('To use LanceDB: npm install vectordb openai');
             engine = new text_engine_1.TextEngine();
         }
     }
