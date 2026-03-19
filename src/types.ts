@@ -52,6 +52,12 @@ export interface MemoConfig {
   search: { use_tags: boolean; use_summary: boolean };
   review: { enabled: boolean };
   team?: TeamConfig;
+  reranker?: {
+    enabled: boolean;
+    provider: 'jina' | 'cohere';
+    model?: string;
+    top_n?: number;
+  };
 }
 
 export interface ExtractionResult {

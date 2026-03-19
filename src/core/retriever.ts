@@ -7,7 +7,8 @@ import { RecallResult, MemoConfig, MemoryScope } from '../types';
 import { EngineAdapter } from '../engines/engine-adapter';
 import { loadAll, writeMemoryMd } from './store';
 import { TextEngine } from '../engines/text-engine';
-import { recordAccess } from './lifecycle-manager';
+import { recordAccess, loadAccessLogs } from './lifecycle-manager';
+import { rerank } from './reranker';
 
 function estimateTokenCount(text: string): number {
   return Math.ceil(text.length / 4);
@@ -26,10 +27,34 @@ export async function recall(
 ): Promise<{ results: RecallResult[]; markdown: string }> {
   const memories = loadAll(repoRoot, scope);
   const searchEngine = engine || new TextEngine();
+  const accessLogs = loadAccessLogs(repoRoot);
   let results = await searchEngine.search(query, memories, config.memory.top_k);
+
+  // Apply access frequency boost
+  results = results.map(result => {
+    const log = accessLogs[result.memory.path];
+    const accessCount = log?.accessCount ?? 0;
+    const boost = Math.min(1.5, 1.0 + Math.log1p(accessCount) / 10);
+    return { ...result, score: Math.min(1.0, result.score * boost) };
+  });
+  results.sort((a, b) => b.score - a.score);
 
   for (const result of results) {
     recordAccess(repoRoot, result.memory.path, query);
+  }
+
+  // Apply reranker if configured
+  if (config.reranker?.enabled && results.length > 1) {
+    try {
+      results = await rerank(query, results, {
+        provider: config.reranker.provider,
+        model: config.reranker.model,
+        top_n: config.reranker.top_n ?? config.memory.top_k,
+      });
+    } catch (e) {
+      // Reranker failure is non-fatal — use original order
+      console.warn(`Reranker skipped: ${(e as Error).message}`);
+    }
   }
 
   if (explain && results.length > 0 && results.every(r => !r.scoreBreakdown)) {

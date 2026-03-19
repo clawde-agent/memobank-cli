@@ -78,6 +78,7 @@ export function loadConfig(repoRoot: string): MemoConfig {
         ...loaded?.review,
       },
       ...(loaded?.team ? { team: loaded.team as TeamConfig } : {}),
+      ...(loaded?.reranker ? { reranker: loaded.reranker } : {}),
     };
   } catch (error) {
     console.warn(`Could not load config: ${(error as Error).message}`);

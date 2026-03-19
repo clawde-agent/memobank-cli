@@ -80,7 +80,7 @@ function getDetectedPlatforms(items: MultiSelectItem[]): string[] {
   return items.filter(i => i.hint?.includes('✓')).map(i => i.value);
 }
 
-type Step = 'project-name' | 'platforms' | 'team-repo' | 'search-engine' | 'embedding-provider' | 'ollama-url' | 'openai-key' | 'jina-key' | 'done';
+type Step = 'project-name' | 'platforms' | 'team-repo' | 'search-engine' | 'embedding-provider' | 'ollama-url' | 'openai-key' | 'jina-key' | 'reranker' | 'reranker-provider' | 'done';
 
 interface OnboardingState {
   step: Step;
@@ -91,6 +91,8 @@ interface OnboardingState {
   embeddingProvider: string;
   embeddingUrl: string;
   embeddingApiKey: string;
+  enableReranker: boolean;
+  rerankerProvider: string;
 }
 
 async function runSetup(state: OnboardingState, repoRoot: string): Promise<string[]> {
@@ -176,6 +178,17 @@ async function runSetup(state: OnboardingState, repoRoot: string): Promise<strin
       }
     }
     writeConfig(repoRoot, config);
+  }
+
+  if (state.enableReranker && state.rerankerProvider) {
+    const config = loadConfig(repoRoot);
+    config.reranker = {
+      enabled: true,
+      provider: state.rerankerProvider as 'jina' | 'cohere',
+    };
+    writeConfig(repoRoot, config);
+    const keyVar = state.rerankerProvider === 'jina' ? 'JINA_API_KEY' : 'COHERE_API_KEY';
+    summaryLines.push(`Reranker: ${state.rerankerProvider} (set ${keyVar} env var)`);
   }
 
   return summaryLines;
@@ -270,6 +283,8 @@ export async function onboardingCommand(): Promise<void> {
       embeddingProvider: '',
       embeddingUrl: 'http://localhost:11434',
       embeddingApiKey: '',
+      enableReranker: false,
+      rerankerProvider: '',
     });
     const [nameInput, setNameInput] = useState(defaultName);
     const [teamInput, setTeamInput] = useState('');
@@ -336,17 +351,7 @@ export async function onboardingCommand(): Promise<void> {
             if (engine === 'lancedb') {
               setState(s => ({ ...s, step: 'embedding-provider', searchEngine: engine }));
             } else {
-              if (setupRunning.current) return;
-              setupRunning.current = true;
-              const finalState = { ...state, step: 'done' as Step, searchEngine: engine };
-              setState(finalState);
-              runSetup(finalState, repoRoot).then(lines => {
-                setSummary(lines);
-                setDone(true);
-              }).catch((err: Error) => {
-                setSummary([`Setup failed: ${err.message}`]);
-                setDone(true);
-              });
+              setState(s => ({ ...s, step: 'reranker', searchEngine: engine }));
             }
           },
         }),
@@ -380,17 +385,7 @@ export async function onboardingCommand(): Promise<void> {
           value: ollamaUrlInput,
           onChange: setOllamaUrlInput,
           onSubmit: (value: string) => {
-            if (setupRunning.current) return;
-            setupRunning.current = true;
-            const finalState = { ...state, step: 'done' as Step, embeddingUrl: value || 'http://localhost:11434' };
-            setState(finalState);
-            runSetup(finalState, repoRoot).then(lines => {
-              setSummary(lines);
-              setDone(true);
-            }).catch((err: Error) => {
-              setSummary([`Setup failed: ${err.message}`]);
-              setDone(true);
-            });
+            setState(s => ({ ...s, step: 'reranker', embeddingUrl: value || 'http://localhost:11434' }));
           },
         }),
       ) : null,
@@ -402,17 +397,7 @@ export async function onboardingCommand(): Promise<void> {
           value: openaiKeyInput,
           onChange: setOpenaiKeyInput,
           onSubmit: (value: string) => {
-            if (setupRunning.current) return;
-            setupRunning.current = true;
-            const finalState = { ...state, step: 'done' as Step, embeddingApiKey: value };
-            setState(finalState);
-            runSetup(finalState, repoRoot).then(lines => {
-              setSummary(lines);
-              setDone(true);
-            }).catch((err: Error) => {
-              setSummary([`Setup failed: ${err.message}`]);
-              setDone(true);
-            });
+            setState(s => ({ ...s, step: 'reranker', embeddingApiKey: value }));
           },
         }),
       ) : null,
@@ -424,9 +409,50 @@ export async function onboardingCommand(): Promise<void> {
           value: jinaKeyInput,
           onChange: setJinaKeyInput,
           onSubmit: (value: string) => {
+            setState(s => ({ ...s, step: 'reranker', embeddingApiKey: value }));
+          },
+        }),
+      ) : null,
+
+      state.step === 'reranker' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, { bold: true }, 'Enable reranker?'),
+        React.createElement(Text, { dimColor: true }, '  Re-ranks results with AI for better precision (needs Jina or Cohere API key)'),
+        React.createElement(SelectInput, {
+          items: [
+            { label: 'No', value: 'no' },
+            { label: 'Yes', value: 'yes' },
+          ],
+          onSelect: (item: { label: string; value: unknown }) => {
+            if (String(item.value) === 'yes') {
+              setState(s => ({ ...s, step: 'reranker-provider' }));
+            } else {
+              if (setupRunning.current) return;
+              setupRunning.current = true;
+              const finalState = { ...state, step: 'done' as Step, enableReranker: false };
+              setState(finalState);
+              runSetup(finalState, repoRoot).then(lines => {
+                setSummary(lines);
+                setDone(true);
+              }).catch((err: Error) => {
+                setSummary([`Setup failed: ${err.message}`]);
+                setDone(true);
+              });
+            }
+          },
+        }),
+      ) : null,
+
+      state.step === 'reranker-provider' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, { bold: true }, 'Reranker provider:'),
+        React.createElement(SelectInput, {
+          items: [
+            { label: 'Jina AI  (set JINA_API_KEY)', value: 'jina' },
+            { label: 'Cohere   (set COHERE_API_KEY)', value: 'cohere' },
+          ],
+          onSelect: (item: { label: string; value: unknown }) => {
             if (setupRunning.current) return;
             setupRunning.current = true;
-            const finalState = { ...state, step: 'done' as Step, embeddingApiKey: value };
+            const finalState = { ...state, step: 'done' as Step, enableReranker: true, rerankerProvider: String(item.value) };
             setState(finalState);
             runSetup(finalState, repoRoot).then(lines => {
               setSummary(lines);
