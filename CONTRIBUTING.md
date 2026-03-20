@@ -2,6 +2,12 @@
 
 Thank you for your interest in contributing to memobank CLI! This document provides guidelines and instructions for contributing.
 
+## 📋 Quick Links
+
+- [Commit & PR Guidelines](.github/COMMIT_CONVENTION.md) - How to write commit messages and create PRs
+- [Branch Protection](.github/BRANCH_PROTECTION.md) - Branch protection rules
+- [Code of Conduct](CODE_OF_CONDUCT.md) - Community guidelines
+
 ## Code of Conduct
 
 - Be respectful and inclusive
@@ -148,15 +154,18 @@ npm run dev -- memo write lesson --name="test" --description="Test" --content="T
 
 ### 5. Commit Messages
 
-Follow [Conventional Commits](https://www.conventionalcommits.org/):
+We use [Conventional Commits](https://www.conventionalcommits.org/). See [Commit & PR Guidelines](.github/COMMIT_CONVENTION.md) for full details.
 
-```
+```bash
+# Examples
 feat: add Ollama embedding support
 fix: correct LanceDB search API usage
 docs: update README with installation steps
 test: add unit tests for memory template
 refactor: extract sanitization logic to separate module
 ```
+
+**Git hooks** automatically validate your commit messages and format code on commit.
 
 ### 6. Pull Request
 
@@ -165,6 +174,8 @@ refactor: extract sanitization logic to separate module
 3. Ensure all tests pass
 4. Update CHANGELOG.md
 5. Request review from maintainers
+
+**PR title must follow Conventional Commits format** (validated by GitHub Actions).
 
 ## PR Checklist
 
