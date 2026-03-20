@@ -181,9 +181,8 @@ export function writeMemoryMd(
   query: string,
   engine: string
 ): void {
-  const memoryDir = path.join(repoRoot, 'memory');
-  if (!fs.existsSync(memoryDir)) { fs.mkdirSync(memoryDir, { recursive: true }); }
-  const filePath = path.join(memoryDir, 'MEMORY.md');
+  if (!fs.existsSync(repoRoot)) { fs.mkdirSync(repoRoot, { recursive: true }); }
+  const filePath = path.join(repoRoot, 'MEMORY.md');
 
   let markdown = `<!-- Last updated: ${new Date().toISOString()} | query: "${query}" | engine: ${engine} | top ${results.length} -->\n\n`;
   markdown += `## Recalled Memory\n\n`;
@@ -207,7 +206,7 @@ export function writeMemoryMd(
 }
 
 export function readMemoryMd(repoRoot: string): string | null {
-  const filePath = path.join(repoRoot, 'memory', 'MEMORY.md');
+  const filePath = path.join(repoRoot, 'MEMORY.md');
   if (!fs.existsSync(filePath)) { return null; }
   return fs.readFileSync(filePath, 'utf-8');
 }

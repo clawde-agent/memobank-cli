@@ -55,6 +55,18 @@ function detectProjectName(): string {
   }
 }
 
+/** Check if Claude Code has auto-memory explicitly disabled */
+function isAutoMemoryDisabled(): boolean {
+  const settingsPath = path.join(process.env.HOME || process.env.USERPROFILE || '', '.claude', 'settings.json');
+  if (!fs.existsSync(settingsPath)) { return false; }
+  try {
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    return settings.autoMemoryEnabled === false;
+  } catch {
+    return false;
+  }
+}
+
 /** Detect which platforms are installed */
 function detectPlatforms(): MultiSelectItem[] {
   const home = process.env.HOME || process.env.USERPROFILE || '';
@@ -97,12 +109,13 @@ function getDetectedPlatforms(items: MultiSelectItem[]): string[] {
   return items.filter(i => i.hint?.includes('✓')).map(i => i.value);
 }
 
-type Step = 'project-name' | 'platforms' | 'team-repo' | 'search-engine' | 'embedding-provider' | 'ollama-url' | 'ollama-model' | 'openai-key' | 'jina-key' | 'reranker' | 'reranker-provider' | 'done';
+type Step = 'project-name' | 'platforms' | 'auto-memory-check' | 'team-repo' | 'search-engine' | 'embedding-provider' | 'ollama-url' | 'ollama-model' | 'openai-key' | 'jina-key' | 'reranker' | 'reranker-provider' | 'done';
 
 interface OnboardingState {
   step: Step;
   projectName: string;
   platforms: string[];
+  enableAutoMemory: boolean;
   teamRepo: string;
   searchEngine: string;
   embeddingProvider: string;
@@ -113,8 +126,9 @@ interface OnboardingState {
   rerankerProvider: string;
 }
 
-async function runSetup(state: OnboardingState, repoRoot: string): Promise<string[]> {
+async function runSetup(state: OnboardingState, repoRoot: string): Promise<{ lines: string[]; autoMemoryWarning: boolean }> {
   const summaryLines: string[] = [];
+  let autoMemoryWarning = false;
 
   // 1. Init config
   initConfig(repoRoot, state.projectName);
@@ -124,14 +138,16 @@ async function runSetup(state: OnboardingState, repoRoot: string): Promise<strin
   for (const type of TYPES) {
     fs.mkdirSync(path.join(repoRoot, type), { recursive: true });
   }
-  fs.mkdirSync(path.join(repoRoot, 'memory'), { recursive: true });
 
   summaryLines.push(`Memories: ${repoRoot}`);
 
   // 4. Install platform adapters
   for (const platform of state.platforms) {
     switch (platform) {
-      case 'claude-code': await installClaudeCode(repoRoot); break;
+      case 'claude-code':
+        await installClaudeCode(repoRoot, state.enableAutoMemory);
+        if (!state.enableAutoMemory) { autoMemoryWarning = true; }
+        break;
       case 'codex': await installCodex(process.cwd()); break;
       case 'gemini': await installGemini(); break;
       case 'qwen': await installQwen(); break;
@@ -202,7 +218,7 @@ async function runSetup(state: OnboardingState, repoRoot: string): Promise<strin
     summaryLines.push(`Reranker: ${state.rerankerProvider} (set ${keyVar} env var)`);
   }
 
-  return summaryLines;
+  return { lines: summaryLines, autoMemoryWarning };
 }
 
 export async function onboardingCommand(): Promise<void> {
@@ -289,6 +305,7 @@ export async function onboardingCommand(): Promise<void> {
       step: 'project-name',
       projectName: defaultName,
       platforms: detectedPlatforms,
+      enableAutoMemory: true,
       teamRepo: '',
       searchEngine: 'text',
       embeddingProvider: '',
@@ -306,6 +323,7 @@ export async function onboardingCommand(): Promise<void> {
     const [jinaKeyInput, setJinaKeyInput] = useState('');
     const [done, setDone] = useState(false);
     const [summary, setSummary] = useState<string[]>([]);
+    const [autoMemoryWarning, setAutoMemoryWarning] = useState(false);
     // Prevent double-submission
     const setupRunning = useRef(false);
 
@@ -314,6 +332,13 @@ export async function onboardingCommand(): Promise<void> {
         React.createElement(Text, { color: 'green', bold: true }, '✓ memobank initialized!'),
         ...summary.map((line, i) => React.createElement(Text, { key: i, dimColor: true }, `  ${line}`)),
         React.createElement(Text, { dimColor: true }, 'Run: memo recall "anything" to test'),
+        autoMemoryWarning
+          ? React.createElement(Box, { flexDirection: 'column', marginTop: 1 },
+              React.createElement(Text, { color: 'yellow', bold: true }, '⚠  Auto-memory is off'),
+              React.createElement(Text, { color: 'yellow' }, '   Claude Code won\'t read or write team memories in .memobank/'),
+              React.createElement(Text, { dimColor: true }, '   To enable later: set "autoMemoryEnabled": true in ~/.claude/settings.json'),
+            )
+          : null,
       );
     }
 
@@ -337,9 +362,34 @@ export async function onboardingCommand(): Promise<void> {
         items: platformItems,
         defaultSelected: detectedPlatforms,
         onSubmit: (selected: string[]) => {
-          setState(s => ({ ...s, step: 'team-repo', platforms: selected }));
+          const needsAutoMemoryCheck = selected.includes('claude-code') && isAutoMemoryDisabled();
+          setState(s => ({
+            ...s,
+            platforms: selected,
+            step: needsAutoMemoryCheck ? 'auto-memory-check' : 'team-repo',
+          }));
         },
       }) : null,
+
+      state.step === 'auto-memory-check' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, { bold: true, color: 'yellow' }, '⚠  Claude Code auto-memory is disabled'),
+        React.createElement(Text, null, ' '),
+        React.createElement(Text, null, 'memobank stores team memories in .memobank/ and relies on Claude Code\'s'),
+        React.createElement(Text, null, 'auto-memory to load them at session start and save new ones automatically.'),
+        React.createElement(Text, null, 'With auto-memory off, Claude Code won\'t read or write to .memobank/.'),
+        React.createElement(Text, null, ' '),
+        React.createElement(Text, { bold: true }, 'Enable auto-memory for this project?'),
+        React.createElement(SelectInput, {
+          items: [
+            { label: 'Yes — enable auto-memory (recommended)', value: 'yes' },
+            { label: 'No — keep it off', value: 'no' },
+          ],
+          onSelect: (item: { label: string; value: unknown }) => {
+            const enable = String(item.value) === 'yes';
+            setState(s => ({ ...s, enableAutoMemory: enable, step: 'team-repo' }));
+          },
+        }),
+      ) : null,
 
       state.step === 'team-repo' ? React.createElement(Box, { flexDirection: 'column' },
         React.createElement(Text, null,
@@ -455,8 +505,9 @@ export async function onboardingCommand(): Promise<void> {
               setupRunning.current = true;
               const finalState = { ...state, step: 'done' as Step, enableReranker: false };
               setState(finalState);
-              runSetup(finalState, repoRoot).then(lines => {
+              runSetup(finalState, repoRoot).then(({ lines, autoMemoryWarning: warn }) => {
                 setSummary(lines);
+                setAutoMemoryWarning(warn);
                 setDone(true);
               }).catch((err: Error) => {
                 setSummary([`Setup failed: ${err.message}`]);
@@ -479,8 +530,9 @@ export async function onboardingCommand(): Promise<void> {
             setupRunning.current = true;
             const finalState = { ...state, step: 'done' as Step, enableReranker: true, rerankerProvider: String(item.value) };
             setState(finalState);
-            runSetup(finalState, repoRoot).then(lines => {
+            runSetup(finalState, repoRoot).then(({ lines, autoMemoryWarning: warn }) => {
               setSummary(lines);
+              setAutoMemoryWarning(warn);
               setDone(true);
             }).catch((err: Error) => {
               setSummary([`Setup failed: ${err.message}`]);

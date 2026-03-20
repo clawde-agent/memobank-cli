@@ -77,29 +77,42 @@ async function capture(options = {}) {
     // 1. Get session text
     let sessionText = '';
     if (options.auto) {
-        // Read from Claude auto-memory directory
-        const claudeMemoryDir = path.join(process.env.HOME || '', '.claude', 'projects', config.project.name, 'memory');
-        if (fs.existsSync(claudeMemoryDir)) {
+        // Read Claude Code auto-memory topic files from the project tier root
+        // (autoMemoryDirectory = repoRoot = .memobank/).
+        // Topic files are flat .md files written directly by Claude Code — exclude
+        // MEMORY.md (the index) and subdirectories (lesson/, decision/, etc.).
+        const autoMemoryDir = repoRoot;
+        if (fs.existsSync(autoMemoryDir)) {
+            const STRUCTURED_DIRS = new Set(['lesson', 'decision', 'workflow', 'architecture', 'meta']);
             const files = fs
-                .readdirSync(claudeMemoryDir)
-                .filter((f) => f.endsWith('.md'))
-                .map((f) => path.join(claudeMemoryDir, f))
-                .sort((a, b) => {
-                const statA = fs.statSync(a);
-                const statB = fs.statSync(b);
-                return statB.mtimeMs - statA.mtimeMs;
-            });
+                .readdirSync(autoMemoryDir)
+                .filter((f) => {
+                if (!f.endsWith('.md') || f === 'MEMORY.md') {
+                    return false;
+                }
+                const fullPath = path.join(autoMemoryDir, f);
+                // Skip subdirectories (memobank structured tiers)
+                if (fs.statSync(fullPath).isDirectory()) {
+                    return false;
+                }
+                if (STRUCTURED_DIRS.has(f.replace(/\.md$/, ''))) {
+                    return false;
+                }
+                return true;
+            })
+                .map((f) => path.join(autoMemoryDir, f))
+                .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
             if (files.length > 0 && files[0]) {
                 sessionText = fs.readFileSync(files[0], 'utf-8');
                 log(`Read from: ${files[0]}`);
             }
             else {
-                log('No recent memory files found in Claude directory');
+                log('No recent Claude Code auto-memory files found');
                 return;
             }
         }
         else {
-            log('Claude memory directory not found');
+            log('Project memory directory not found');
             return;
         }
     }

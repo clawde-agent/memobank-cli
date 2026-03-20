@@ -217,11 +217,10 @@ function updateMemoryStatus(filePath, status) {
     fs.writeFileSync(filePath, gray_matter_1.default.stringify(parsed.content, parsed.data), 'utf-8');
 }
 function writeMemoryMd(repoRoot, results, query, engine) {
-    const memoryDir = path.join(repoRoot, 'memory');
-    if (!fs.existsSync(memoryDir)) {
-        fs.mkdirSync(memoryDir, { recursive: true });
+    if (!fs.existsSync(repoRoot)) {
+        fs.mkdirSync(repoRoot, { recursive: true });
     }
-    const filePath = path.join(memoryDir, 'MEMORY.md');
+    const filePath = path.join(repoRoot, 'MEMORY.md');
     let markdown = `<!-- Last updated: ${new Date().toISOString()} | query: "${query}" | engine: ${engine} | top ${results.length} -->\n\n`;
     markdown += `## Recalled Memory\n\n`;
     if (results.length === 0) {
@@ -243,7 +242,7 @@ function writeMemoryMd(repoRoot, results, query, engine) {
     fs.writeFileSync(filePath, markdown, 'utf-8');
 }
 function readMemoryMd(repoRoot) {
-    const filePath = path.join(repoRoot, 'memory', 'MEMORY.md');
+    const filePath = path.join(repoRoot, 'MEMORY.md');
     if (!fs.existsSync(filePath)) {
         return null;
     }

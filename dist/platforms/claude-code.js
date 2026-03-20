@@ -49,8 +49,9 @@ function getSettingsPath() {
 }
 /**
  * Install memobank for Claude Code
+ * @param enableAutoMemory - explicitly set autoMemoryEnabled in settings (true to enable, false to leave unchanged)
  */
-async function installClaudeCode(repoRoot) {
+async function installClaudeCode(repoRoot, enableAutoMemory = true) {
     const settingsPath = getSettingsPath();
     const settingsDir = path.dirname(settingsPath);
     // Ensure .claude directory exists
@@ -69,21 +70,25 @@ async function installClaudeCode(repoRoot) {
             return false;
         }
     }
-    // Set autoMemoryDirectory
-    settings.autoMemoryDirectory = path.join(repoRoot, 'memory');
-    // Add Stop hook for auto-capture
-    if (!settings.hooks) {
-        settings.hooks = {};
+    // Only set autoMemoryEnabled when the user explicitly agreed during setup.
+    // If they chose to keep it off, leave the setting untouched.
+    if (enableAutoMemory) {
+        settings.autoMemoryEnabled = true;
     }
-    if (!settings.hooks.Stop) {
-        settings.hooks.Stop = [];
+    // Set autoMemoryDirectory to the project tier root so Claude Code's
+    // native auto-memory and memobank project memories share the same directory.
+    settings.autoMemoryDirectory = repoRoot;
+    // Remove any legacy memobank Stop hook (no longer needed — Claude Code's
+    // native auto-memory writes directly to autoMemoryDirectory).
+    if (settings.hooks?.Stop) {
+        settings.hooks.Stop = settings.hooks.Stop.filter((h) => !(h.hooks?.[0]?.command?.includes('memo capture')));
+        if (settings.hooks.Stop.length === 0) {
+            delete settings.hooks.Stop;
+        }
+        if (Object.keys(settings.hooks).length === 0) {
+            delete settings.hooks;
+        }
     }
-    // Remove any existing memobank Stop hook to avoid duplicates
-    settings.hooks.Stop = settings.hooks.Stop.filter((h) => !(h.hooks?.[0]?.command?.includes('memo capture')));
-    settings.hooks.Stop.push({
-        matcher: '',
-        hooks: [{ type: 'command', command: 'memo capture --auto --silent' }],
-    });
     // Write settings
     try {
         fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
