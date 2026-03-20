@@ -7,9 +7,9 @@
 
 ## Overview
 
-Redesign memobank-cli's memory storage and team collaboration model to eliminate conceptual complexity, align with familiar developer mental models (global vs. project, like npm/git config), and support large multi-repo organizations through an optional org layer.
+Redesign memobank-cli's memory storage and team collaboration model to eliminate conceptual complexity, align with familiar developer mental models (global vs. project, like npm/git config), and support large multi-repo organizations through an optional workspace layer.
 
-The core insight: **the code repo itself is the team memory**. A project's `.memobank/` directory committed alongside code is the natural "team" layer. The existing `team/` concept (separate remote repo) is elevated to an `org/` layer for cross-repo organizational knowledge.
+The core insight: **the code repo itself is the team memory**. A project's `.memobank/` directory committed alongside code is the natural "team" layer. The existing `team/` concept (separate remote repo) is elevated to a `workspace/` layer for cross-repo organizational knowledge.
 
 ---
 
@@ -18,7 +18,7 @@ The core insight: **the code repo itself is the team memory**. A project's `.mem
 - Zero extra mental overhead for the common case (single repo, single team)
 - Personal memories are truly private — never in a repo, never shared
 - Team memories follow the code — committed, reviewed, diffed like any other file
-- Org memories support large teams and multi-repo architectures via standard Git PR workflow
+- Workspace memories support large teams and multi-repo architectures via standard Git PR workflow
 - `status` field + frequency-driven lifecycle enables long-term maintenance without ownership tracking
 
 ---
@@ -27,7 +27,7 @@ The core insight: **the code repo itself is the team memory**. A project's `.mem
 
 - Supporting non-Git backends
 - Real-time collaboration or conflict resolution beyond standard Git merge
-- Requiring an org layer (it remains optional)
+- Requiring a workspace layer (it remains optional)
 
 ---
 
@@ -55,16 +55,16 @@ Personal memories are private drafts, local experiments, and individual notes. T
 
 Project memories are committed alongside code. Adding a memory = adding a file in a PR. Reviewing a memory = code review. History = git log. This tier requires no special commands — standard Git workflow handles everything.
 
-### Tier 3: Org (Remote Repo, Optional)
+### Tier 3: Workspace (Remote Repo, Optional)
 
 | Property | Value |
 |----------|-------|
-| Location | `~/.memobank/_org/<org-name>/` (local clone) |
+| Location | `~/.memobank/_workspace/<workspace-name>/` (local clone) |
 | Committed | To a designated remote repo (infra, platform-docs, etc.) |
 | Scope | Entire organization, across all repos/services |
-| Activation | `memo org init <remote-url>` |
+| Activation | `memo workspace init <remote-url>` |
 
-Org memories capture cross-repo knowledge: inter-service contracts, org-wide decisions, shared architecture patterns. Any Git repo can serve as the org remote. Updates flow through standard PRs on that repo.
+Workspace memories capture cross-repo knowledge: inter-service contracts, workspace-wide decisions, shared architecture patterns. Any Git repo can serve as the workspace remote. Updates flow through standard PRs on that repo.
 
 ### Recall Priority
 
@@ -74,18 +74,18 @@ When `memo recall` runs, all three tiers are searched and results merged:
 Priority (highest → lowest):
 1. Project  — most specific to current context
 2. Personal — individual experience
-3. Org      — broad organizational knowledge
+3. Workspace      — broad organizational knowledge
 ```
 
 **Merge / deduplication rules:**
 - Results from all tiers are scored independently and combined into a single ranked list
-- If the same filename exists in multiple tiers, the highest-priority tier's version wins (Project > Personal > Org); lower-tier duplicates are suppressed
-- Each result includes a `scope` field (`project | personal | org`) shown in output so users know the source
-- If org tier is not configured or its local clone does not exist, recall silently skips that tier (no error)
+- If the same filename exists in multiple tiers, the highest-priority tier's version wins (Project > Personal > Workspace); lower-tier duplicates are suppressed
+- Each result includes a `scope` field (`project | personal | workspace`) shown in output so users know the source
+- If workspace tier is not configured or its local clone does not exist, recall silently skips that tier (no error)
 
-**Org sync during recall:**
-- `auto_sync: false` (default): recall uses the last-synced local clone of org memories; if no clone exists, org tier is skipped silently
-- If org remote is unreachable during `memo org sync`, the command fails with an error but existing local clone remains usable
+**Workspace sync during recall:**
+- `auto_sync: false` (default): recall uses the last-synced local clone of workspace memories; if no clone exists, workspace tier is skipped silently
+- If workspace remote is unreachable during `memo workspace sync`, the command fails with an error but existing local clone remains usable
 - `memo recall` itself never triggers a network request regardless of `auto_sync` setting
 
 ---
@@ -118,27 +118,27 @@ memo init             # project tier — .memobank/ in current repo
 memo init --global    # personal tier — ~/.memobank/<project>/
 ```
 
-Onboarding (`memo onboarding`) asks which tier to set up. If the user selects neither org nor project, only personal is configured — zero team footprint.
+Onboarding (`memo onboarding`) asks which tier to set up. If the user selects neither workspace nor project, only personal is configured — zero team footprint.
 
-### Org Commands (Optional)
+### Workspace Commands (Optional)
 
 ```bash
-memo org init <remote-url>     # configure org remote, clone to ~/.memobank/_org/
-memo org sync                  # pull latest org memories from remote
-memo org sync --push           # push local org changes to remote
-memo org publish <file>        # copy project memory to org layer (+ secret scan)
-memo org status                # show git status of local org clone
+memo workspace init <remote-url>     # configure workspace remote, clone to ~/.memobank/_workspace/
+memo workspace sync                  # pull latest workspace memories from remote
+memo workspace sync --push           # push local workspace changes to remote
+memo workspace publish <file>        # copy project memory to workspace layer (+ secret scan)
+memo workspace status                # show git status of local workspace clone
 ```
 
 ### Removed Commands
 
 | Removed | Reason |
 |---------|--------|
-| `memo team init` | Replaced by `memo org init` |
-| `memo team sync` | Replaced by `memo org sync` |
-| `memo team publish` | Replaced by `memo org publish` |
-| `memo team status` | Replaced by `memo org status` |
-| `memo team handoff` | Project handoff = new team clones repo; org handoff = PR-based |
+| `memo team init` | Replaced by `memo workspace init` |
+| `memo team sync` | Replaced by `memo workspace sync` |
+| `memo team publish` | Replaced by `memo workspace publish` |
+| `memo team status` | Replaced by `memo workspace status` |
+| `memo team handoff` | Project handoff = new team clones repo; workspace handoff = PR-based |
 
 ### Unchanged Commands
 
@@ -230,7 +230,7 @@ Old team's access history contributes positively but fades to zero over 180 days
 
 ### Deprecated Memory Re-recall
 
-If a `deprecated` memory is explicitly recalled (e.g., via `memo search --include-deprecated` followed by direct use, or if it surfaces via org sync), it transitions back to `needs-review` — not directly to `active`. This requires at least 3 more recalls to re-validate, preventing accidental resurrection.
+If a `deprecated` memory is explicitly recalled (e.g., via `memo search --include-deprecated` followed by direct use, or if it surfaces via workspace sync), it transitions back to `needs-review` — not directly to `active`. This requires at least 3 more recalls to re-validate, preventing accidental resurrection.
 
 ### Epoch Decay Function
 
@@ -254,10 +254,10 @@ memo lifecycle --reset-epoch    # reset epoch to now, epochAccessCount → 0 for
 
 When a new team takes over a project:
 1. Clone the repo (project-tier memories arrive automatically)
-2. Run `memo org sync` to pull latest org knowledge
+2. Run `memo workspace sync` to pull latest workspace knowledge
 3. Run `memo lifecycle --reset-epoch` to start fresh decay tracking
 
-If no org layer is configured, step 2 is skipped. The epoch still resets via step 3.
+If no workspace layer is configured, step 2 is skipped. The epoch still resets via step 3.
 
 The epoch reset does not change any `status` values — status continues to evolve based on how often the new team recalls each memory. Unused memories fade naturally via the downgrade path.
 
@@ -281,8 +281,8 @@ memo migrate             # execute after reviewing dry-run output
 **Steps executed:**
 1. Moves `personal/` contents → `~/.memobank/<project-name>/` (global tier)
 2. Flattens `team/` contents → `.memobank/` root (project tier, if team remote was configured)
-3. Renames `team:` key → `org:` in `meta/config.yaml`
-4. Old configs with `team:` key continue to work during transition (aliased to `org:`)
+3. Renames `team:` key → `workspace:` in `meta/config.yaml`
+4. Old configs with `team:` key continue to work during transition (aliased to `workspace:`)
 5. Prints a per-file summary of what moved
 
 **Conflict handling (same filename in multiple tiers):**
@@ -296,24 +296,24 @@ memo migrate             # execute after reviewing dry-run output
 
 ---
 
-## Org Layer: Large Team Governance
+## Workspace Layer: Large Team Governance
 
-Since the org remote is a standard Git repo, all standard Git governance applies with no additional tooling:
+Since the workspace remote is a standard Git repo, all standard Git governance applies with no additional tooling:
 
 | Need | Mechanism |
 |------|-----------|
-| Review before publishing | PR to org repo |
-| Prevent unauthorized changes | Branch protection on org repo |
-| Audit trail | Git log on org repo |
-| Dispute a memory | Open PR/issue on org repo |
-| Distribute to new services | `memo org init <same-remote-url>` |
-| Cross-service context in recall | `memo org sync` before `memo recall` |
+| Review before publishing | PR to workspace repo |
+| Prevent unauthorized changes | Branch protection on workspace repo |
+| Audit trail | Git log on workspace repo |
+| Dispute a memory | Open PR/issue on workspace repo |
+| Distribute to new services | `memo workspace init <same-remote-url>` |
+| Cross-service context in recall | `memo workspace sync` before `memo recall` |
 
-The org repo can be any existing repo (infra, platform-docs, monorepo root). A `.memobank/` directory within that repo holds the memories. The `org.path` config option specifies the subdirectory if needed.
+The workspace repo can be any existing repo (infra, platform-docs, monorepo root). A `.memobank/` directory within that repo holds the memories. The `workspace.path` config option specifies the subdirectory if needed.
 
 ```yaml
 # meta/config.yaml
-org:
+workspace:
   enabled: true
   remote: git@github.com:mycompany/platform-docs.git
   path: .memobank       # subdirectory within remote repo
@@ -327,33 +327,33 @@ org:
 
 | File | Change |
 |------|--------|
-| `src/types.ts` | Add `status: Status` field to `MemoryFile`; add `Status` type; update `MemoryScope` to `'personal' \| 'project' \| 'org'`; rename `TeamConfig` → `OrgConfig` |
-| `src/config.ts` | Update config schema; add `lifecycle` thresholds block; alias `team:` → `org:` for backward compat |
-| `src/core/store.ts` | Rewrite path resolution: `getGlobalDir()`, `getProjectDir()`, `getOrgDir()`; three-tier `loadAll()`; remove `getPersonalDir()`, `getTeamDir()`, `migrateToPersonal()` |
+| `src/types.ts` | Add `status: Status` field to `MemoryFile`; add `Status` type; update `MemoryScope` to `'personal' \| 'project' \| 'workspace'`; rename `TeamConfig` → `WorkspaceConfig` |
+| `src/config.ts` | Update config schema; add `lifecycle` thresholds block; alias `team:` → `workspace:` for backward compat |
+| `src/core/store.ts` | Rewrite path resolution: `getGlobalDir()`, `getProjectDir()`, `getWorkspaceDir()`; three-tier `loadAll()`; remove `getPersonalDir()`, `getTeamDir()`, `migrateToPersonal()` |
 | `src/core/retriever.ts` | Update to merge results from three tiers; apply tier priority deduplication; add `scope` to `RecallResult` |
 | `src/core/lifecycle-manager.ts` | Add `updateStatusOnRecall()` (called by recall); add `runLifecycleScan()` (called by lifecycle command); add epoch-aware scoring; add `resetEpoch()` |
 | `src/core/decay-engine.ts` | Integrate dual-track epoch scoring formula |
 | `src/commands/team.ts` | **Delete** |
-| `src/commands/org.ts` | **New**: `orgInit`, `orgSync`, `orgPublish`, `orgStatus` |
+| `src/commands/workspace.ts` | **New**: `workspaceInit`, `workspaceSync`, `workspacePublish`, `workspaceStatus` |
 | `src/commands/recall.ts` | Call `updateStatusOnRecall()` after results returned |
 | `src/commands/lifecycle.ts` | Add `--reset-epoch` flag; call `runLifecycleScan()` for full status sweep |
 | `src/commands/write.ts` | Set `status: experimental` on all newly created memories |
 | `src/commands/migrate.ts` | **New**: dry-run + execute migration; conflict handling; rollback support |
 | `src/commands/init.ts` | **New** (or extend onboarding): handle `memo init` and `memo init --global` |
-| `src/cli.ts` | Replace `team` subcommand with `org`; add `migrate` and `init` commands |
-| `src/onboarding.tsx` | Ask global vs project tier; ask org remote URL (optional, skippable) |
+| `src/cli.ts` | Replace `team` subcommand with `workspace`; add `migrate` and `init` commands |
+| `src/onboarding.tsx` | Ask global vs project tier; ask workspace remote URL (optional, skippable) |
 
 ---
 
 ## Edge Case Behavior
 
-### Onboarding when org remote is pre-configured
+### Onboarding when workspace remote is pre-configured
 
-If `org.remote` is already set in `config.yaml` and the user runs `memo onboarding` or `memo init` without specifying org, the existing org config is preserved untouched. Skipping the org step in onboarding only means "don't configure now" — it does not disable or remove a pre-existing org remote.
+If `workspace.remote` is already set in `config.yaml` and the user runs `memo onboarding` or `memo init` without specifying workspace, the existing workspace config is preserved untouched. Skipping the workspace step in onboarding only means "don't configure now" — it does not disable or remove a pre-existing workspace remote.
 
-### `memo org init` subdirectory handling
+### `memo workspace init` subdirectory handling
 
-When `org.path` is set to a subdirectory (e.g., `.memobank` inside a larger repo), `memo org init` clones the entire remote repo to `~/.memobank/_org/<org-name>/` and reads memories from the specified `org.path` subdirectory within that clone. If the subdirectory does not exist in the remote, `memo org init` creates it with an empty `.gitkeep` and commits it as part of initialization.
+When `workspace.path` is set to a subdirectory (e.g., `.memobank` inside a larger repo), `memo workspace init` clones the entire remote repo to `~/.memobank/_workspace/<workspace-name>/` and reads memories from the specified `workspace.path` subdirectory within that clone. If the subdirectory does not exist in the remote, `memo workspace init` creates it with an empty `.gitkeep` and commits it as part of initialization.
 
 ### `memo init` conflicts
 
@@ -361,14 +361,14 @@ When `org.path` is set to a subdirectory (e.g., `.memobank` inside a larger repo
 - Running `memo init --global` when `~/.memobank/<project>/` already exists: same behavior
 - Both personal and project tiers can coexist simultaneously; recall merges both
 
-### `memo org publish` secret scanning
+### `memo workspace publish` secret scanning
 
 - Uses the same regex-based scanner as `memo scan` (`src/commands/scan.ts`)
 - If secrets are found: command aborts, lists findings, instructs user to fix before publishing
 - No automatic stripping — user must manually redact and re-run
-- If the same filename already exists in the org local clone: user is prompted to confirm overwrite; the org repo's PR review is the final governance gate
+- If the same filename already exists in the workspace local clone: user is prompted to confirm overwrite; the workspace repo's PR review is the final governance gate
 
-### `memo org sync --push` conflict handling
+### `memo workspace sync --push` conflict handling
 
-- If remote has changes not in local clone: `sync --push` is rejected with an error; user must `memo org sync` (pull) first, resolve conflicts via standard `git` commands, then retry push
+- If remote has changes not in local clone: `sync --push` is rejected with an error; user must `memo workspace sync` (pull) first, resolve conflicts via standard `git` commands, then retry push
 - This mirrors standard Git push-rejection behavior; no special tooling needed
