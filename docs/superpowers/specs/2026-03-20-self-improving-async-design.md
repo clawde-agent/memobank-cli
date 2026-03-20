@@ -1,0 +1,573 @@
+# Self-Improving Memobank — 异步学习架构设计
+
+**Created**: 2026-03-20  
+**Status**: Draft  
+**Author**: AI Agent  
+
+---
+
+## 1. 核心洞察
+
+### 1.1 问题陈述
+
+当前 memobank 的记忆捕获是**同步阻塞**的：
+
+```
+用户输入 → Hook 触发 → 立即分析 → 写入文件 → 返回
+```
+
+这导致：
+- 每次交互都有轻微延迟（虽然仅 50-200ms）
+- 无法利用批量处理优化 token 消耗
+- 用户可能希望"先记下，稍后整理"
+
+### 1.2 关键观察
+
+> **学习捕获是低频事件**，但当前设计按**高频处理**。
+
+| 场景 | 频率 | 当前处理 | 理想处理 |
+|------|------|----------|----------|
+| 用户说"记住这个" | 偶尔 | 立即写入 | 可延迟 |
+| 命令执行失败 | 偶尔 | 立即分析 | 可批量 |
+| 用户纠正 AI | 偶尔 | 立即记录 | 可延迟 |
+| 重复模式检测 | 定期 | 无法检测 | 批量分析 |
+
+### 1.3 设计目标
+
+1. **零感知延迟** — 用户交互不等待
+2. **Token 优化** — 批量处理减少 API 调用
+3. **灵活触发** — 支持多种异步触发方式
+4. **可撤销** — pending 状态允许删除/修改
+
+---
+
+## 2. 架构概览
+
+### 2.1 三层架构
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 1: 捕获层（同步，<10ms）                              │
+│  Hook 检测 → 写入 .memobank/.pending/*.json → 立即返回      │
+└─────────────────────────────┬───────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 2: 调度层（异步触发）                                 │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
+│  │   Idle   │  │   Cron   │  │  CI/CD   │  │  Manual  │   │
+│  │  Timer   │  │  Job     │  │  Action  │  │  Command │   │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘   │
+│       └─────────────┴─────────────┴─────────────┘          │
+│                         │                                  │
+│                         ▼                                  │
+│              ┌─────────────────────┐                       │
+│              │ memo process-queue  │                       │
+│              └─────────────────────┘                       │
+└─────────────────────────────┬───────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 3: 处理层（批量分析，可调用 LLM）                     │
+│  读取 pending → 分组 → LLM 分析 → 生成记忆 → 检测模式 → 提升 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 2.2 目录结构
+
+```
+.memobank/
+├── lesson/                    # 正式记忆（已处理）
+│   ├── api-timeout-handling.md
+│   └── redis-pooling.md
+├── .pending/                  # 待处理队列（git-ignored）
+│   ├── learning-1711008800.json
+│   └── learning-1711008860.json
+├── .queue/                    # 队列状态（git-ignored）
+│   └── state.json
+├── decision/                  # 决策记录
+├── workflow/                  # 工作流程
+└── architecture/              # 架构文档
+```
+
+---
+
+## 3. 数据结构
+
+### 3.1 Pending 学习记录
+
+```json
+{
+  "id": "LRN-20260320-001",
+  "timestamp": "2026-03-20T10:30:00Z",
+  "type": "correction",
+  "trigger": "UserPromptSubmit",
+  "rawContent": {
+    "userPrompt": "不对，应该是用 pnpm 不是 npm",
+    "context": "讨论包管理器选择",
+    "relatedFiles": ["package.json"]
+  },
+  "metadata": {
+    "session": "abc123",
+    "confidence": 0.8,
+    "tags": ["package-manager", "tooling"]
+  },
+  "status": "pending",
+  "processedAt": null,
+  "promotedTo": null,
+  "patternKey": null,
+  "seeAlso": []
+}
+```
+
+### 3.2 队列状态
+
+```json
+{
+  "lastProcessed": "2026-03-20T08:00:00Z",
+  "pendingCount": 3,
+  "processedToday": 5,
+  "patterns": {
+    "package-manager": {
+      "count": 2,
+      "lastSeen": "2026-03-20T10:30:00Z"
+    }
+  }
+}
+```
+
+---
+
+## 4. 触发器设计
+
+### 4.1 Idle Timer（空闲定时器）
+
+**原理**：检测用户 N 分钟无操作后自动处理
+
+**配置**：
+```yaml
+# .memobank/meta/config.yaml
+async:
+  idle:
+    enabled: true
+    timeoutMinutes: 5
+    checkIntervalSeconds: 60
+```
+
+**实现**：
+```bash
+# 后台轮询（轻量级）
+while true; do
+  if [ $(stat -c %Y .memobank/.pending/*.json 2>/dev/null | sort -n | tail -1) -lt $(date -d '5 minutes ago' +%s) ]; then
+    memo process-queue --idle
+  fi
+  sleep 60
+done
+```
+
+**适用场景**：个人开发，本地即时处理
+
+---
+
+### 4.2 Cron Job（定时任务）
+
+**原理**：固定时间触发（如每日 23:00）
+
+**配置**：
+```yaml
+async:
+  cron:
+    enabled: true
+    schedule: "0 23 * * *"
+    timezone: "Asia/Shanghai"
+```
+
+**Crontab 示例**：
+```bash
+# 每日 23:00 处理学习队列
+0 23 * * * cd /path/to/project && memo process-queue --cron
+```
+
+**适用场景**：规律工作节奏，希望每日总结
+
+---
+
+### 4.3 CI/CD Trigger（持续集成）
+
+**原理**：Git push/PR merge 时触发
+
+**GitHub Action 示例**：
+```yaml
+# .github/workflows/memobank-process.yml
+name: Memobank Process Queue
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: Install memobank
+        run: npm install -g memobank-cli
+      
+      - name: Process learning queue
+        run: memo process-queue --ci
+      
+      - name: Create PR if memories changed
+        run: |
+          git diff --exit-code .memobank/lesson/ || {
+            git checkout -b memobank/auto-$(date +%Y%m%d)
+            git add .memobank/lesson/
+            git commit -m "mem: auto-process learning queue"
+            gh pr create --title "Memobank: Auto-processed learnings" --body "Auto-generated by CI/CD"
+          }
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+**适用场景**：团队协作，自动同步知识
+
+---
+
+### 4.4 Session End Hook（会话结束）
+
+**原理**：Claude Code 会话结束时触发
+
+**配置**：
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "command": "memo process-queue --session-end"
+      }
+    ]
+  }
+}
+```
+
+**适用场景**：会话边界清晰，希望立即整理
+
+---
+
+### 4.5 Manual Command（手动触发）
+
+**命令**：
+```bash
+memo process-queue              # 立即处理
+memo process-queue --dry-run    # 预览不写入
+memo process-queue --force      # 忽略 pending 数量限制
+```
+
+**适用场景**：主动控制，调试
+
+---
+
+## 5. 处理流程
+
+### 5.1 批量处理算法
+
+```typescript
+async function processQueue(options: ProcessOptions) {
+  // 1. 读取 pending 队列
+  const pending = await readPendingFiles();
+  
+  if (pending.length === 0) {
+    console.log('No pending learnings');
+    return;
+  }
+  
+  // 2. 分组策略（按类型/模式）
+  const groups = groupByType(pending);
+  
+  // 3. 批量处理每组
+  for (const [type, items] of Object.entries(groups)) {
+    // 3.1 调用 LLM 批量分析（可选）
+    const analysis = options.useLLM 
+      ? await llm.analyze({
+          items: items.map(i => i.rawContent),
+          prompt: `从这些${type}学习中提取共同模式和教训`
+        })
+      : ruleBasedAnalysis(items);
+    
+    // 3.2 生成正式记忆文件
+    for (const item of analysis) {
+      const memoryFile = generateMemoryFile(item);
+      await writeMemory(memoryFile);
+      
+      // 3.3 标记已处理
+      await markProcessed(item.id, memoryFile.path);
+    }
+  }
+  
+  // 4. 检测重复模式
+  const patterns = detectPatterns(pending);
+  for (const pattern of patterns) {
+    if (pattern.recurrenceCount >= 3) {
+      // 触发提升逻辑
+      await promoteToProjectMemory(pattern);
+    }
+  }
+  
+  // 5. 清理已处理的 pending 文件
+  await cleanupProcessed();
+  
+  console.log(`Processed ${pending.length} learnings`);
+}
+```
+
+### 5.2 分组策略
+
+| 分组维度 | 说明 | 示例 |
+|----------|------|------|
+| **按类型** | correction / error / feature | 所有纠正放一起 |
+| **按标签** | 相同 tag 的学习 | `package-manager` |
+| **按时间** | 同一天/会话的学习 | 2026-03-20 的所有学习 |
+| **按模式** | Pattern-Key 相同 | `simplify.dead_code` |
+
+### 5.3 LLM 批量分析 Prompt
+
+```
+你是一个知识整理专家。以下是 AI 助手在会话中收到的用户反馈：
+
+<feedbacks>
+{items.map(i => `
+## Feedback ${i.id}
+Type: ${i.type}
+Content: ${i.rawContent.userPrompt}
+Context: ${i.rawContent.context}
+`).join('\n')}
+</feedbacks>
+
+请完成以下任务：
+1. 识别共同主题和模式
+2. 合并相似反馈为一条结构化记忆
+3. 提取可复用的教训或规则
+4. 为每条记忆建议标签和优先级
+
+输出格式（JSON）：
+{
+  "memories": [
+    {
+      "name": "简短名称",
+      "type": "lesson|decision|workflow",
+      "description": "一句话总结",
+      "tags": ["tag1", "tag2"],
+      "content": "## Problem\n...\n\n## Solution\n...",
+      "priority": "high|medium|low"
+    }
+  ],
+  "patterns": [
+    {
+      "key": "模式标识",
+      "count": 出现次数,
+      "recommendation": "建议行动"
+    }
+  ]
+}
+```
+
+---
+
+## 6. Token 优化分析
+
+### 6.1 对比：同步 vs 异步
+
+| 策略 | Token 消耗 | 延迟 | 适用场景 |
+|------|------------|------|----------|
+| **同步 + 每学习调用** | 1000 × N | 高 | 实时性要求高 |
+| **异步 + 批量调用** | 2000 × (N/10) | 低 | 默认推荐 |
+| **异步 + 规则匹配** | ~0 | 最低 | 极简模式 |
+| **CI/CD + LLM** | 团队分摊 | 无感 | 团队协作 |
+
+### 6.2 实际案例
+
+**场景**：一天内捕获 10 个学习
+
+| 方案 | Token 计算 | 总计 |
+|------|------------|------|
+| 同步处理 | 10 × 1000 | 10,000 |
+| 异步批量 | 1 × 2000 | 2,000 |
+| **节省** | | **80%** |
+
+### 6.3 优化技巧
+
+1. **分组调用** — 相似学习合并分析
+2. **缓存模式** — 相同 Pattern-Key 复用分析结果
+3. **渐进处理** — 先规则匹配，不确定再 LLM
+4. **团队分摊** — CI/CD 处理的 token 由团队承担
+
+---
+
+## 7. 与 Self-Improving Agent 对比
+
+| 特性 | Self-Improving Agent | Memobank 异步方案 |
+|------|---------------------|-------------------|
+| **捕获时机** | 同步（立即写入） | 异步（pending 队列） |
+| **处理方式** | 规则匹配 | 规则 + 批量 LLM |
+| **Token 效率** | 中（每次单独调用） | 高（批量调用） |
+| **用户感知** | 轻微延迟（50-200ms） | 零延迟（<10ms） |
+| **可撤销** | ❌ 已写入文件 | ✅ 删除 pending 即可 |
+| **团队同步** | 手动 git push | CI/CD 自动 |
+| **模式检测** | grep + 手动 | 自动批量分析 |
+
+---
+
+## 8. 实现路线图
+
+### Phase 1: 基础异步队列（1 天）
+
+- [ ] 创建 `.memobank/.pending/` 目录结构
+- [ ] 设计 pending JSON schema
+- [ ] Hook 脚本改为写入 pending（而非直接写入 lesson/）
+- [ ] `memo process-queue` 基础命令
+
+### Phase 2: 触发器（1 天）
+
+- [ ] Idle Timer（本地轮询）
+- [ ] Cron 配置示例
+- [ ] Session End Hook 集成
+- [ ] Manual command 完善
+
+### Phase 3: 批量处理（1 天）
+
+- [ ] 分组算法实现
+- [ ] 批量 LLM 分析集成
+- [ ] 模式检测逻辑
+- [ ] 自动提升规则
+
+### Phase 4: CI/CD 集成（1 天）
+
+- [ ] GitHub Action 模板
+- [ ] PR 自动创建
+- [ ] Workspace 同步流程
+- [ ] Secret 扫描集成
+
+### Phase 5: 高级功能（可选）
+
+- [ ] 学习预览 UI（TUI）
+- [ ] 撤销/修改 pending
+- [ ] 学习统计面板
+- [ ] 团队审核工作流
+
+---
+
+## 9. 配置示例
+
+### 9.1 完整配置
+
+```yaml
+# .memobank/meta/config.yaml
+
+async:
+  enabled: true
+  
+  # Idle Timer
+  idle:
+    enabled: true
+    timeoutMinutes: 5
+    checkIntervalSeconds: 60
+  
+  # Cron Job
+  cron:
+    enabled: false
+    schedule: "0 23 * * *"
+    timezone: "Asia/Shanghai"
+  
+  # CI/CD
+  ci:
+    enabled: true
+    triggerOnPush: true
+    triggerOnPR: false
+    autoCreatePR: true
+  
+  # 处理选项
+  process:
+    useLLM: true
+    llmProvider: jina
+    batchSize: 10
+    dryRun: false
+    
+    # 分组策略
+    groupBy:
+      - type
+      - tags
+    
+    # 模式检测
+    patternDetection:
+      enabled: true
+      minRecurrence: 3
+      timeWindowDays: 30
+    
+    # 提升规则
+  promotion:
+    enabled: true
+    rules:
+      - condition: "recurrenceCount >= 3"
+        action: "promote-to-lesson"
+      - condition: "priority == 'critical'"
+        action: "immediate-promote"
+      - condition: "type == 'workflow'"
+        action: "promote-to-agents-md"
+```
+
+### 9.2 最小配置
+
+```yaml
+# .memobank/meta/config.yaml
+async:
+  enabled: true
+  idle:
+    enabled: true
+    timeoutMinutes: 5
+```
+
+---
+
+## 10. 风险与缓解
+
+| 风险 | 影响 | 缓解措施 |
+|------|------|----------|
+| Pending 文件丢失 | 学习丢失 | 本地备份 + git ignore 但定期导出 |
+| LLM 分析错误 | 记忆质量差 | 人工审核 + 可撤销 |
+| 触发器失效 | 队列堆积 | 监控 + 告警 + 手动 fallback |
+| Token 超预算 | 成本增加 | 批量处理 + 规则匹配 fallback |
+| CI/CD 失败 | PR 未创建 | 重试机制 + 通知 |
+
+---
+
+## 11. 成功指标
+
+| 指标 | 目标 | 测量方式 |
+|------|------|----------|
+| 用户感知延迟 | <10ms | Hook 执行时间 |
+| Token 节省 | >50% | 对比同步处理 |
+| 学习捕获率 | >90% | pending 队列长度 |
+| 处理成功率 | >95% | process-queue 成功率 |
+| 模式检测准确率 | >80% | 人工抽样审核 |
+
+---
+
+## 12. 开放问题
+
+1. **Pending 保留策略**：保留多久？需要归档吗？
+2. **冲突处理**：多个触发器同时触发怎么办？
+3. **团队审核**：是否需要人工审核再提升？
+4. **跨设备同步**：个人 tier 如何跨设备同步 pending？
+
+---
+
+## 13. 参考
+
+- [Self-Improving Agent](https://github.com/peterskoett/self-improving-agent)
+- [Claude Code Hooks](https://www.ksred.com/claude-code-hooks-a-complete-guide-to-automating-your-ai-coding-workflow/)
+- [OpenClaw Skills](https://github.com/openclaw/skills)

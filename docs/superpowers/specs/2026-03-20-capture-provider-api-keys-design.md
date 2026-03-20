@@ -241,7 +241,7 @@ dotenv.config({ path: path.join(process.cwd(), '.memobank', '.env'), override: f
 
 ## Error Handling
 
-| Scenario | Behavior |
+| Scenario | Behaviour |
 |---|---|
 | Key validation fails during onboarding | Re-prompt in place with error message |
 | Model list fetch fails | Fall back to curated list, no error shown to user |

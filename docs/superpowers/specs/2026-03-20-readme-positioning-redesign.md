@@ -199,7 +199,7 @@ Codex, Gemini CLI, and Qwen Code.
 
 **MEMORY.md commit status:** `.memobank/MEMORY.md` is regenerated on every `memo recall`. The implementer should add a note in the README (or in `.memobank/.gitignore`) clarifying whether it should be committed. Recommendation: gitignore it, since it's a derived artifact — only the source memory files in `lesson/`, `decision/`, etc. need committing.
 
-**Claude Code auto-memory claim:** "Claude Code's auto-memory is personal and machine-local" reflects current Claude Code behavior. Verify against current Claude Code documentation before shipping, and word it as "by default" in case the behavior changes.
+**Claude Code auto-memory claim:** "Claude Code's auto-memory is personal and machine-local" reflects current Claude Code behaviour. Verify against current Claude Code documentation before shipping, and word it as "by default" in case the behaviour changes.
 
 **Badges:** Existing npm/license/TypeScript badges at the top of the README stay in place above the Hero section.
 
