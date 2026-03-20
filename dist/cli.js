@@ -50,8 +50,12 @@ const map_1 = require("./commands/map");
 const import_1 = require("./commands/import");
 const onboarding_1 = require("./commands/onboarding");
 const lifecycle_1 = require("./commands/lifecycle");
-// team commands removed — use 'workspace' subcommand instead
+const workspace_1 = require("./commands/workspace");
+const init_1 = require("./commands/init");
+const migrate_1 = require("./commands/migrate");
 const scan_1 = require("./commands/scan");
+const store_1 = require("./core/store");
+const config_1 = require("./config");
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const program = new commander_1.Command();
@@ -82,7 +86,6 @@ program
 // Onboarding command - new interactive setup
 program
     .command('onboarding')
-    .alias('init')
     .alias('setup')
     .description('Interactive setup wizard (recommended for first-time setup)')
     .action(async () => {
@@ -103,7 +106,7 @@ program
     .option('--format <format>', 'Output format (text|json)', 'text')
     .option('--dry-run', 'Print without writing MEMORY.md', false)
     .option('--repo <path>', 'Memobank repository path')
-    .option('--scope <scope>', 'Limit search scope: personal|team|all (default: all)')
+    .option('--scope <scope>', 'Limit search scope: personal|project|workspace|all (default: all)')
     .option('--explain', 'Show score breakdown for each result')
     .action(async (query, options) => {
     try {
@@ -286,6 +289,8 @@ program
     .option('--delete', 'Delete memory (requires --path)')
     .option('--flagged', 'Show memories flagged for review')
     .option('--path <path>', 'Memory file path')
+    .option('--reset-epoch', 'Reset team epoch to now (use after team handoff)')
+    .option('--scan', 'Run full lifecycle scan — auto-update status on all memories')
     .option('--repo <path>', 'Memobank repository path')
     .action(async (action, options) => {
     try {
@@ -298,11 +303,13 @@ program
         else {
             await (0, lifecycle_1.lifecycleCommand)({
                 repo: options.repo,
-                report: options.report || (!options.tier && !options.archive && !options.delete && !options.flagged),
+                report: options.report || (!options.tier && !options.archive && !options.delete && !options.flagged && !options.resetEpoch && !options.scan),
                 archive: options.archive,
                 delete: options.delete,
                 flagged: options.flagged,
                 tier: options.tier,
+                resetEpoch: options.resetEpoch,
+                scan: options.scan,
             });
         }
     }
@@ -329,7 +336,103 @@ program
         process.exit(1);
     }
 });
-// Workspace commands will be wired in Task 12
+// Init command
+program
+    .command('init')
+    .description('Initialize memobank in current project (project tier)')
+    .option('--global', 'Initialize personal tier in ~/.memobank/<project>/')
+    .option('--name <name>', 'Project name (defaults to directory name)')
+    .action(async (options) => {
+    try {
+        await (0, init_1.initCommand)(options);
+    }
+    catch (error) {
+        console.error(`Error: ${error.message}`);
+        process.exit(1);
+    }
+});
+// Migrate command
+program
+    .command('migrate')
+    .description('Migrate from legacy personal/+team/ layout to three-tier model')
+    .option('--dry-run', 'Preview changes without executing')
+    .option('--rollback', 'Restore from personal.bak/ and team.bak/')
+    .option('--global-dir <path>', 'Target path for personal tier (default: ~/.memobank/<project>)')
+    .option('--repo <path>', 'Memobank repository path')
+    .action(async (options) => {
+    try {
+        const repoRoot = (0, store_1.findRepoRoot)(process.cwd(), options.repo);
+        const config = (0, config_1.loadConfig)(repoRoot);
+        const home = process.env.HOME || process.env.USERPROFILE || '';
+        const globalDir = options.globalDir ?? path.join(home, '.memobank', config.project.name);
+        await (0, migrate_1.migrate)(repoRoot, globalDir, { dryRun: options.dryRun, rollback: options.rollback });
+    }
+    catch (error) {
+        console.error(`Error: ${error.message}`);
+        process.exit(1);
+    }
+});
+// Workspace commands
+const workspace = program
+    .command('workspace')
+    .description('Cross-repo workspace memory sharing commands (optional)');
+workspace
+    .command('init <remote-url>')
+    .description('Connect to a shared workspace memory repository')
+    .option('--repo <path>', 'Memobank repository path')
+    .action(async (remoteUrl, options) => {
+    try {
+        const repoRoot = (0, store_1.findRepoRoot)(process.cwd(), options.repo);
+        await (0, workspace_1.workspaceInit)(remoteUrl, repoRoot);
+    }
+    catch (error) {
+        console.error(`Error: ${error.message}`);
+        process.exit(1);
+    }
+});
+workspace
+    .command('sync')
+    .description('Pull latest workspace memories (--push to also push)')
+    .option('--push', 'Push local changes to remote after pulling')
+    .option('--repo <path>', 'Memobank repository path')
+    .action(async (options) => {
+    try {
+        const repoRoot = (0, store_1.findRepoRoot)(process.cwd(), options.repo);
+        await (0, workspace_1.workspaceSync)(repoRoot, options.push);
+    }
+    catch (error) {
+        console.error(`Error: ${error.message}`);
+        process.exit(1);
+    }
+});
+workspace
+    .command('publish <file>')
+    .description('Promote a project memory to workspace (runs secret scan first)')
+    .option('--repo <path>', 'Memobank repository path')
+    .action(async (file, options) => {
+    try {
+        const repoRoot = (0, store_1.findRepoRoot)(process.cwd(), options.repo);
+        await (0, workspace_1.workspacePublish)(file, repoRoot);
+    }
+    catch (error) {
+        console.error(`Error: ${error.message}`);
+        process.exit(1);
+    }
+});
+workspace
+    .command('status')
+    .description('Show git status of local workspace clone')
+    .option('--repo <path>', 'Memobank repository path')
+    .action(async (options) => {
+    try {
+        const repoRoot = (0, store_1.findRepoRoot)(process.cwd(), options.repo);
+        await (0, workspace_1.workspaceStatus)(repoRoot);
+    }
+    catch (error) {
+        console.error(`Error: ${error.message}`);
+        process.exit(1);
+    }
+});
 // Scan command
 program
     .command('scan [path]')
