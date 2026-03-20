@@ -143,6 +143,7 @@ export async function writeMemoryCommand(
       confidence: 'medium' as Confidence,
       content: options.content || '',
       created: new Date().toISOString(),
+      status: 'experimental',
     };
   } else {
     // Interactive mode - open editor
@@ -244,6 +245,7 @@ export async function writeMemoryCommand(
     // Update memoryData with generated file name
     memoryData.name = fileName.replace('.md', '').replace(/^\d{4}-\d{2}-\d{2}-/, '');
 
+    if (!memoryData.status) { memoryData.status = 'experimental'; }
     const filePath = writeMemory(repoRoot, memoryData);
     console.log(`✅ Created: ${filePath}`);
   } catch (error) {
