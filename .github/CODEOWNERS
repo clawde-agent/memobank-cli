@@ -1,0 +1,21 @@
+# Code Owners for memobank-cli
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for the entire repository
+* @clawde-agent/maintainers
+
+# Core source code
+/src/ @clawde-agent/maintainers
+
+# Tests
+/tests/ @clawde-agent/maintainers
+
+# Documentation
+/docs/ @clawde-agent/maintainers
+/README.md @clawde-agent/maintainers
+/CONTRIBUTING.md @clawde-agent/maintainers
+
+# Configuration files
+/package.json @clawde-agent/maintainers
+/tsconfig.json @clawde-agent/maintainers
+/.github/workflows/ @clawde-agent/maintainers
