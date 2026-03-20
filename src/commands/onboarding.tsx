@@ -11,13 +11,14 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import { findRepoRoot } from '../core/store';
+import { findGitRoot } from '../core/store';
 import { loadConfig, writeConfig, initConfig } from '../config';
 import { installClaudeCode } from '../platforms/claude-code';
 import { installCodex } from '../platforms/codex';
 import { installGemini, detectGemini } from '../platforms/gemini';
 import { installQwen, detectQwen } from '../platforms/qwen';
 import { installCursor } from '../platforms/cursor';
+import { workspaceInit } from './workspace';
 interface MultiSelectItem {
   label: string;
   value: string;
@@ -109,14 +110,15 @@ function getDetectedPlatforms(items: MultiSelectItem[]): string[] {
   return items.filter(i => i.hint?.includes('✓')).map(i => i.value);
 }
 
-type Step = 'project-name' | 'platforms' | 'auto-memory-check' | 'team-repo' | 'search-engine' | 'embedding-provider' | 'ollama-url' | 'ollama-model' | 'openai-key' | 'jina-key' | 'reranker' | 'reranker-provider' | 'done';
+type Step = 'project-name' | 'project-dir' | 'platforms' | 'auto-memory-check' | 'workspace-remote' | 'search-engine' | 'embedding-provider' | 'ollama-url' | 'ollama-model' | 'openai-key' | 'jina-key' | 'reranker' | 'reranker-provider' | 'done';
 
 interface OnboardingState {
   step: Step;
   projectName: string;
+  projectDir: string;
   platforms: string[];
   enableAutoMemory: boolean;
-  teamRepo: string;
+  workspaceRemote: string;
   searchEngine: string;
   embeddingProvider: string;
   embeddingUrl: string;
@@ -126,7 +128,8 @@ interface OnboardingState {
   rerankerProvider: string;
 }
 
-async function runSetup(state: OnboardingState, repoRoot: string): Promise<{ lines: string[]; autoMemoryWarning: boolean }> {
+async function runSetup(state: OnboardingState, gitRoot: string): Promise<{ lines: string[]; autoMemoryWarning: boolean }> {
+  const repoRoot = path.join(gitRoot, state.projectDir);
   const summaryLines: string[] = [];
   let autoMemoryWarning = false;
 
@@ -140,6 +143,16 @@ async function runSetup(state: OnboardingState, repoRoot: string): Promise<{ lin
   }
 
   summaryLines.push(`Memories: ${repoRoot}`);
+
+  // 3. Initialize workspace remote if provided
+  if (state.workspaceRemote.trim()) {
+    try {
+      await workspaceInit(state.workspaceRemote.trim(), repoRoot);
+      summaryLines.push(`Workspace: ${state.workspaceRemote.trim()}`);
+    } catch (err) {
+      summaryLines.push(`⚠  Workspace init failed: ${(err as Error).message}`);
+    }
+  }
 
   // 4. Install platform adapters
   for (const platform of state.platforms) {
@@ -222,7 +235,7 @@ async function runSetup(state: OnboardingState, repoRoot: string): Promise<{ lin
 }
 
 export async function onboardingCommand(): Promise<void> {
-  const repoRoot = findRepoRoot(process.cwd());
+  const gitRoot = findGitRoot(process.cwd());
 
   // Use Function constructor to bypass TypeScript's import() -> require() transform.
   // ink, ink-text-input, ink-select-input are ESM-only packages that cannot be
@@ -304,9 +317,10 @@ export async function onboardingCommand(): Promise<void> {
     const [state, setState] = useState<OnboardingState>({
       step: 'project-name',
       projectName: defaultName,
+      projectDir: '.memobank',
       platforms: detectedPlatforms,
       enableAutoMemory: true,
-      teamRepo: '',
+      workspaceRemote: '',
       searchEngine: 'text',
       embeddingProvider: '',
       embeddingUrl: 'http://localhost:11434',
@@ -316,7 +330,8 @@ export async function onboardingCommand(): Promise<void> {
       rerankerProvider: '',
     });
     const [nameInput, setNameInput] = useState(defaultName);
-    const [teamInput, setTeamInput] = useState('');
+    const [projectDirInput, setProjectDirInput] = useState('.memobank');
+    const [workspaceInput, setWorkspaceInput] = useState('');
     const [ollamaUrlInput, setOllamaUrlInput] = useState('http://localhost:11434');
     const [ollamaModelInput, setOllamaModelInput] = useState('mxbai-embed-large');
     const [openaiKeyInput, setOpenaiKeyInput] = useState('');
@@ -335,7 +350,7 @@ export async function onboardingCommand(): Promise<void> {
         autoMemoryWarning
           ? React.createElement(Box, { flexDirection: 'column', marginTop: 1 },
               React.createElement(Text, { color: 'yellow', bold: true }, '⚠  Auto-memory is off'),
-              React.createElement(Text, { color: 'yellow' }, '   Claude Code won\'t read or write team memories in .memobank/'),
+              React.createElement(Text, { color: 'yellow' }, '   Claude Code won\'t read or write project memories in .memobank/'),
               React.createElement(Text, { dimColor: true }, '   To enable later: set "autoMemoryEnabled": true in ~/.claude/settings.json'),
             )
           : null,
@@ -352,7 +367,21 @@ export async function onboardingCommand(): Promise<void> {
           value: nameInput,
           onChange: setNameInput,
           onSubmit: (value: string) => {
-            setState(s => ({ ...s, step: 'platforms', projectName: value || defaultName }));
+            setState(s => ({ ...s, step: 'project-dir', projectName: value || defaultName }));
+          },
+        }),
+      ) : null,
+
+      state.step === 'project-dir' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, { bold: true }, 'Project memory directory'),
+        React.createElement(Text, { dimColor: true }, `  Folder inside ${gitRoot}/ that stores your project memories`),
+        React.createElement(Text, { dimColor: true }, '  Default is .memobank — press Enter to confirm, or type a custom name:'),
+        React.createElement(TextInput, {
+          value: projectDirInput,
+          onChange: setProjectDirInput,
+          onSubmit: (value: string) => {
+            const dir = (value || '.memobank').replace(/^\/+|\/+$/g, '');
+            setState(s => ({ ...s, step: 'platforms', projectDir: dir }));
           },
         }),
       ) : null,
@@ -366,7 +395,7 @@ export async function onboardingCommand(): Promise<void> {
           setState(s => ({
             ...s,
             platforms: selected,
-            step: needsAutoMemoryCheck ? 'auto-memory-check' : 'team-repo',
+            step: needsAutoMemoryCheck ? 'auto-memory-check' : 'workspace-remote',
           }));
         },
       }) : null,
@@ -374,7 +403,7 @@ export async function onboardingCommand(): Promise<void> {
       state.step === 'auto-memory-check' ? React.createElement(Box, { flexDirection: 'column' },
         React.createElement(Text, { bold: true, color: 'yellow' }, '⚠  Claude Code auto-memory is disabled'),
         React.createElement(Text, null, ' '),
-        React.createElement(Text, null, 'memobank stores team memories in .memobank/ and relies on Claude Code\'s'),
+        React.createElement(Text, null, 'memobank stores project memories in .memobank/ and relies on Claude Code\'s'),
         React.createElement(Text, null, 'auto-memory to load them at session start and save new ones automatically.'),
         React.createElement(Text, null, 'With auto-memory off, Claude Code won\'t read or write to .memobank/.'),
         React.createElement(Text, null, ' '),
@@ -386,21 +415,20 @@ export async function onboardingCommand(): Promise<void> {
           ],
           onSelect: (item: { label: string; value: unknown }) => {
             const enable = String(item.value) === 'yes';
-            setState(s => ({ ...s, enableAutoMemory: enable, step: 'team-repo' }));
+            setState(s => ({ ...s, enableAutoMemory: enable, step: 'workspace-remote' }));
           },
         }),
       ) : null,
 
-      state.step === 'team-repo' ? React.createElement(Box, { flexDirection: 'column' },
-        React.createElement(Text, null,
-          'Team memory repo ',
-          React.createElement(Text, { dimColor: true }, '(optional — Enter to skip):'),
-        ),
+      state.step === 'workspace-remote' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, { bold: true }, 'Workspace remote'),
+        React.createElement(Text, { dimColor: true }, '  Org-wide memories shared across repos (e.g. git@github.com:myorg/platform-docs.git)'),
+        React.createElement(Text, { dimColor: true }, '  Optional — press Enter to skip:'),
         React.createElement(TextInput, {
-          value: teamInput,
-          onChange: setTeamInput,
+          value: workspaceInput,
+          onChange: setWorkspaceInput,
           onSubmit: (value: string) => {
-            setState(s => ({ ...s, step: 'search-engine', teamRepo: value }));
+            setState(s => ({ ...s, step: 'search-engine', workspaceRemote: value }));
           },
         }),
       ) : null,
@@ -505,7 +533,7 @@ export async function onboardingCommand(): Promise<void> {
               setupRunning.current = true;
               const finalState = { ...state, step: 'done' as Step, enableReranker: false };
               setState(finalState);
-              runSetup(finalState, repoRoot).then(({ lines, autoMemoryWarning: warn }) => {
+              runSetup(finalState, gitRoot).then(({ lines, autoMemoryWarning: warn }) => {
                 setSummary(lines);
                 setAutoMemoryWarning(warn);
                 setDone(true);
@@ -530,7 +558,7 @@ export async function onboardingCommand(): Promise<void> {
             setupRunning.current = true;
             const finalState = { ...state, step: 'done' as Step, enableReranker: true, rerankerProvider: String(item.value) };
             setState(finalState);
-            runSetup(finalState, repoRoot).then(({ lines, autoMemoryWarning: warn }) => {
+            runSetup(finalState, gitRoot).then(({ lines, autoMemoryWarning: warn }) => {
               setSummary(lines);
               setAutoMemoryWarning(warn);
               setDone(true);
