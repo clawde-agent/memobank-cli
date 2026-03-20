@@ -102,3 +102,21 @@ function parseReviewDuration(duration: string): number {
       return 90 * msPerDay;
   }
 }
+
+export interface EpochScoreInput {
+  accessCount: number;
+  epochAccessCount: number;
+  daysSinceEpoch: number;
+  decayWindowDays: number;
+}
+
+/**
+ * Compute dual-track epoch score.
+ * score = epochAccessCount × 1.0 + historical × linearDecay(daysSinceEpoch, window)
+ */
+export function computeEpochScore(input: EpochScoreInput): number {
+  const { accessCount, epochAccessCount, daysSinceEpoch, decayWindowDays } = input;
+  const historical = accessCount - epochAccessCount;
+  const decay = Math.max(0, 1 - daysSinceEpoch / decayWindowDays);
+  return epochAccessCount + historical * decay;
+}
