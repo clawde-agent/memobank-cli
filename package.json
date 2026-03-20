@@ -1,6 +1,6 @@
 {
   "name": "memobank-cli",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Persistent memory for AI coding sessions — Git-native, human-readable, safe to share",
   "main": "./dist/cli.js",
   "bin": {
