@@ -35,12 +35,18 @@ export async function recallCommand(query: string, options: RecallOptions): Prom
       const { LanceDbEngine } = await import('../engines/lancedb-engine');
       const embedConfig = EmbeddingGenerator.fromMemoConfig(config);
       if (!embedConfig) {
-        throw new Error('OPENAI_API_KEY not set or embedding config missing');
+        throw new Error('embedding config missing or API key not set');
       }
       const embeddingGenerator = new EmbeddingGenerator(embedConfig);
       engine = new LanceDbEngine(repoRoot, embeddingGenerator);
-    } catch {
-      console.warn('LanceDB not available, falling back to text engine.');
+    } catch (err) {
+      const msg = (err as Error).message;
+      const provider = config.embedding?.provider ?? 'ollama';
+      const model = config.embedding?.model ?? 'mxbai-embed-large';
+      const hint = provider === 'ollama'
+        ? `  Check: ollama serve && ollama pull ${model}`
+        : `  Check: ${provider.toUpperCase()}_API_KEY is set`;
+      process.stderr.write(`\n⚠  Vector search unavailable (${msg})\n${hint}\n  Falling back to text search.\n\n`);
       engine = new TextEngine();
     }
   }

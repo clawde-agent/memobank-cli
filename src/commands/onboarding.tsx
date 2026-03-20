@@ -26,6 +26,24 @@ interface MultiSelectItem {
   disabled?: boolean;
 }
 
+/** Test Ollama connectivity and model availability */
+async function testOllamaConnection(baseUrl: string, model: string): Promise<string | null> {
+  try {
+    const url = baseUrl.replace(/\/$/, '');
+    const res = await fetch(`${url}/api/tags`);
+    if (!res.ok) return `Ollama returned HTTP ${res.status}`;
+    const data = await res.json() as { models?: { name: string }[] };
+    const models = data.models?.map((m: { name: string }) => m.name) ?? [];
+    const found = models.some((n: string) => n === model || n.startsWith(`${model}:`));
+    if (!found) {
+      return `Model "${model}" not found — run: ollama pull ${model}`;
+    }
+    return null; // success
+  } catch {
+    return `Cannot reach Ollama at ${baseUrl} — run: ollama serve`;
+  }
+}
+
 /** Detect git repo name from cwd */
 function detectProjectName(): string {
   try {
@@ -80,7 +98,7 @@ function getDetectedPlatforms(items: MultiSelectItem[]): string[] {
   return items.filter(i => i.hint?.includes('✓')).map(i => i.value);
 }
 
-type Step = 'project-name' | 'platforms' | 'team-repo' | 'search-engine' | 'embedding-provider' | 'ollama-url' | 'openai-key' | 'jina-key' | 'reranker' | 'reranker-provider' | 'done';
+type Step = 'project-name' | 'platforms' | 'team-repo' | 'search-engine' | 'embedding-provider' | 'ollama-url' | 'ollama-model' | 'openai-key' | 'jina-key' | 'reranker' | 'reranker-provider' | 'done';
 
 interface OnboardingState {
   step: Step;
@@ -90,6 +108,7 @@ interface OnboardingState {
   searchEngine: string;
   embeddingProvider: string;
   embeddingUrl: string;
+  embeddingModel: string;
   embeddingApiKey: string;
   enableReranker: boolean;
   rerankerProvider: string;
@@ -145,10 +164,19 @@ async function runSetup(state: OnboardingState, repoRoot: string): Promise<strin
     const config = loadConfig(repoRoot);
     config.embedding.engine = 'lancedb';
     if (state.embeddingProvider === 'ollama') {
+      const ollamaUrl = state.embeddingUrl || 'http://localhost:11434';
+      const ollamaModel = state.embeddingModel || 'mxbai-embed-large';
       config.embedding.provider = 'ollama';
-      config.embedding.base_url = state.embeddingUrl || 'http://localhost:11434';
-      config.embedding.model = 'mxbai-embed-large';
+      config.embedding.base_url = ollamaUrl;
+      config.embedding.model = ollamaModel;
       config.embedding.dimensions = 1024;
+      // Test connectivity
+      const ollamaErr = await testOllamaConnection(ollamaUrl, ollamaModel);
+      if (ollamaErr) {
+        summaryLines.push(`⚠  Ollama: ${ollamaErr}`);
+      } else {
+        summaryLines.push(`✓ Ollama connected, model "${ollamaModel}" ready`);
+      }
     } else if (state.embeddingProvider === 'openai') {
       config.embedding.provider = 'openai';
       config.embedding.model = 'text-embedding-3-small';
@@ -282,6 +310,7 @@ export async function onboardingCommand(): Promise<void> {
       searchEngine: 'text',
       embeddingProvider: '',
       embeddingUrl: 'http://localhost:11434',
+      embeddingModel: 'mxbai-embed-large',
       embeddingApiKey: '',
       enableReranker: false,
       rerankerProvider: '',
@@ -289,6 +318,7 @@ export async function onboardingCommand(): Promise<void> {
     const [nameInput, setNameInput] = useState(defaultName);
     const [teamInput, setTeamInput] = useState('');
     const [ollamaUrlInput, setOllamaUrlInput] = useState('http://localhost:11434');
+    const [ollamaModelInput, setOllamaModelInput] = useState('mxbai-embed-large');
     const [openaiKeyInput, setOpenaiKeyInput] = useState('');
     const [jinaKeyInput, setJinaKeyInput] = useState('');
     const [done, setDone] = useState(false);
@@ -385,7 +415,19 @@ export async function onboardingCommand(): Promise<void> {
           value: ollamaUrlInput,
           onChange: setOllamaUrlInput,
           onSubmit: (value: string) => {
-            setState(s => ({ ...s, step: 'reranker', embeddingUrl: value || 'http://localhost:11434' }));
+            setState(s => ({ ...s, step: 'ollama-model', embeddingUrl: value || 'http://localhost:11434' }));
+          },
+        }),
+      ) : null,
+
+      state.step === 'ollama-model' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, null, 'Ollama embedding model:'),
+        React.createElement(Text, { dimColor: true }, '  (default: mxbai-embed-large — run `ollama pull mxbai-embed-large` to install)'),
+        React.createElement(TextInput, {
+          value: ollamaModelInput,
+          onChange: setOllamaModelInput,
+          onSubmit: (value: string) => {
+            setState(s => ({ ...s, step: 'reranker', embeddingModel: value || 'mxbai-embed-large' }));
           },
         }),
       ) : null,

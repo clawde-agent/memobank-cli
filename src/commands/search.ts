@@ -48,8 +48,13 @@ export async function search(query: string, options: SearchOptions = {}): Promis
       const embeddingGenerator = new EmbeddingGenerator(embedConfig);
       engine = new LanceDbEngine(repoRoot, embeddingGenerator);
     } catch (e) {
-      console.error('LanceDB engine not available. Falling back to text engine.');
-      console.error(`Error: ${(e as Error).message}`);
+      const msg = (e as Error).message;
+      const provider = config.embedding?.provider ?? 'ollama';
+      const model = config.embedding?.model ?? 'mxbai-embed-large';
+      const hint = provider === 'ollama'
+        ? `  Check: ollama serve && ollama pull ${model}`
+        : `  Check: ${provider.toUpperCase()}_API_KEY is set`;
+      process.stderr.write(`\n⚠  Vector search unavailable (${msg})\n${hint}\n  Falling back to text search.\n\n`);
       engine = new TextEngine();
     }
   } else {
