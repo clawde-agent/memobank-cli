@@ -7,7 +7,7 @@ import { EngineAdapter } from '../engines/engine-adapter';
 /**
  * Recall memories for a query
  */
-export declare function recall(query: string, repoRoot: string, config: MemoConfig, engine?: EngineAdapter, scope?: MemoryScope, explain?: boolean): Promise<{
+export declare function recall(query: string, repoRoot: string, config: MemoConfig, engine?: EngineAdapter, scope?: MemoryScope | 'all', explain?: boolean): Promise<{
     results: RecallResult[];
     markdown: string;
 }>;

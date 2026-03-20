@@ -61,8 +61,11 @@ async function recall(query, repoRoot, config, engine, scope = 'all', explain = 
     return { results, markdown };
 }
 function scopeLabel(scope) {
-    if (scope === 'team') {
-        return '👥 team';
+    if (scope === 'workspace') {
+        return '🌐 workspace';
+    }
+    if (scope === 'project') {
+        return '📁 project';
     }
     if (scope === 'personal') {
         return '👤 personal';

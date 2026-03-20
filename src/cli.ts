@@ -17,7 +17,7 @@ import { mapCommand } from './commands/map';
 import { importMemories } from './commands/import';
 import { onboardingCommand } from './commands/onboarding';
 import { lifecycleCommand, correctCommand } from './commands/lifecycle';
-import { teamInit, teamSync, teamPublish, teamStatus } from './commands/team';
+// team commands removed — use 'workspace' subcommand instead
 import { scanCommand } from './commands/scan';
 import { findRepoRoot } from './core/store';
 import { MemoryType } from './types';
@@ -302,66 +302,7 @@ program
     }
   });
 
-// Team commands
-const team = program
-  .command('team')
-  .description('Team memory sharing commands');
-
-team
-  .command('init <remote-url>')
-  .description('Set up shared team memory repository')
-  .option('--repo <path>', 'Memobank repository path')
-  .action(async (remoteUrl: string, options) => {
-    try {
-      const repoRoot = findRepoRoot(process.cwd(), options.repo);
-      await teamInit(remoteUrl, repoRoot);
-    } catch (error) {
-      console.error(`Error: ${(error as Error).message}`);
-      process.exit(1);
-    }
-  });
-
-team
-  .command('sync')
-  .description('Pull and push team memories')
-  .option('--repo <path>', 'Memobank repository path')
-  .action(async (options) => {
-    try {
-      const repoRoot = findRepoRoot(process.cwd(), options.repo);
-      await teamSync(repoRoot);
-    } catch (error) {
-      console.error(`Error: ${(error as Error).message}`);
-      process.exit(1);
-    }
-  });
-
-team
-  .command('publish <file>')
-  .description('Promote a personal memory to team')
-  .option('--repo <path>', 'Memobank repository path')
-  .action(async (file: string, options) => {
-    try {
-      const repoRoot = findRepoRoot(process.cwd(), options.repo);
-      await teamPublish(file, repoRoot);
-    } catch (error) {
-      console.error(`Error: ${(error as Error).message}`);
-      process.exit(1);
-    }
-  });
-
-team
-  .command('status')
-  .description('Show team repository status')
-  .option('--repo <path>', 'Memobank repository path')
-  .action(async (options) => {
-    try {
-      const repoRoot = findRepoRoot(process.cwd(), options.repo);
-      await teamStatus(repoRoot);
-    } catch (error) {
-      console.error(`Error: ${(error as Error).message}`);
-      process.exit(1);
-    }
-  });
+// Workspace commands will be wired in Task 12
 
 // Scan command
 program

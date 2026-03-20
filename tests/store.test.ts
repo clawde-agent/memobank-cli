@@ -2,11 +2,11 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
-  getPersonalDir,
-  getTeamDir,
+  getGlobalDir,
+  getProjectDir,
+  getWorkspaceDir,
   loadAll,
   writeMemory,
-  migrateToPersonal,
 } from '../src/core/store';
 
 function makeTempRepo(): string {
@@ -18,127 +18,84 @@ function makeTempRepo(): string {
 
 function writeTestMemory(dir: string, type: string, filename: string): void {
   fs.mkdirSync(path.join(dir, type), { recursive: true });
-  const content = `---\nname: test-memory\ntype: ${type}\ndescription: A test\ntags: []\ncreated: "2026-01-01"\n---\n\nContent here.`;
+  const content = `---\nname: test-memory\ntype: ${type}\ndescription: A test\ntags: []\ncreated: "2026-01-01"\nstatus: active\n---\n\nContent here.`;
   fs.writeFileSync(path.join(dir, type, filename), content);
 }
 
-describe('getPersonalDir', () => {
-  it('returns personal/ path under repoRoot', () => {
-    expect(getPersonalDir('/home/user/.memobank/proj')).toBe(
-      '/home/user/.memobank/proj/personal'
-    );
+describe('getGlobalDir', () => {
+  it('returns ~/.memobank/<project> path', () => {
+    const home = process.env.HOME || '';
+    expect(getGlobalDir('my-project')).toBe(path.join(home, '.memobank', 'my-project'));
   });
 });
 
-describe('getTeamDir', () => {
-  it('returns team/ path under repoRoot', () => {
-    expect(getTeamDir('/home/user/.memobank/proj')).toBe(
-      '/home/user/.memobank/proj/team'
-    );
+describe('getProjectDir', () => {
+  it('returns .memobank/ directly under repoRoot', () => {
+    expect(getProjectDir('/repo/root')).toBe('/repo/root');
   });
 });
 
-describe('loadAll', () => {
-  it('falls back to root-level loading when personal/ does not exist', () => {
+describe('getWorkspaceDir', () => {
+  it('returns ~/.memobank/_workspace/<name> path', () => {
+    const home = process.env.HOME || '';
+    expect(getWorkspaceDir('myorg')).toBe(path.join(home, '.memobank', '_workspace', 'myorg'));
+  });
+});
+
+describe('loadAll — three-tier', () => {
+  it('loads project-tier memories from repoRoot directly', () => {
     const repo = makeTempRepo();
     writeTestMemory(repo, 'lesson', '2026-01-01-test.md');
     const memories = loadAll(repo);
     expect(memories.length).toBe(1);
-    expect(memories[0].scope).toBeUndefined();
+    expect(memories[0].scope).toBe('project');
     fs.rmSync(repo, { recursive: true });
   });
 
-  it('loads from personal/ when it exists, labels scope=personal', () => {
+  it('loads global-tier memories from separate globalDir', () => {
     const repo = makeTempRepo();
-    const personalDir = path.join(repo, 'personal');
-    writeTestMemory(personalDir, 'lesson', '2026-01-01-personal.md');
+    const globalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-global-'));
+    writeTestMemory(globalDir, 'lesson', '2026-01-01-global.md');
+    const memories = loadAll(repo, 'all', globalDir);
+    expect(memories.some(m => m.scope === 'personal')).toBe(true);
+    fs.rmSync(repo, { recursive: true });
+    fs.rmSync(globalDir, { recursive: true });
+  });
+
+  it('project scope deduplicates same filename from global', () => {
+    const repo = makeTempRepo();
+    const globalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-global-'));
+    const sameFile = '2026-01-01-test.md';
+    writeTestMemory(repo, 'lesson', sameFile);
+    writeTestMemory(globalDir, 'lesson', sameFile);
+    const memories = loadAll(repo, 'all', globalDir);
+    const lessons = memories.filter(m => m.type === 'lesson');
+    expect(lessons.length).toBe(1);
+    expect(lessons[0].scope).toBe('project');
+    fs.rmSync(repo, { recursive: true });
+    fs.rmSync(globalDir, { recursive: true });
+  });
+
+  it('legacy fallback: loads from root when no tier dirs exist', () => {
+    const repo = makeTempRepo();
+    writeTestMemory(repo, 'lesson', '2026-01-01-legacy.md');
     const memories = loadAll(repo);
     expect(memories.length).toBe(1);
-    expect(memories[0].scope).toBe('personal');
-    fs.rmSync(repo, { recursive: true });
-  });
-
-  it('loads from team/ when it exists, labels scope=team', () => {
-    const repo = makeTempRepo();
-    const teamDir = path.join(repo, 'team');
-    writeTestMemory(teamDir, 'lesson', '2026-01-01-team.md');
-    const memories = loadAll(repo);
-    expect(memories.length).toBe(1);
-    expect(memories[0].scope).toBe('team');
-    fs.rmSync(repo, { recursive: true });
-  });
-
-  it('loads from both personal/ and team/ when both exist', () => {
-    const repo = makeTempRepo();
-    writeTestMemory(path.join(repo, 'personal'), 'lesson', '2026-01-01-p.md');
-    writeTestMemory(path.join(repo, 'team'), 'lesson', '2026-01-01-t.md');
-    const memories = loadAll(repo);
-    expect(memories.length).toBe(2);
-    expect(memories.map(m => m.scope).sort()).toEqual(['personal', 'team']);
-    fs.rmSync(repo, { recursive: true });
-  });
-
-  it('respects scope=personal filter', () => {
-    const repo = makeTempRepo();
-    writeTestMemory(path.join(repo, 'personal'), 'lesson', '2026-01-01-p.md');
-    writeTestMemory(path.join(repo, 'team'), 'lesson', '2026-01-01-t.md');
-    const memories = loadAll(repo, 'personal');
-    expect(memories.length).toBe(1);
-    expect(memories[0].scope).toBe('personal');
     fs.rmSync(repo, { recursive: true });
   });
 });
 
 describe('writeMemory', () => {
-  it('writes to personal/ when personal/ exists', () => {
+  it('writes status: experimental when status provided', () => {
     const repo = makeTempRepo();
-    fs.mkdirSync(path.join(repo, 'personal'), { recursive: true });
-    const filePath = writeMemory(repo, {
-      name: 'test-lesson',
-      type: 'lesson',
-      description: 'A test lesson',
-      tags: [],
-      created: '2026-01-01',
-      content: 'Content',
+    writeMemory(repo, {
+      name: 'test', type: 'lesson', description: 'desc', tags: [],
+      created: '2026-01-01', content: 'body', status: 'experimental',
     });
-    expect(filePath).toContain('personal');
-    fs.rmSync(repo, { recursive: true });
-  });
-
-  it('writes to root level when personal/ does not exist (legacy)', () => {
-    const repo = makeTempRepo();
-    const filePath = writeMemory(repo, {
-      name: 'test-lesson',
-      type: 'lesson',
-      description: 'A test lesson',
-      tags: [],
-      created: '2026-01-01',
-      content: 'Content',
-    });
-    expect(filePath).not.toContain('personal');
-    fs.rmSync(repo, { recursive: true });
-  });
-});
-
-describe('migrateToPersonal', () => {
-  it('moves root-level memories to personal/', () => {
-    const repo = makeTempRepo();
-    writeTestMemory(repo, 'lesson', '2026-01-01-test.md');
-    const result = migrateToPersonal(repo);
-    expect(result.migrated.length).toBe(1);
-    expect(result.skipped.length).toBe(0);
-    expect(fs.existsSync(path.join(repo, 'personal', 'lesson', '2026-01-01-test.md'))).toBe(true);
-    expect(fs.existsSync(path.join(repo, 'lesson', '2026-01-01-test.md'))).toBe(false);
-    fs.rmSync(repo, { recursive: true });
-  });
-
-  it('skips files that already exist in personal/', () => {
-    const repo = makeTempRepo();
-    writeTestMemory(repo, 'lesson', '2026-01-01-test.md');
-    writeTestMemory(path.join(repo, 'personal'), 'lesson', '2026-01-01-test.md');
-    const result = migrateToPersonal(repo);
-    expect(result.migrated.length).toBe(0);
-    expect(result.skipped.length).toBe(1);
+    const files = fs.readdirSync(path.join(repo, 'lesson'));
+    expect(files.length).toBe(1);
+    const written = fs.readFileSync(path.join(repo, 'lesson', files[0]!), 'utf-8');
+    expect(written).toContain('status: experimental');
     fs.rmSync(repo, { recursive: true });
   });
 });

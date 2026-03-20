@@ -7,6 +7,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.computeDecayScore = computeDecayScore;
 exports.isReviewDue = isReviewDue;
+exports.computeEpochScore = computeEpochScore;
 /**
  * Compute decay score for a memory (0-1)
  * Based on recency, access frequency, and confidence
@@ -87,5 +88,15 @@ function parseReviewDuration(duration) {
         default:
             return 90 * msPerDay;
     }
+}
+/**
+ * Compute dual-track epoch score.
+ * score = epochAccessCount × 1.0 + historical × linearDecay(daysSinceEpoch, window)
+ */
+function computeEpochScore(input) {
+    const { accessCount, epochAccessCount, daysSinceEpoch, decayWindowDays } = input;
+    const historical = accessCount - epochAccessCount;
+    const decay = Math.max(0, 1 - daysSinceEpoch / decayWindowDays);
+    return epochAccessCount + historical * decay;
 }
 //# sourceMappingURL=decay-engine.js.map

@@ -22,7 +22,7 @@ export async function recall(
   repoRoot: string,
   config: MemoConfig,
   engine?: EngineAdapter,
-  scope: MemoryScope = 'all',
+  scope: MemoryScope | 'all' = 'all',
   explain: boolean = false
 ): Promise<{ results: RecallResult[]; markdown: string }> {
   const memories = loadAll(repoRoot, scope);
@@ -76,7 +76,8 @@ export async function recall(
 }
 
 function scopeLabel(scope?: MemoryScope | string): string {
-  if (scope === 'team') { return '👥 team'; }
+  if (scope === 'workspace') { return '🌐 workspace'; }
+  if (scope === 'project') { return '📁 project'; }
   if (scope === 'personal') { return '👤 personal'; }
   return '';
 }
@@ -89,7 +90,7 @@ function formatResultsAsMarkdown(
   query: string,
   engine: string,
   totalMemories: number,
-  scope: MemoryScope = 'all',
+  scope: MemoryScope | 'all' = 'all',
   explain: boolean = false
 ): string {
   let markdown = `<!-- Last updated: ${new Date().toISOString()} | query: "${query}" | engine: ${engine} | top ${results.length} of ${totalMemories} -->\n\n`;

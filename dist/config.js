@@ -1,8 +1,4 @@
 "use strict";
-/**
- * Config module
- * Read and write meta/config.yaml
- */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -37,21 +33,24 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.DEFAULT_LIFECYCLE = void 0;
 exports.loadConfig = loadConfig;
 exports.writeConfig = writeConfig;
 exports.initConfig = initConfig;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const yaml = __importStar(require("js-yaml"));
+const DEFAULT_LIFECYCLE = {
+    experimental_ttl_days: 30,
+    active_to_review_days: 90,
+    review_to_deprecated_days: 90,
+    review_recall_threshold: 3,
+    decay_window_days: 180,
+};
+exports.DEFAULT_LIFECYCLE = DEFAULT_LIFECYCLE;
 const DEFAULT_CONFIG = {
-    project: {
-        name: 'default',
-        description: '',
-    },
-    memory: {
-        token_budget: 500,
-        top_k: 5,
-    },
+    project: { name: 'default', description: '' },
+    memory: { token_budget: 500, top_k: 5 },
     embedding: {
         engine: 'text',
         provider: 'openai',
@@ -59,24 +58,13 @@ const DEFAULT_CONFIG = {
         dimensions: 1536,
         base_url: undefined,
     },
-    search: {
-        use_tags: true,
-        use_summary: true,
-    },
-    review: {
-        enabled: true,
-    },
+    search: { use_tags: true, use_summary: true },
+    review: { enabled: true },
+    lifecycle: { ...DEFAULT_LIFECYCLE },
 };
-/**
- * Get config file path
- */
 function getConfigPath(repoRoot) {
     return path.join(repoRoot, 'meta', 'config.yaml');
 }
-/**
- * Load config from repo root
- * Falls back to defaults if file doesn't exist
- */
 function loadConfig(repoRoot) {
     const configPath = getConfigPath(repoRoot);
     if (!fs.existsSync(configPath)) {
@@ -85,29 +73,19 @@ function loadConfig(repoRoot) {
     try {
         const content = fs.readFileSync(configPath, 'utf-8');
         const loaded = yaml.load(content);
-        // Merge with defaults
+        // Alias team: → workspace: for backward compat
+        if (loaded?.team && !loaded?.workspace) {
+            loaded.workspace = loaded.team;
+            delete loaded.team;
+        }
         return {
-            project: {
-                ...DEFAULT_CONFIG.project,
-                ...loaded?.project,
-            },
-            memory: {
-                ...DEFAULT_CONFIG.memory,
-                ...loaded?.memory,
-            },
-            embedding: {
-                ...DEFAULT_CONFIG.embedding,
-                ...loaded?.embedding,
-            },
-            search: {
-                ...DEFAULT_CONFIG.search,
-                ...loaded?.search,
-            },
-            review: {
-                ...DEFAULT_CONFIG.review,
-                ...loaded?.review,
-            },
-            ...(loaded?.team ? { team: loaded.team } : {}),
+            project: { ...DEFAULT_CONFIG.project, ...loaded?.project },
+            memory: { ...DEFAULT_CONFIG.memory, ...loaded?.memory },
+            embedding: { ...DEFAULT_CONFIG.embedding, ...loaded?.embedding },
+            search: { ...DEFAULT_CONFIG.search, ...loaded?.search },
+            review: { ...DEFAULT_CONFIG.review, ...loaded?.review },
+            lifecycle: { ...DEFAULT_LIFECYCLE, ...loaded?.lifecycle },
+            ...(loaded?.workspace ? { workspace: loaded.workspace } : {}),
             ...(loaded?.reranker ? { reranker: loaded.reranker } : {}),
         };
     }
@@ -116,13 +94,9 @@ function loadConfig(repoRoot) {
         return { ...DEFAULT_CONFIG };
     }
 }
-/**
- * Write config to repo root
- */
 function writeConfig(repoRoot, config) {
     const configPath = getConfigPath(repoRoot);
     const configDir = path.dirname(configPath);
-    // Ensure meta directory exists
     if (!fs.existsSync(configDir)) {
         fs.mkdirSync(configDir, { recursive: true });
     }
@@ -134,16 +108,7 @@ function writeConfig(repoRoot, config) {
         throw new Error(`Could not write config: ${error.message}`);
     }
 }
-/**
- * Initialize config with project name
- */
 function initConfig(repoRoot, projectName) {
-    const config = {
-        ...DEFAULT_CONFIG,
-        project: {
-            name: projectName,
-        },
-    };
-    writeConfig(repoRoot, config);
+    writeConfig(repoRoot, { ...DEFAULT_CONFIG, project: { name: projectName } });
 }
 //# sourceMappingURL=config.js.map

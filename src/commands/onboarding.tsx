@@ -11,14 +11,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import { findRepoRoot, getPersonalDir, migrateToPersonal } from '../core/store';
+import { findRepoRoot } from '../core/store';
 import { loadConfig, writeConfig, initConfig } from '../config';
 import { installClaudeCode } from '../platforms/claude-code';
 import { installCodex } from '../platforms/codex';
 import { installGemini, detectGemini } from '../platforms/gemini';
 import { installQwen, detectQwen } from '../platforms/qwen';
 import { installCursor } from '../platforms/cursor';
-import { teamInit } from './team';
 interface MultiSelectItem {
   label: string;
   value: string;
@@ -120,20 +119,14 @@ async function runSetup(state: OnboardingState, repoRoot: string): Promise<strin
   // 1. Init config
   initConfig(repoRoot, state.projectName);
 
-  // 2. Create personal/ directory structure
-  const personalDir = getPersonalDir(repoRoot);
+  // 2. Create directory structure
   const TYPES = ['lesson', 'decision', 'workflow', 'architecture'];
   for (const type of TYPES) {
-    fs.mkdirSync(path.join(personalDir, type), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, type), { recursive: true });
   }
   fs.mkdirSync(path.join(repoRoot, 'memory'), { recursive: true });
 
-  // 3. Migrate existing root-level memories
-  const { migrated, skipped } = migrateToPersonal(repoRoot);
-  if (migrated.length > 0) { summaryLines.push(`Migrated ${migrated.length} existing memories to personal/`); }
-  if (skipped.length > 0) { summaryLines.push(`Skipped ${skipped.length} files (conflict) — resolve manually`); }
-
-  summaryLines.push(`Personal memories: ${personalDir}`);
+  summaryLines.push(`Memories: ${repoRoot}`);
 
   // 4. Install platform adapters
   for (const platform of state.platforms) {
@@ -147,16 +140,6 @@ async function runSetup(state: OnboardingState, repoRoot: string): Promise<strin
   }
   if (state.platforms.length > 0) {
     summaryLines.push(`Platforms: ${state.platforms.join(', ')}`);
-  }
-
-  // 5. Set up team repo if provided
-  if (state.teamRepo.trim()) {
-    try {
-      await teamInit(state.teamRepo.trim(), repoRoot);
-      summaryLines.push(`Team repo: linked`);
-    } catch (e) {
-      summaryLines.push(`Team repo: setup failed — ${(e as Error).message}`);
-    }
   }
 
   // 6. Update engine config if lancedb
