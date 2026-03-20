@@ -18,7 +18,7 @@ Both individual developers (using Claude Code / Cursor solo) and engineering tea
 ## Killer Differentiators
 
 1. **Three-tier architecture (personal / team / workspace)** — like `git config` levels, each with a different scope
-2. **Native Claude Code integration** — `autoMemoryDirectory` points to `.memobank/`, memories load at every session start with no configuration beyond `memo init`
+2. **Native Claude Code integration** — `autoMemoryDirectory` points to `.memobank/`, memories load at every session start with no configuration beyond `memo onboarding`
 
 ## Approach
 
@@ -71,13 +71,13 @@ Zero external services required.
 ```bash
 npm install -g memobank-cli
 cd your-project
-memo init        # creates .memobank/ and configures Claude Code
+memo onboarding  # creates .memobank/ and configures Claude Code
 ```
 
 **For individuals** — memories stay on your machine, load automatically into every Claude Code session:
 
 ```bash
-memo write "always use pnpm, not npm"
+memo write decision   # interactive: name, description, content
 memo recall "package manager"
 ```
 
@@ -88,7 +88,7 @@ git add .memobank/
 git commit -m "init team memory"
 ```
 
-Claude Code loads the first 200 lines of `.memobank/MEMORY.md` at every session start — no plugins, no configuration beyond `memo init`.
+Claude Code loads the first 200 lines of `.memobank/MEMORY.md` at every session start — no plugins, no configuration beyond `memo onboarding`.
 ````
 
 **Rationale:** Two paths, clearly labelled. Individual path shows the write/recall loop in two lines. Team path shows that sharing is just a `git add` — no special workflow. Claude Code integration explained in one sentence at the end.
@@ -176,7 +176,7 @@ Codex, Gemini CLI, and Qwen Code.
 
 **Integrations**
 - Claude Code — `autoMemoryDirectory` points to `.memobank/`, loads at session start
-- Cursor, Codex, Gemini CLI, Qwen Code — hooks installed via `memo init`
+- Cursor, Codex, Gemini CLI, Qwen Code — hooks installed via `memo onboarding`
 - Import from Claude Code, Gemini, and Qwen: `memo import --claude`
 
 **Team workflows**
@@ -189,12 +189,25 @@ Codex, Gemini CLI, and Qwen Code.
 
 ---
 
-## What This Does Not Change
-
-- The existing command reference section — keep as-is, it is already well-structured
-- Configuration documentation — keep as-is
-- Platform integration guides — keep as-is
-
 ## Implementation Notes
 
-The redesign is a rewrite of the top portion of README.md (Hero through Features). Everything below the Features section (command reference, configuration, platform docs) stays in place. The new content replaces roughly the first 60% of the current README.
+**Scope:** Rewrite the top portion of README.md (Hero through Features). Everything below the Features section (command reference, configuration, platform docs) stays in place. The new content replaces roughly the first 60% of the current README.
+
+**Tier naming:** The README uses "Team" as the user-facing label for the project tier. The codebase and CLI use `project` internally (e.g., `--scope project` flag, `MemoryScope` type). When the README mentions CLI flags or scope values, use `project` to match CLI output. "Team" is only used in the prose tier description.
+
+**MEMORY.md path:** After the Claude Code integration refactor, `autoMemoryDirectory = repoRoot = .memobank/`, so MEMORY.md lives at `.memobank/MEMORY.md`. The 200-line figure is a Claude Code platform constraint (documented in Claude Code docs), not a memobank config. The token_budget config in `meta/config.yaml` controls memobank's own recall output, which is a separate concept.
+
+**MEMORY.md commit status:** `.memobank/MEMORY.md` is regenerated on every `memo recall`. The implementer should add a note in the README (or in `.memobank/.gitignore`) clarifying whether it should be committed. Recommendation: gitignore it, since it's a derived artifact — only the source memory files in `lesson/`, `decision/`, etc. need committing.
+
+**Claude Code auto-memory claim:** "Claude Code's auto-memory is personal and machine-local" reflects current Claude Code behavior. Verify against current Claude Code documentation before shipping, and word it as "by default" in case the behavior changes.
+
+**Badges:** Existing npm/license/TypeScript badges at the top of the README stay in place above the Hero section.
+
+**"Three-Tier Memory Model" deep-dive section:** The existing deep-dive section (currently near the top) should be moved below Features, after the new "How it works" table. It becomes supplementary reference, not the primary explanation.
+
+## What This Does Not Change
+
+- The existing command reference section — keep as-is
+- Configuration documentation — keep as-is
+- Platform integration guides — keep as-is
+- Existing badges (npm version, license, Node.js, TypeScript) — stay above Hero
