@@ -55,10 +55,11 @@ memobank uses three memory tiers — like `git config` levels, each with a diffe
 | Tier | Location | Committed? | Scope |
 |------|----------|-----------|-------|
 | Personal | `~/.memobank/<project>/` | No | Your machine only |
-| Team | `.memobank/` in repo | Yes | Everyone who clones |
+| Project | `<repo>/<dir>/` (default: `.memobank/`) | Yes | Everyone who clones |
 | Workspace | `~/.memobank/_workspace/` | Separate remote | Across multiple repos |
 
-Most teams only ever need **Personal + Team**. Workspace is opt-in.
+Most teams only ever need **Personal + Project**. Workspace is opt-in.
+The project directory name (default `.memobank`) can be customized during `memo onboarding`.
 
 When you run `memo recall`, memobank searches all active tiers and writes the top results to `.memobank/MEMORY.md`. Claude Code loads that file at the start of every session.
 
