@@ -11,7 +11,7 @@ import * as path from 'path';
 import { execSync, execFileSync } from 'child_process';
 import { glob } from 'glob';
 import { scanForSecrets, sanitize } from '../core/sanitizer';
-import { findRepoRoot, getTeamDir } from '../core/store';
+import { findRepoRoot } from '../core/store';
 
 export interface ScanResult {
   file: string;
@@ -87,7 +87,7 @@ export async function scanCommand(scanPath: string | undefined, options: ScanCom
   } else {
     // Directory scan
     const repoRoot = findRepoRoot(process.cwd(), options.repo);
-    const targetDir = scanPath ? path.resolve(scanPath) : getTeamDir(repoRoot);
+    const targetDir = scanPath ? path.resolve(scanPath) : repoRoot;
 
     if (!fs.existsSync(targetDir)) {
       console.log(`No directory to scan: ${targetDir}`);

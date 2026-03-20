@@ -3,11 +3,12 @@
  * Orchestrates engine search and formats output for MEMORY.md injection
  */
 
+import * as path from 'path';
 import { RecallResult, MemoConfig, MemoryScope } from '../types';
 import { EngineAdapter } from '../engines/engine-adapter';
-import { loadAll, writeMemoryMd } from './store';
+import { loadAll, writeMemoryMd, getGlobalDir, getWorkspaceDir } from './store';
 import { TextEngine } from '../engines/text-engine';
-import { recordAccess, loadAccessLogs } from './lifecycle-manager';
+import { recordAccess, loadAccessLogs, updateStatusOnRecall } from './lifecycle-manager';
 import { rerank } from './reranker';
 
 function estimateTokenCount(text: string): number {
@@ -22,10 +23,14 @@ export async function recall(
   repoRoot: string,
   config: MemoConfig,
   engine?: EngineAdapter,
-  scope: MemoryScope = 'all',
+  scope: MemoryScope | 'all' = 'all',
   explain: boolean = false
 ): Promise<{ results: RecallResult[]; markdown: string }> {
-  const memories = loadAll(repoRoot, scope);
+  const globalDir = getGlobalDir(config.project.name);
+  const workspaceDir = config.workspace?.enabled
+    ? getWorkspaceDir(path.basename(config.workspace.remote ?? '', '.git'))
+    : undefined;
+  const memories = loadAll(repoRoot, scope, globalDir, workspaceDir);
   const searchEngine = engine || new TextEngine();
   const accessLogs = loadAccessLogs(repoRoot);
   let results = await searchEngine.search(query, memories, config.memory.top_k);
@@ -41,6 +46,11 @@ export async function recall(
 
   for (const result of results) {
     recordAccess(repoRoot, result.memory.path, query);
+  }
+
+  // Update status for recalled memories
+  for (const result of results) {
+    updateStatusOnRecall(repoRoot, result.memory.path);
   }
 
   // Apply reranker if configured
@@ -76,7 +86,8 @@ export async function recall(
 }
 
 function scopeLabel(scope?: MemoryScope | string): string {
-  if (scope === 'team') { return '👥 team'; }
+  if (scope === 'workspace') { return '🌐 workspace'; }
+  if (scope === 'project') { return '📁 project'; }
   if (scope === 'personal') { return '👤 personal'; }
   return '';
 }
@@ -89,7 +100,7 @@ function formatResultsAsMarkdown(
   query: string,
   engine: string,
   totalMemories: number,
-  scope: MemoryScope = 'all',
+  scope: MemoryScope | 'all' = 'all',
   explain: boolean = false
 ): string {
   let markdown = `<!-- Last updated: ${new Date().toISOString()} | query: "${query}" | engine: ${engine} | top ${results.length} of ${totalMemories} -->\n\n`;

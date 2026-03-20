@@ -13,4 +13,15 @@ export declare function computeDecayScore(memory: MemoryFile, now?: Date): numbe
  * Check if a memory is due for review
  */
 export declare function isReviewDue(memory: MemoryFile, now?: Date): boolean;
+export interface EpochScoreInput {
+    accessCount: number;
+    epochAccessCount: number;
+    daysSinceEpoch: number;
+    decayWindowDays: number;
+}
+/**
+ * Compute dual-track epoch score.
+ * score = epochAccessCount × 1.0 + historical × linearDecay(daysSinceEpoch, window)
+ */
+export declare function computeEpochScore(input: EpochScoreInput): number;
 //# sourceMappingURL=decay-engine.d.ts.map

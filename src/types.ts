@@ -1,42 +1,50 @@
-/**
- * Shared TypeScript interfaces for memobank-cli
- */
-
 export type MemoryType = 'lesson' | 'decision' | 'workflow' | 'architecture';
 export type Engine = 'text' | 'lancedb';
 export type Confidence = 'low' | 'medium' | 'high';
-export type MemoryScope = 'personal' | 'team' | 'all';
+export type MemoryScope = 'personal' | 'project' | 'workspace';
+export type Status = 'experimental' | 'active' | 'needs-review' | 'deprecated';
 
 export interface MemoryFile {
-  path: string;           // absolute path to .md file
-  name: string;           // frontmatter slug
+  path: string;
+  name: string;
   type: MemoryType;
-  description: string;    // one-sentence summary
+  description: string;
   tags: string[];
-  created: string;        // ISO date
+  created: string;
   updated?: string;
-  review_after?: string;  // e.g. "90d"
+  review_after?: string;
   confidence?: Confidence;
-  content: string;        // Markdown body (below ---)
-  scope?: MemoryScope;    // 'personal' | 'team' | undefined (legacy root-level)
+  status?: Status;           // NEW
+  content: string;
+  scope?: MemoryScope;
 }
 
 export interface ScoreBreakdown {
-  keyword: number;  // 0-1, weighted keyword match
-  tags: number;     // 0-1, tag overlap score
-  recency: number;  // 0-1, Weibull decay score
+  keyword: number;
+  tags: number;
+  recency: number;
 }
 
 export interface RecallResult {
   memory: MemoryFile;
-  score: number;                    // final composite score (0-1)
-  scoreBreakdown?: ScoreBreakdown;  // present when --explain is requested
+  score: number;
+  scoreBreakdown?: ScoreBreakdown;
 }
 
-export interface TeamConfig {
+export interface WorkspaceConfig {          // renamed from TeamConfig
   remote: string;
+  enabled?: boolean;                        // opt-in flag
   auto_sync: boolean;
   branch: string;
+  path?: string;                            // subdirectory within remote repo
+}
+
+export interface LifecycleConfig {
+  experimental_ttl_days: number;
+  active_to_review_days: number;
+  review_to_deprecated_days: number;
+  review_recall_threshold: number;
+  decay_window_days: number;
 }
 
 export interface MemoConfig {
@@ -51,7 +59,8 @@ export interface MemoConfig {
   };
   search: { use_tags: boolean; use_summary: boolean };
   review: { enabled: boolean };
-  team?: TeamConfig;
+  lifecycle?: LifecycleConfig;              // NEW
+  workspace?: WorkspaceConfig;             // renamed from team
   reranker?: {
     enabled: boolean;
     provider: 'jina' | 'cohere';

@@ -1,10 +1,8 @@
-/**
- * Shared TypeScript interfaces for memobank-cli
- */
 export type MemoryType = 'lesson' | 'decision' | 'workflow' | 'architecture';
 export type Engine = 'text' | 'lancedb';
 export type Confidence = 'low' | 'medium' | 'high';
-export type MemoryScope = 'personal' | 'team' | 'all';
+export type MemoryScope = 'personal' | 'project' | 'workspace';
+export type Status = 'experimental' | 'active' | 'needs-review' | 'deprecated';
 export interface MemoryFile {
     path: string;
     name: string;
@@ -15,6 +13,7 @@ export interface MemoryFile {
     updated?: string;
     review_after?: string;
     confidence?: Confidence;
+    status?: Status;
     content: string;
     scope?: MemoryScope;
 }
@@ -28,10 +27,19 @@ export interface RecallResult {
     score: number;
     scoreBreakdown?: ScoreBreakdown;
 }
-export interface TeamConfig {
+export interface WorkspaceConfig {
     remote: string;
+    enabled?: boolean;
     auto_sync: boolean;
     branch: string;
+    path?: string;
+}
+export interface LifecycleConfig {
+    experimental_ttl_days: number;
+    active_to_review_days: number;
+    review_to_deprecated_days: number;
+    review_recall_threshold: number;
+    decay_window_days: number;
 }
 export interface MemoConfig {
     project: {
@@ -56,7 +64,8 @@ export interface MemoConfig {
     review: {
         enabled: boolean;
     };
-    team?: TeamConfig;
+    lifecycle?: LifecycleConfig;
+    workspace?: WorkspaceConfig;
     reranker?: {
         enabled: boolean;
         provider: 'jina' | 'cohere';

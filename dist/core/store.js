@@ -1,8 +1,4 @@
 "use strict";
-/**
- * File I/O layer for memobank
- * Reads and writes .md files with YAML frontmatter
- */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -40,13 +36,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.getGlobalDir = getGlobalDir;
+exports.getProjectDir = getProjectDir;
+exports.getWorkspaceDir = getWorkspaceDir;
 exports.findRepoRoot = findRepoRoot;
-exports.getPersonalDir = getPersonalDir;
-exports.getTeamDir = getTeamDir;
 exports.loadAll = loadAll;
 exports.loadFile = loadFile;
 exports.writeMemory = writeMemory;
-exports.migrateToPersonal = migrateToPersonal;
+exports.updateMemoryStatus = updateMemoryStatus;
 exports.writeMemoryMd = writeMemoryMd;
 exports.readMemoryMd = readMemoryMd;
 const fs = __importStar(require("fs"));
@@ -54,6 +51,21 @@ const path = __importStar(require("path"));
 const gray_matter_1 = __importDefault(require("gray-matter"));
 const glob_1 = require("glob");
 const MEMORY_TYPES = ['lesson', 'decision', 'workflow', 'architecture'];
+function osHomeDir() {
+    return process.env.HOME || process.env.USERPROFILE || '';
+}
+/** Personal tier: ~/.memobank/<project-name>/ */
+function getGlobalDir(projectName) {
+    return path.join(osHomeDir(), '.memobank', projectName);
+}
+/** Project/team tier: the repo root itself (.memobank/ in repo) */
+function getProjectDir(repoRoot) {
+    return repoRoot;
+}
+/** Workspace tier (cross-repo): ~/.memobank/_workspace/<name>/ */
+function getWorkspaceDir(workspaceName) {
+    return path.join(osHomeDir(), '.memobank', '_workspace', workspaceName);
+}
 function findRepoRoot(cwd, repoFlag) {
     if (repoFlag) {
         return path.resolve(repoFlag);
@@ -64,8 +76,12 @@ function findRepoRoot(cwd, repoFlag) {
     }
     let current = cwd;
     while (current !== path.dirname(current)) {
-        const configPath = path.join(current, 'meta', 'config.yaml');
+        const configPath = path.join(current, '.memobank', 'meta', 'config.yaml');
         if (fs.existsSync(configPath)) {
+            return path.join(current, '.memobank');
+        }
+        // Legacy: meta/config.yaml at root
+        if (fs.existsSync(path.join(current, 'meta', 'config.yaml'))) {
             return current;
         }
         current = path.dirname(current);
@@ -80,15 +96,6 @@ function findRepoRoot(cwd, repoFlag) {
     catch (e) { /* ignore */ }
     return path.join(osHomeDir(), '.memobank', 'default');
 }
-function osHomeDir() {
-    return process.env.HOME || process.env.USERPROFILE || '';
-}
-function getPersonalDir(repoRoot) {
-    return path.join(repoRoot, 'personal');
-}
-function getTeamDir(repoRoot) {
-    return path.join(repoRoot, 'team');
-}
 function loadFromDir(baseDir, scope) {
     const memories = [];
     for (const type of MEMORY_TYPES) {
@@ -97,9 +104,7 @@ function loadFromDir(baseDir, scope) {
         for (const filePath of files) {
             try {
                 const memory = loadFile(filePath);
-                if (scope) {
-                    memory.scope = scope;
-                }
+                memory.scope = scope;
                 memories.push(memory);
             }
             catch (e) {
@@ -109,27 +114,46 @@ function loadFromDir(baseDir, scope) {
     }
     return memories;
 }
-function loadAll(repoRoot, scope = 'all') {
-    const personalDir = getPersonalDir(repoRoot);
-    const teamDir = getTeamDir(repoRoot);
-    const hasPersonal = fs.existsSync(personalDir);
-    const hasTeam = fs.existsSync(teamDir);
-    // Legacy fallback: memories at root level
-    if (!hasPersonal && !hasTeam) {
-        return loadFromDir(repoRoot);
-    }
+/**
+ * Load memories from all configured tiers.
+ * Priority: project > personal > workspace (for deduplication by filename).
+ * globalDir and workspaceDir are optional; if absent, those tiers are skipped silently.
+ */
+function loadAll(repoRoot, scope = 'all', globalDir, workspaceDir) {
+    const seenFilenames = new Set();
     const memories = [];
-    if ((scope === 'all' || scope === 'personal') && hasPersonal) {
-        memories.push(...loadFromDir(personalDir, 'personal'));
+    const addFromDir = (dir, tierScope) => {
+        if (!fs.existsSync(dir)) {
+            return;
+        }
+        const tierMemories = loadFromDir(dir, tierScope);
+        for (const m of tierMemories) {
+            const filename = path.basename(m.path);
+            if (!seenFilenames.has(filename)) {
+                seenFilenames.add(filename);
+                memories.push(m);
+            }
+        }
+    };
+    if (scope === 'all' || scope === 'project') {
+        addFromDir(repoRoot, 'project');
     }
-    if ((scope === 'all' || scope === 'team') && hasTeam) {
-        memories.push(...loadFromDir(teamDir, 'team'));
+    if (scope === 'all' || scope === 'personal') {
+        if (globalDir) {
+            addFromDir(globalDir, 'personal');
+        }
+    }
+    if (scope === 'all' || scope === 'workspace') {
+        if (workspaceDir) {
+            addFromDir(workspaceDir, 'workspace');
+        }
+    }
+    // Legacy fallback: no tier dirs exist, load from root
+    if (memories.length === 0 && scope === 'all') {
+        return loadFromDir(repoRoot, 'project');
     }
     return memories;
 }
-/**
- * Load a single memory file
- */
 function loadFile(filePath) {
     const fileContent = fs.readFileSync(filePath, 'utf-8');
     const parsed = (0, gray_matter_1.default)(fileContent);
@@ -150,22 +174,18 @@ function loadFile(filePath) {
         updated: data.updated,
         review_after: data.review_after,
         confidence: data.confidence,
+        status: data.status,
         content: parsed.content,
     };
 }
 function writeMemory(repoRoot, memory) {
-    const personalDir = getPersonalDir(repoRoot);
-    const baseDir = fs.existsSync(personalDir) ? personalDir : repoRoot;
-    const typeDir = path.join(baseDir, memory.type);
+    const typeDir = path.join(repoRoot, memory.type);
     if (!fs.existsSync(typeDir)) {
         fs.mkdirSync(typeDir, { recursive: true });
     }
     const date = new Date(memory.created);
     const dateStr = date.toISOString().split('T')[0];
-    const slug = memory.name
-        .toLowerCase()
-        .replace(/\s+/g, '-')
-        .replace(/[^a-z0-9-]/g, '');
+    const slug = memory.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
     const filename = `${dateStr}-${slug}.md`;
     const filePath = path.join(typeDir, filename);
     const frontmatter = {
@@ -174,6 +194,7 @@ function writeMemory(repoRoot, memory) {
         description: memory.description,
         tags: memory.tags,
         created: memory.created,
+        status: memory.status ?? 'experimental',
     };
     if (memory.updated) {
         frontmatter.updated = memory.updated;
@@ -188,34 +209,13 @@ function writeMemory(repoRoot, memory) {
     fs.writeFileSync(filePath, fileContent, 'utf-8');
     return filePath;
 }
-function migrateToPersonal(repoRoot) {
-    const migrated = [];
-    const skipped = [];
-    const personalDir = getPersonalDir(repoRoot);
-    for (const type of MEMORY_TYPES) {
-        const srcTypeDir = path.join(repoRoot, type);
-        if (!fs.existsSync(srcTypeDir)) {
-            continue;
-        }
-        const dstTypeDir = path.join(personalDir, type);
-        const files = glob_1.glob.sync(path.join(srcTypeDir, '*.md'));
-        for (const srcFile of files) {
-            const filename = path.basename(srcFile);
-            const dstFile = path.join(dstTypeDir, filename);
-            if (fs.existsSync(dstFile)) {
-                skipped.push(srcFile);
-                continue;
-            }
-            fs.mkdirSync(dstTypeDir, { recursive: true });
-            fs.renameSync(srcFile, dstFile);
-            migrated.push(srcFile);
-        }
-    }
-    return { migrated, skipped };
+/** Patch status in a memory file's frontmatter in-place */
+function updateMemoryStatus(filePath, status) {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const parsed = (0, gray_matter_1.default)(content);
+    parsed.data.status = status;
+    fs.writeFileSync(filePath, gray_matter_1.default.stringify(parsed.content, parsed.data), 'utf-8');
 }
-/**
- * Update MEMORY.md with recall results
- */
 function writeMemoryMd(repoRoot, results, query, engine) {
     const memoryDir = path.join(repoRoot, 'memory');
     if (!fs.existsSync(memoryDir)) {
@@ -229,7 +229,7 @@ function writeMemoryMd(repoRoot, results, query, engine) {
     }
     else {
         for (const result of results) {
-            const { memory, score } = result;
+            const { memory } = result;
             const relativePath = path.relative(repoRoot, memory.path);
             const confidenceStr = memory.confidence ? ` · ${memory.confidence} confidence` : '';
             const tagStr = memory.tags.length > 0 ? ` · tags: ${memory.tags.join(', ')}` : '';
@@ -242,9 +242,6 @@ function writeMemoryMd(repoRoot, results, query, engine) {
     markdown += `*${results.length} memories · engine: ${engine}*`;
     fs.writeFileSync(filePath, markdown, 'utf-8');
 }
-/**
- * Read MEMORY.md content
- */
 function readMemoryMd(repoRoot) {
     const filePath = path.join(repoRoot, 'memory', 'MEMORY.md');
     if (!fs.existsSync(filePath)) {
