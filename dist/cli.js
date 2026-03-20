@@ -86,6 +86,7 @@ program
 // Onboarding command - new interactive setup
 program
     .command('onboarding')
+    .alias('init')
     .alias('setup')
     .description('Interactive setup wizard (recommended for first-time setup)')
     .action(async () => {
@@ -336,10 +337,10 @@ program
         process.exit(1);
     }
 });
-// Init command
+// Tier-init command (non-interactive, for scripting)
 program
-    .command('init')
-    .description('Initialize memobank in current project (project tier)')
+    .command('tier-init')
+    .description('Non-interactive tier initialization (use memo init for guided setup)')
     .option('--global', 'Initialize personal tier in ~/.memobank/<project>/')
     .option('--name <name>', 'Project name (defaults to directory name)')
     .action(async (options) => {
