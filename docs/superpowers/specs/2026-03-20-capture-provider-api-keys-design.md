@@ -27,7 +27,7 @@ Users have no guided path to configure which LLM to use for capture, and API key
 ## Non-Goals
 
 - Model selection for embedding providers (out of scope for this change)
-- Reranker key collection changes (minor: just add key prompt after reranker step, no model selection)
+- Model selection for reranker providers (reranker key collection is in scope; model selection is not)
 - Global/cross-project key storage
 
 ---
@@ -68,6 +68,8 @@ onboarding ──→ .memobank/.env     (API keys)
 memo capture --auto
   → cli.ts loads .memobank/.env into process.env
   → capture.ts calls captureConfigFromMemoConfig()
+      → returns null if provider unconfigured or key missing
+      → capture.ts prints warning and exits silently if null
   → smart-extractor.extract(text, config)
   → LLM call (provider-specific)
   → structured ExtractionResult[]
@@ -158,12 +160,12 @@ export async function fetchAvailableModels(
 | Provider | API | Notes |
 |---|---|---|
 | openai | `GET /v1/models` | Filter to `gpt-*` and `o*` models |
-| openrouter | `GET /v1/models` | Filter to top 20 by context length |
+| openrouter | `GET /v1/models` | Sort by `context_length` field descending, take top 20 |
 | ollama | `GET localhost:11434/api/tags` | Local models only |
 | gemini | `GET /v1beta/models` | Filter to `generateContent`-capable |
 | anthropic | No public API | Use hardcoded curated list |
 
-Anthropic curated list: `claude-opus-4-5`, `claude-sonnet-4-5`, `claude-haiku-4-5`, `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022`
+Anthropic curated list: `claude-3-5-haiku-20241022` (default), `claude-3-5-sonnet-20241022`, `claude-opus-4-5`, `claude-sonnet-4-5`, `claude-haiku-4-5`
 
 ### Dead code removal
 
@@ -181,11 +183,15 @@ New step sequence (new steps marked ★):
 2.  project-dir
 3.  ★ capture-provider     select: anthropic | openai | gemini | openrouter | ollama
 4.  ★ capture-key          text input for API key (skip for ollama)
-                           → validate key by fetching models
-                           → re-prompt on failure
-5.  ★ capture-model        select from fetched list (or curated fallback on error)
-6.  ★ capture-base-url     text input, shown only for openrouter / ollama
-                           (pre-filled with default URL, user can override)
+                           → auth error (4xx) = invalid key → re-prompt with error message
+                           → network/fetch error = key accepted, model list falls back to curated
+5.  ★ capture-base-url     text input, shown only for openrouter / ollama
+                           pre-filled per provider:
+                             openrouter → https://openrouter.ai/api/v1
+                             ollama     → http://localhost:11434/v1
+                           user can override before model list is fetched
+6.  ★ capture-model        select from list fetched using (key + base-url)
+                           fallback to curated list if fetch fails or returns empty
 7.  platforms
 8.  auto-memory-check
 9.  workspace-remote
@@ -194,20 +200,26 @@ New step sequence (new steps marked ★):
 12. ★ embedding-key        text input if provider ≠ ollama and key not already collected
 13. reranker
 14. ★ reranker-key         text input if reranker enabled and key not already collected
-                           (deduped: Jina key already collected → skip)
-15. done                   write .memobank/.env, .memobank/.gitignore, config.yaml
+                           (deduped: Jina key already collected at step 12 → skip)
+15. done                   consolidate all collected keys → write .memobank/.env
+                           create/append .memobank/.gitignore with `.env` entry
+                           write meta/config.yaml with capture + embedding + reranker sections
+                           NOTE: all .env writes happen here only — no inline writes elsewhere
 ```
 
 ### Key deduplication
 
-Jina can serve both embedding and reranking. Track collected keys in onboarding state; skip the prompt if already present.
+Track collected keys in `OnboardingState` as a `Record<string, string>` map (env var name → value). At steps 12 and 14, check this map before prompting. At done step, write the full map to `.memobank/.env`.
 
 ### Ollama path
 
-Steps 4 (key) and 6 (base-url) behave differently:
-- Step 4: skipped entirely
-- Step 5: calls `localhost:11434/api/tags`; if Ollama not running → show warning + fallback to text input
-- Step 6: pre-filled with `http://localhost:11434/v1`, user can change
+- Step 4: skipped (no key needed)
+- Step 5: shown with pre-fill `http://localhost:11434/v1`; user can change
+- Step 6: calls `GET {baseUrl}/api/tags` (Ollama-specific endpoint, not `/v1/models`); if unreachable → show warning + fallback to text input for model name
+
+### Existing onboarding .env writes
+
+The current `runSetup` in `onboarding.tsx` does not write any `.env` file. The old `api-key` step (present in the Step union type but never shown) is removed entirely. All `.env` writes are consolidated into the done step as specified above.
 
 ---
 
@@ -234,7 +246,7 @@ dotenv.config({ path: path.join(process.cwd(), '.memobank', '.env'), override: f
 | Key validation fails during onboarding | Re-prompt in place with error message |
 | Model list fetch fails | Fall back to curated list, no error shown to user |
 | Ollama not running during onboarding | Warning shown; step 5 falls back to text input |
-| Gemini SDK not installed | Onboarding warns: `npm install -g @google/generative-ai` and skips gemini option |
+| Gemini SDK not installed | `@google/generative-ai` is an optional dependency; onboarding attempts `require('@google/generative-ai')` and if not found, shows "gemini unavailable — run `npm install @google/generative-ai` then re-run onboarding" and removes gemini from the provider list |
 | Key missing at `memo capture` runtime | Print warning, exit silently (does not interrupt session) |
 | `.memobank/.env` not found | dotenv silently no-ops; existing system env vars still work |
 
@@ -259,4 +271,4 @@ dotenv.config({ path: path.join(process.cwd(), '.memobank', '.env'), override: f
 |---|---|---|
 | `openai` | Yes | OpenAI / OpenRouter / Ollama via SDK |
 | `dotenv` | No — add | `.env` loading |
-| `@google/generative-ai` | No — optional peer dep | Gemini provider |
+| `@google/generative-ai` | No — optional dependency (not installed by default) | Gemini provider; user installs manually if they choose Gemini |
