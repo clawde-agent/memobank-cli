@@ -14,6 +14,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Advanced search filters
 - Memory export formats (PDF, HTML)
 
+## [0.6.0] - 2026-03-20
+
+### Added
+
+- **Three-Tier Memory Model** — Personal (`~/.memobank/<project>/`), Project (`.memobank/`), Workspace (`~/.memobank/_workspace/`) tiers with distinct scopes and recall priority
+- **Custom project memory directory** — onboarding now prompts for the project tier directory name (default `.memobank`); any name is supported
+- **`findGitRoot` helper** — correctly resolves the git repo root independently of the memory directory name
+- **Auto-memory check step** — onboarding detects if Claude Code has `autoMemoryEnabled: false` and offers to re-enable it
+- **Workspace remote renamed from `team`** — `config.workspace` replaces `config.team`; backward-compatible alias in `loadConfig`
+
+### Changed
+
+- `MEMORY.md` now lives at `<repoRoot>/MEMORY.md` (flat, not `memory/MEMORY.md`)
+- `autoMemoryDirectory` in Claude Code settings points to the project tier root (not a subdirectory)
+- `findRepoRoot` scans all immediate subdirectories to support custom directory names
+- `memo onboarding` is the canonical setup command; `memo init` and `memo setup` remain as aliases
+- Deprecated `memo team` commands fully removed; use `memo workspace`
+- `--scope team` option removed; use `--scope project`
+
+### Fixed
+
+- Dead imports (`isNoise`, `hasHighValueIndicators`, `filterAndRank`) removed from `capture.ts`
+- Removed Stop hook install from Claude Code platform adapter (Claude Code native auto-memory handles writes)
+
 ## [0.1.0] - 2026-03-19
 
 ### Added

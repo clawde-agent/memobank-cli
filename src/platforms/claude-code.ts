@@ -21,8 +21,9 @@ function getSettingsPath(): string {
 
 /**
  * Install memobank for Claude Code
+ * @param enableAutoMemory - explicitly set autoMemoryEnabled in settings (true to enable, false to leave unchanged)
  */
-export async function installClaudeCode(repoRoot: string): Promise<boolean> {
+export async function installClaudeCode(repoRoot: string, enableAutoMemory: boolean = true): Promise<boolean> {
   const settingsPath = getSettingsPath();
   const settingsDir = path.dirname(settingsPath);
 
@@ -44,22 +45,25 @@ export async function installClaudeCode(repoRoot: string): Promise<boolean> {
     }
   }
 
-  // Set autoMemoryDirectory
-  settings.autoMemoryDirectory = path.join(repoRoot, 'memory');
+  // Only set autoMemoryEnabled when the user explicitly agreed during setup.
+  // If they chose to keep it off, leave the setting untouched.
+  if (enableAutoMemory) {
+    settings.autoMemoryEnabled = true;
+  }
 
-  // Add Stop hook for auto-capture
-  if (!settings.hooks) { settings.hooks = {}; }
-  if (!settings.hooks.Stop) { settings.hooks.Stop = []; }
+  // Set autoMemoryDirectory to the project tier root so Claude Code's
+  // native auto-memory and memobank project memories share the same directory.
+  settings.autoMemoryDirectory = repoRoot;
 
-  // Remove any existing memobank Stop hook to avoid duplicates
-  settings.hooks.Stop = settings.hooks.Stop.filter(
-    (h: any) => !(h.hooks?.[0]?.command?.includes('memo capture'))
-  );
-
-  settings.hooks.Stop.push({
-    matcher: '',
-    hooks: [{ type: 'command', command: 'memo capture --auto --silent' }],
-  });
+  // Remove any legacy memobank Stop hook (no longer needed — Claude Code's
+  // native auto-memory writes directly to autoMemoryDirectory).
+  if (settings.hooks?.Stop) {
+    settings.hooks.Stop = settings.hooks.Stop.filter(
+      (h: any) => !(h.hooks?.[0]?.command?.includes('memo capture'))
+    );
+    if (settings.hooks.Stop.length === 0) { delete settings.hooks.Stop; }
+    if (Object.keys(settings.hooks).length === 0) { delete settings.hooks; }
+  }
 
   // Write settings
   try {

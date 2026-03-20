@@ -1,22 +1,22 @@
-# Memobank CLI 交互式 Onboarding 指南
+# Memobank CLI Interactive Onboarding Guide
 
-## 快速开始
+## Quick Start
 
-### 方式 1：交互式菜单（推荐）
+### Method 1: Interactive Menu (Recommended)
 
 ```bash
-# 进入项目目录
+# Navigate to your project directory
 cd /path/to/your/project
 
-# 启动交互式设置
+# Launch the interactive setup
 memo onboarding
 
-# 或者使用别名
+# Or use an alias
 memo init
 memo setup
 ```
 
-### 界面预览
+### Interface Preview
 
 ```
 ╔═══════════════════════════════════════════════════════════╗
@@ -44,31 +44,31 @@ Use ↑↓ arrows to navigate, Enter to select
 
 ---
 
-## 菜单选项说明
+## Menu Options Explained
 
-### 1. Quick Setup（快速设置）
+### 1. Quick Setup
 
-**适合人群：** 大多数用户，想要快速开始
+**Suitable for:** Most users who want to get started quickly
 
-**自动完成：**
-- ✅ 检测 Ollama 并配置本地向量搜索
-- ✅ 安装所有平台集成（Claude Code、Cursor、Codex）
-- ✅ 创建默认配置
+**Completed automatically:**
+- ✅ Detects Ollama and configures local vector search
+- ✅ Installs all platform integrations (Claude Code, Cursor, Codex)
+- ✅ Creates the default configuration
 
-**操作：**
-1. 选择 `Quick Setup`
-2. 按 Enter
-3. 等待自动完成
+**Steps:**
+1. Select `Quick Setup`
+2. Press Enter
+3. Wait for the process to complete automatically
 
 ---
 
-### 2. Custom Setup（自定义设置）
+### 2. Custom Setup
 
-**适合人群：** 高级用户，想要精细控制
+**Suitable for:** Advanced users who want fine-grained control
 
-**步骤：**
+**Steps:**
 
-#### Step 1: 选择 Embedding 提供商
+#### Step 1: Choose an Embedding Provider
 
 ```
 Choose embedding provider:
@@ -78,12 +78,12 @@ Choose embedding provider:
   ◯ Text Only (No embeddings)
 ```
 
-**选项说明：**
-- **Ollama**: 本地运行，免费，推荐
-- **OpenAI**: 云端 API，需要 API Key
-- **Text Only**: 不使用向量搜索
+**Option descriptions:**
+- **Ollama**: Runs locally, free of charge, recommended
+- **OpenAI**: Cloud API, requires an API key
+- **Text Only**: Does not use vector search
 
-#### Step 2: 选择平台
+#### Step 2: Select Platforms
 
 ```
 Configure AI tools:
@@ -95,76 +95,76 @@ Configure AI tools:
 ↑↓ navigate, Space to toggle, Enter to confirm
 ```
 
-**操作：**
-- ↑↓ 导航
-- Space 切换选择
-- Enter 确认
+**Controls:**
+- ↑↓ to navigate
+- Space to toggle selection
+- Enter to confirm
 
 ---
 
-### 3. Import Memories（导入记忆）
+### 3. Import Memories
 
-**适合人群：** 从其他 AI 工具迁移
+**Suitable for:** Users migrating from other AI tools
 
-**支持的工具：**
+**Supported tools:**
 - Claude Code
 - Gemini CLI
 - Qwen Code
 
-**操作：**
-1. 选择 `Import Memories`
-2. 选择源工具
-3. 自动导入
+**Steps:**
+1. Select `Import Memories`
+2. Choose the source tool
+3. Import completes automatically
 
 ---
 
-### 4. Platform Setup（平台设置）
+### 4. Platform Setup
 
-**适合人群：** 只想配置特定平台
+**Suitable for:** Users who only want to configure a specific platform
 
-**可选平台：**
+**Available platforms:**
 - Claude Code
 - Cursor
 - Codex
 
 ---
 
-### 5. Embedding Setup（向量搜索设置）
+### 5. Embedding Setup
 
-**适合人群：** 想要更改向量搜索配置
+**Suitable for:** Users who want to change their vector search configuration
 
-**选项：**
-- Ollama（本地）
-- OpenAI（云端）
+**Options:**
+- Ollama (local)
+- OpenAI (cloud)
 - Azure OpenAI
-- Text Only（无向量）
+- Text Only (no vector search)
 
 ---
 
-## 键盘快捷键
+## Keyboard Shortcuts
 
-| 按键 | 功能 |
-|------|------|
-| `↑` / `↓` | 导航菜单项 |
-| `Enter` | 确认选择 |
-| `Space` | 切换复选框 |
-| `Ctrl+C` | 退出 |
+| Key | Function |
+|-----|----------|
+| `↑` / `↓` | Navigate menu items |
+| `Enter` | Confirm selection |
+| `Space` | Toggle checkbox |
+| `Ctrl+C` | Exit |
 
 ---
 
-## 完整流程示例
+## Complete Workflow Examples
 
-### 示例 1：首次使用（快速设置）
+### Example 1: First-Time Use (Quick Setup)
 
 ```bash
-# 1. 进入项目
+# 1. Navigate to your project
 cd my-project
 
-# 2. 启动设置
+# 2. Launch setup
 memo onboarding
 
-# 3. 选择 Quick Setup
-# 4. 等待完成
+# 3. Select Quick Setup
+# 4. Wait for completion
 
 ✅ Setup Complete!
 
@@ -179,127 +179,127 @@ Next steps:
   memo lifecycle report      View memory statistics
 ```
 
-### 示例 2：自定义配置
+### Example 2: Custom Configuration
 
 ```bash
-# 1. 启动设置
+# 1. Launch setup
 memo onboarding
 
-# 2. 选择 Custom Setup
+# 2. Select Custom Setup
 
-# 3. 选择 OpenAI embedding
+# 3. Choose OpenAI embedding
 ❯ ◉ OpenAI (Cloud)
 
-# 4. 选择平台（Space 切换）
+# 4. Select platforms (Space to toggle)
 ❯ [◉] Claude Code
   [◯] Cursor
   [◉] Codex
 
-# 5. 完成
+# 5. Finish
 
 ✅ Custom Setup Complete!
 ```
 
 ---
 
-## 配置后验证
+## Post-Configuration Verification
 
 ```bash
-# 检查配置
+# Check the configuration
 cat ~/.memobank/my-project/meta/config.yaml
 
-# 测试回忆
+# Test recall
 memo recall "test query"
 
-# 创建第一个记忆
+# Create your first memory
 memo write lesson
 ```
 
 ---
 
-## 常见问题
+## Frequently Asked Questions
 
-### Q: 如何重新运行设置？
+### Q: How do I re-run the setup?
 
 ```bash
-# 随时可以重新运行
+# You can re-run it at any time
 memo onboarding
 
-# 选择 Exit 可以随时退出
+# Select Exit to quit at any point
 ```
 
-### Q: Ollama 未检测到怎么办？
+### Q: What if Ollama is not detected?
 
 ```bash
-# 1. 安装 Ollama
+# 1. Install Ollama
 brew install ollama  # macOS
-# 或访问 https://ollama.ai
+# or visit https://ollama.ai
 
-# 2. 拉取模型
+# 2. Pull the model
 ollama pull mxbai-embed-large
 
-# 3. 重新运行设置
+# 3. Re-run the setup
 memo onboarding
 ```
 
-### Q: 如何更改已配置的平台？
+### Q: How do I change a platform that is already configured?
 
 ```bash
-# 重新运行设置
+# Re-run the setup
 memo onboarding
 
-# 选择 Platform Setup
-# 选择要添加/移除的平台
+# Select Platform Setup
+# Choose the platforms to add or remove
 ```
 
 ---
 
-## 命令对比
+## Command Comparison
 
-| 旧命令 | 新命令 | 说明 |
-|--------|--------|------|
-| `memo install` | `memo onboarding` | 交互式菜单（推荐） |
-| `memo setup` | `memo onboarding` | 合并为同一命令 |
-| - | `memo init` | 新别名 |
+| Old Command | New Command | Description |
+|-------------|-------------|-------------|
+| `memo install` | `memo onboarding` | Interactive menu (recommended) |
+| `memo setup` | `memo onboarding` | Merged into a single command |
+| - | `memo init` | New alias |
 
-**向后兼容：**
-- `memo install` 仍然可用（简化版）
-- `memo setup` 仍然可用（指向 onboarding）
+**Backwards compatibility:**
+- `memo install` is still available (simplified version)
+- `memo setup` is still available (redirects to onboarding)
 
 ---
 
-## 高级选项
+## Advanced Options
 
-### 指定项目路径
+### Specify a Project Path
 
 ```bash
 memo onboarding --repo /path/to/memobank
 ```
 
-### 无交互模式（脚本使用）
+### Non-Interactive Mode (for use in scripts)
 
 ```bash
-# 快速安装（无提示）
+# Quick install (no prompts)
 memo install --all
 
-# 仅配置特定平台
+# Configure a specific platform only
 memo install --claude-code
 memo install --cursor
 ```
 
 ---
 
-## 总结
+## Summary
 
-**推荐使用 `memo onboarding` 因为：**
+**`memo onboarding` is recommended because:**
 
-1. ✅ 直观的菜单导航
-2. ✅ 实时预览选项
-3. ✅ 键盘快捷键支持
-4. ✅ 自动检测环境
-5. ✅ 一站式完成所有配置
+1. ✅ Intuitive menu navigation
+2. ✅ Real-time option preview
+3. ✅ Keyboard shortcut support
+4. ✅ Automatic environment detection
+5. ✅ All configuration in one place
 
-**开始使用：**
+**Getting started:**
 
 ```bash
 cd your-project

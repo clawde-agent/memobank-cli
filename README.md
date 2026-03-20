@@ -1,6 +1,4 @@
-# Memobank CLI
-
-> Persistent memory for AI coding sessions — personal, team, and organization-wide
+# memobank
 
 [![npm version](https://img.shields.io/npm/v/memobank-cli.svg)](https://www.npmjs.com/package/memobank-cli)
 [![npm downloads](https://img.shields.io/npm/dm/memobank-cli.svg)](https://www.npmjs.com/package/memobank-cli)
@@ -8,20 +6,115 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18.0-green.svg)](https://nodejs.org/)
 
-**Memobank CLI** is a structured memory system for AI coding agents. It stores lessons, decisions, workflows, and architecture notes across three tiers — personal, project, and workspace — so agents never lose context between sessions.
+AI agents forget everything between sessions.
+Static files like CLAUDE.md go stale and require manual upkeep.
+Cloud memory APIs add external services your team doesn't own or control.
 
-## 🚀 Quick Start
+**memobank gives AI agents persistent, structured memory that lives in your Git repo** —
+versioned alongside code, reviewed as PRs, and loaded automatically at session start.
+
+- **Personal** — private lessons and preferences, never committed
+- **Team** — shared knowledge that travels with the codebase
+- **Workspace** — cross-repo patterns, synced via a separate Git remote
+
+Works with Claude Code, Cursor, Codex, Gemini CLI, and Qwen Code.
+Zero external services required.
+
+---
+
+## Get started
 
 ```bash
-# Install globally
 npm install -g memobank-cli
-
-# Interactive setup (recommended)
-memo onboarding
-
-# Or use the alias
-memo init
+cd your-project
+memo onboarding  # creates .memobank/ and configures Claude Code
 ```
+
+**For individuals** — memories stay on your machine, load automatically into every Claude Code session:
+
+```bash
+memo write decision   # interactive: name, description, content
+memo recall "package manager"
+```
+
+**For teams** — commit `.memobank/` like source code. Teammates get the same memories on clone:
+
+```bash
+git add .memobank/
+git commit -m "init team memory"
+```
+
+Claude Code loads the first 200 lines of `.memobank/MEMORY.md` at every session start — no plugins, no configuration beyond `memo onboarding`.
+
+---
+
+## How it works
+
+memobank uses three memory tiers — like `git config` levels, each with a different scope:
+
+| Tier | Location | Committed? | Scope |
+|------|----------|-----------|-------|
+| Personal | `~/.memobank/<project>/` | No | Your machine only |
+| Project | `<repo>/<dir>/` (default: `.memobank/`) | Yes | Everyone who clones |
+| Workspace | `~/.memobank/_workspace/` | Separate remote | Across multiple repos |
+
+Most teams only ever need **Personal + Project**. Workspace is opt-in.
+The project directory name (default `.memobank`) can be customized during `memo onboarding`.
+
+When you run `memo recall`, memobank searches all active tiers and writes the top results to `.memobank/MEMORY.md`. Claude Code loads that file at the start of every session.
+
+Memories are plain markdown with a small YAML header — readable, diffable, and reviewable in PRs:
+
+```markdown
+---
+name: prefer-pnpm
+type: decision
+status: active
+tags: [tooling, packages]
+---
+We switched from npm to pnpm in March 2026. Faster installs, better monorepo support.
+```
+
+---
+
+## Why not just use CLAUDE.md?
+
+CLAUDE.md is great for static rules you write once. memobank handles knowledge that accumulates over time — lessons learned, decisions made, patterns discovered. The two are complementary: CLAUDE.md for "always do X", memobank for "we learned Y".
+
+## Why not a cloud memory API?
+
+Tools like mem0 or Zep store memories in external services. memobank stores them in your Git repo — no API keys, no vendor lock-in, no data leaving your machine. Memory health is visible in `git diff`. Reviews happen in PRs.
+
+## Why not Claude Code's built-in auto-memory?
+
+Claude Code's auto-memory is personal and machine-local by default. memobank adds the team layer: `.memobank/` is committed alongside your code, so every teammate and every CI run starts with the same shared knowledge. memobank also works with Cursor, Codex, Gemini CLI, and Qwen Code.
+
+---
+
+## Features
+
+**Memory management**
+- Four types: `lesson`, `decision`, `workflow`, `architecture`
+- Status lifecycle: `experimental → active → needs-review → deprecated`
+- Automatic stale memory detection via `memo review`
+
+**Search**
+- Default: keyword + tag + recency scoring, zero external dependencies
+- Optional: vector search via LanceDB (Ollama, OpenAI, Azure, Jina)
+
+**Safety**
+- Automatic secret redaction before every write (API keys, tokens, credentials)
+- `memo scan` blocks workspace publish if secrets are detected
+
+**Integrations**
+- Claude Code — `autoMemoryDirectory` points to `.memobank/`, loads at session start
+- Cursor, Codex, Gemini CLI, Qwen Code — hooks installed via `memo onboarding`
+- Import from Claude Code, Gemini, and Qwen: `memo import --claude`
+
+**Team workflows**
+- Workspace tier: cross-repo knowledge synced via separate Git remote
+- Epoch-aware scoring: team knowledge naturally fades during handoffs
+- `memo map` for memory statistics, `memo lifecycle` for health scans
 
 ---
 
@@ -120,23 +213,6 @@ Priority (highest → lowest):
 ```
 
 If the same filename exists in multiple tiers, the higher-priority tier's version wins. Each result shows its source tier so you always know where a memory came from.
-
----
-
-## ✨ Features
-
-- 🗂️ **Three-Tier Memory** — Personal (private), Project (team, Git-committed), Workspace (org-wide, optional)
-- 🧠 **Automatic Recall** — Relevant memories injected at session start
-- 💾 **Structured Storage** — Markdown files with YAML frontmatter, Git-native
-- 📈 **Status Lifecycle** — `experimental → active → needs-review → deprecated` driven by recall frequency
-- ⏳ **Epoch Scoring** — Linear decay separates new-team vs old-team memory relevance
-- 🔍 **Hybrid Search** — Text engine (keyword + tag + decay) with optional LanceDB vector search
-- 🛡️ **Secret Sanitization** — Automatic redaction of API keys, tokens, PII, etc. (20+ patterns)
-- 🤖 **LLM Extraction** — Turn session summaries into structured memories
-- 🔌 **Multi-Platform** — Claude Code, Codex, Cursor, Gemini CLI, Qwen Code
-- 📦 **Zero-Dependency** — Text engine works out-of-the-box
-- 🌍 **Local Embeddings** — Ollama support (no API key needed)
-- 📥 **Memory Import** — Import from Claude Code, Gemini CLI, Qwen Code
 
 ---
 

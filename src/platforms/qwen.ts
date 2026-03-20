@@ -10,8 +10,30 @@ import { execSync } from 'child_process';
 const QWEN_PROTOCOL = `
 ## Memobank Memory Protocol
 
-At the end of each session, run: \`memo capture --auto --silent\`
-This captures learnings into your persistent memory bank automatically.
+This project uses memobank for persistent memory.
+
+### Before Starting Work
+
+Recall relevant project context:
+
+\`\`\`bash
+memo recall "project context"
+\`\`\`
+
+### After Finishing Work
+
+Capture learnings and insights:
+
+\`\`\`bash
+memo capture --auto --silent
+\`\`\`
+
+### Useful Commands
+
+- \`memo recall <query>\` - Search and display relevant memories
+- \`memo search <query>\` - Debug search without updating MEMORY.md
+- \`memo write <type>\` - Manually create a new memory
+- \`memo map\` - Show memory summary
 `;
 
 function getQwenMdPath(): string {
@@ -43,13 +65,13 @@ export async function installQwen(): Promise<boolean> {
   let content = '';
   if (fs.existsSync(mdPath)) {
     content = fs.readFileSync(mdPath, 'utf-8');
-    if (content.includes('memo capture --auto --silent')) {
+    if (content.includes('memo recall "project context"')) {
       console.log('✓ Qwen: memobank protocol already installed');
       return true;
     }
   }
 
   fs.writeFileSync(mdPath, content + QWEN_PROTOCOL, 'utf-8');
-  console.log(`✓ Qwen: auto-capture protocol added to ${mdPath}`);
+  console.log(`✓ Qwen: memobank protocol added to ${mdPath}`);
   return true;
 }

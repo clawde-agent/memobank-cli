@@ -345,7 +345,7 @@ workspace:
 
 ---
 
-## Edge Case Behavior
+## Edge Case Behaviour
 
 ### Onboarding when workspace remote is pre-configured
 
@@ -358,7 +358,7 @@ When `workspace.path` is set to a subdirectory (e.g., `.memobank` inside a large
 ### `memo init` conflicts
 
 - Running `memo init` when `.memobank/` already exists: prints a warning and exits (no-op); user must run `memo migrate` if upgrading from old layout
-- Running `memo init --global` when `~/.memobank/<project>/` already exists: same behavior
+- Running `memo init --global` when `~/.memobank/<project>/` already exists: same behaviour
 - Both personal and project tiers can coexist simultaneously; recall merges both
 
 ### `memo workspace publish` secret scanning
@@ -371,4 +371,4 @@ When `workspace.path` is set to a subdirectory (e.g., `.memobank` inside a large
 ### `memo workspace sync --push` conflict handling
 
 - If remote has changes not in local clone: `sync --push` is rejected with an error; user must `memo workspace sync` (pull) first, resolve conflicts via standard `git` commands, then retry push
-- This mirrors standard Git push-rejection behavior; no special tooling needed
+- This mirrors standard Git push-rejection behaviour; no special tooling needed

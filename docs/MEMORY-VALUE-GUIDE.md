@@ -1,91 +1,91 @@
-# Memobank 记忆价值评估指南
+# Memobank Memory Value Assessment Guide
 
-## 如何判断哪些记忆值得记录
+## How to Determine Which Memories Are Worth Recording
 
-Memobank CLI 使用多层过滤系统来判断哪些内容值得记录为记忆。
-
----
-
-## 自动过滤机制
-
-### 1. 噪声检测（Noise Filter）
-
-系统会自动过滤以下低价值内容：
-
-#### ❌ 不记录的内容
-
-| 类型 | 示例 | 原因 |
-|------|------|------|
-| **简单操作** | "打开了文件"、"运行了测试" | 无学习价值 |
-| **问候语** | "你好"、"谢谢"、"再见" | 对话礼仪 |
-| **简单确认** | "好的"、"是的"、"没问题" | 无实质内容 |
-| **元问题** | "你是谁"、"你能做什么" | 关于 AI 本身 |
-| **琐碎修改** | "修复拼写错误"、"格式化代码" | 无长期价值 |
-
-### 2. 高价值指标检测
-
-#### ✅ 记录的内容
-
-| 类型 | 关键词 | 示例 |
-|------|--------|------|
-| **问题解决** | problem, issue, bug, fix, solution | "修复了 Redis 连接池耗尽的问题" |
-| **决策理由** | decided, choice, trade-off, because | "选择 PostgreSQL 因为需要 ACID" |
-| **学习洞察** | learned, discovered, realized | "发现连接池大小影响性能" |
-| **模式实践** | pattern, practice, principle | "使用仓库模式解耦数据访问" |
-| **架构设计** | architecture, design, component | "微服务架构的职责划分" |
-| **性能优化** | performance, optimize, scalability | "通过缓存减少数据库查询" |
-| **安全考虑** | security, authentication, vulnerability | "实现 JWT 认证的最佳实践" |
-| **工作流程** | workflow, process, deployment | "CI/CD 流水线的配置步骤" |
+Memobank CLI uses a multi-layer filtering system to determine which content is worth saving as a memory.
 
 ---
 
-## 价值评分系统
+## Automatic Filtering Mechanism
 
-系统为每个潜在记忆计算 0-1 的价值分数：
+### 1. Noise Detection (Noise Filter)
 
-### 评分因素
+The system automatically filters out the following low-value content:
 
-| 因素 | 权重 | 说明 |
-|------|------|------|
-| **基础分** | 0.5 | 所有内容的起始分 |
-| **长度因子** | +0.2 | 500 字符以上可得满分 |
-| **高价值模式** | +0.3 | 每个模式 +0.05，最多 +0.3 |
-| **低价值模式** | -0.2 | 每个模式 -0.2 |
-| **代码示例** | +0.1 | 包含代码块 |
-| **结构化内容** | +0.1 | 有标题、列表等 |
+#### ❌ Content That Is Not Recorded
 
-### 分数解读
+| Type | Examples | Reason |
+|------|----------|--------|
+| **Simple actions** | "Opened a file", "Ran the tests" | No learning value |
+| **Greetings** | "Hello", "Thank you", "Goodbye" | Conversational courtesy |
+| **Simple confirmations** | "OK", "Yes", "No problem" | No substantive content |
+| **Meta questions** | "Who are you", "What can you do" | About the AI itself |
+| **Trivial changes** | "Fixed a typo", "Formatted code" | No long-term value |
+
+### 2. High-Value Indicator Detection
+
+#### ✅ Content That Is Recorded
+
+| Type | Keywords | Example |
+|------|----------|---------|
+| **Problem solving** | problem, issue, bug, fix, solution | "Fixed the Redis connection pool exhaustion issue" |
+| **Decision rationale** | decided, choice, trade-off, because | "Chose PostgreSQL because ACID compliance was required" |
+| **Learning insights** | learned, discovered, realized | "Discovered that connection pool size affects performance" |
+| **Patterns and practices** | pattern, practice, principle | "Using the repository pattern to decouple data access" |
+| **Architectural design** | architecture, design, component | "Responsibility boundaries in a microservices architecture" |
+| **Performance optimisation** | performance, optimize, scalability | "Reducing database queries through caching" |
+| **Security considerations** | security, authentication, vulnerability | "Best practices for implementing JWT authentication" |
+| **Workflows** | workflow, process, deployment | "Configuration steps for the CI/CD pipeline" |
+
+---
+
+## Value Scoring System
+
+The system calculates a value score between 0 and 1 for each potential memory:
+
+### Scoring Factors
+
+| Factor | Weight | Description |
+|--------|--------|-------------|
+| **Base score** | 0.5 | Starting score for all content |
+| **Length factor** | +0.2 | Full score awarded for 500+ characters |
+| **High-value patterns** | +0.3 | +0.05 per pattern, up to +0.3 |
+| **Low-value patterns** | -0.2 | -0.2 per pattern |
+| **Code examples** | +0.1 | Contains a code block |
+| **Structured content** | +0.1 | Has headings, lists, etc. |
+
+### Interpreting the Score
 
 ```
-分数 ≥ 0.7  ✅ 高价值 - 强烈推荐记录
-0.5-0.7    ⚠️  中价值 - 建议记录
-0.3-0.5    ❌  低价值 - 建议跳过
-分数 < 0.3  ❌  极低价值 - 自动过滤
+Score ≥ 0.7  ✅ High value — strongly recommended to record
+0.5–0.7      ⚠️  Medium value — recommended to record
+0.3–0.5      ❌  Low value — recommended to skip
+Score < 0.3  ❌  Very low value — filtered out automatically
 ```
 
 ---
 
-## 实际使用示例
+## Practical Usage Examples
 
-### 示例 1：高价值记忆
+### Example 1: High-Value Memory
 
-**会话内容：**
+**Session content:**
 ```
-今天修复了一个生产环境的 Redis 连接池耗尽问题。
+Today I fixed a Redis connection pool exhaustion issue in the production environment.
 
-问题：高并发下 Redis 连接池耗尽，导致请求失败。
+Problem: Under high concurrency, the Redis connection pool was exhausted, causing requests to fail.
 
-排查过程：
-1. 监控显示连接数达到上限
-2. 日志显示大量超时错误
-3. 发现代码中没有正确释放连接
+Investigation process:
+1. Monitoring showed the connection count had reached its limit
+2. Logs showed a large number of timeout errors
+3. Discovered that the code was not releasing connections correctly
 
-解决方案：
-1. 使用连接池管理
-2. 在 finally 块中释放连接
-3. 设置合理的超时时间
+Solution:
+1. Use connection pool management
+2. Release connections in the finally block
+3. Set a reasonable timeout
 
-代码示例：
+Code example:
 ```typescript
 const pool = new RedisPool({ max: 10, timeout: 5000 });
 try {
@@ -96,207 +96,207 @@ try {
 }
 ```
 
-经验教训：
-- 连接池大小根据并发量调整（通常 5-10）
-- 始终在 finally 块中释放连接
-- 设置超时避免阻塞
+Lessons learned:
+- Adjust pool size based on concurrency (typically 5–10)
+- Always release connections in the finally block
+- Set a timeout to avoid blocking
 ```
 
-**评估结果：**
+**Assessment result:**
 ```
 ✅ [1] redis-connection-pool-fix
    Score: 0.92 | High-value content worth remembering
    Confidence: high
 ```
 
-**原因分析：**
-- ✅ 包含问题描述和解决方案
-- ✅ 有排查过程和代码示例
-- ✅ 包含经验教训
-- ✅ 结构化内容（标题、列表、代码块）
-- ✅ 高价值关键词（problem, solution, fix）
+**Reason for this rating:**
+- ✅ Contains a problem description and solution
+- ✅ Includes an investigation process and code example
+- ✅ Contains lessons learned
+- ✅ Structured content (headings, lists, code blocks)
+- ✅ High-value keywords (problem, solution, fix)
 
 ---
 
-### 示例 2：低价值内容
+### Example 2: Low-Value Content
 
-**会话内容：**
+**Session content:**
 ```
-好的，我来帮你运行测试。
+Sure, I'll run the tests for you.
 
-已经打开了测试文件。
-执行了 npm test 命令。
-测试通过了。
+I've opened the test file.
+Executed the npm test command.
+The tests passed.
 
-还有什么需要帮忙的吗？
+Is there anything else you need help with?
 ```
 
-**评估结果：**
+**Assessment result:**
 ```
 ❌ Skipped (noise): unnamed
 ```
 
-**原因分析：**
-- ❌ 简单操作（打开文件、运行命令）
-- ❌ 问候语和确认
-- ❌ 无学习价值
-- ❌ 长度太短
+**Reason for this rating:**
+- ❌ Simple actions (opening a file, running a command)
+- ❌ Greetings and confirmations
+- ❌ No learning value
+- ❌ Too short
 
 ---
 
-### 示例 3：中等价值内容
+### Example 3: Medium-Value Content
 
-**会话内容：**
+**Session content:**
 ```
-今天学习了如何使用 Express 创建路由。
+Today I learnt how to create routes with Express.
 
-创建了用户路由：
-- GET /users - 获取用户列表
-- POST /users - 创建用户
+Created user routes:
+- GET /users - retrieve user list
+- POST /users - create a user
 
-使用了 Express Router。
+Used Express Router.
 ```
 
-**评估结果：**
+**Assessment result:**
 ```
 ⚠️ [1] express-routing-basics
    Score: 0.58 | Potentially useful context
    Confidence: medium
 ```
 
-**原因分析：**
-- ⚠️ 有一定的结构
-- ⚠️ 包含具体信息
-- ⚠️ 但较为基础，可能是常识
+**Reason for this rating:**
+- ⚠️ Has some structure
+- ⚠️ Contains specific information
+- ⚠️ However, it is fairly basic and may be common knowledge
 
 ---
 
-## 手动判断指南
+## Manual Assessment Guide
 
-当系统评分在边界情况时，可以手动判断：
+When the system score is on the boundary, you can assess manually:
 
-### 问自己这些问题
+### Ask Yourself These Questions
 
-1. **6 个月后我还会关心这个吗？**
-   - 是 → 记录
-   - 否 → 跳过
+1. **Will I still care about this in 6 months?**
+   - Yes → Record it
+   - No → Skip it
 
-2. **这个经验可以复用到其他场景吗？**
-   - 是 → 记录
-   - 否 → 可能是特定情况
+2. **Can this experience be applied to other situations?**
+   - Yes → Record it
+   - No → It may be context-specific
 
-3. **如果忘记了这个，重新发现需要多少时间？**
-   - 很多时间 → 记录
-   - 很少时间 → 可能不需要
+3. **If I forgot this, how long would it take to rediscover?**
+   - A long time → Record it
+   - Not long → It may not be necessary
 
-4. **团队成员会从这个经验中受益吗？**
-   - 是 → 记录
-   - 否 → 可能是个人偏好
+4. **Would team members benefit from this experience?**
+   - Yes → Record it
+   - No → It may be a personal preference
 
-5. **这个决策的理由在未来还重要吗？**
-   - 是 → 记录
-   - 否 → 可能是临时方案
-
----
-
-## 记忆类型优先级
-
-### 高优先级（强烈推荐记录）
-
-| 类型 | 说明 | 示例 |
-|------|------|------|
-| **Lesson** | 从错误/问题中学到的 | "Redis 连接池耗尽的解决方案" |
-| **Decision** | 重要架构/技术决策 | "为什么选择 PostgreSQL" |
-
-### 中优先级（建议记录）
-
-| 类型 | 说明 | 示例 |
-|------|------|------|
-| **Workflow** | 重复性工作流程 | "生产环境部署流程" |
-| **Architecture** | 系统设计文档 | "微服务架构图解" |
-
-### 低优先级（选择性记录）
-
-| 类型 | 说明 | 示例 |
-|------|------|------|
-| **临时方案** | 权宜之计 | "临时修复：重启服务" |
-| **个人偏好** | 编码风格 | "我喜欢用单引号" |
+5. **Will the reasoning behind this decision still matter in the future?**
+   - Yes → Record it
+   - No → It may be a temporary solution
 
 ---
 
-## 使用建议
+## Memory Type Priorities
 
-### 1. 让系统自动过滤
+### High Priority (Strongly Recommended to Record)
+
+| Type | Description | Example |
+|------|-------------|---------|
+| **Lesson** | Learnt from mistakes or problems | "Solution to Redis connection pool exhaustion" |
+| **Decision** | Important architectural or technical decisions | "Why PostgreSQL was chosen" |
+
+### Medium Priority (Recommended to Record)
+
+| Type | Description | Example |
+|------|-------------|---------|
+| **Workflow** | Repetitive workflows | "Production environment deployment process" |
+| **Architecture** | System design documentation | "Microservices architecture diagram" |
+
+### Low Priority (Record Selectively)
+
+| Type | Description | Example |
+|------|-------------|---------|
+| **Temporary solutions** | Stopgap measures | "Temporary fix: restart the service" |
+| **Personal preferences** | Coding style | "I prefer single quotes" |
+
+---
+
+## Usage Recommendations
+
+### 1. Let the System Filter Automatically
 
 ```bash
-# 系统会自动评估和过滤
+# The system will assess and filter automatically
 memo capture --auto
 
-# 查看评估结果
-# ✅ 高价值记忆会被记录
-# ❌ 低价值内容会被跳过
+# View the assessment results
+# ✅ High-value memories will be recorded
+# ❌ Low-value content will be skipped
 ```
 
-### 2. 手动创建时思考
+### 2. Think Before Creating Manually
 
 ```bash
-# 在创建记忆前，先评估价值
+# Before creating a memory, assess its value
 memo write lesson
-# 问自己：这个值得记录吗？
+# Ask yourself: is this worth recording?
 ```
 
-### 3. 定期回顾和清理
+### 3. Review and Clean Up Regularly
 
 ```bash
-# 查看待复习的记忆
+# View memories due for review
 memo review
 
-# 删除不再有价值的记忆
-# （手动删除文件）
+# Delete memories that no longer have value
+# (delete the file manually)
 ```
 
 ---
 
-## 配置建议
+## Configuration Recommendations
 
-### 调整过滤阈值
+### Adjusting the Filter Threshold
 
-在 `meta/config.yaml` 中：
+In `meta/config.yaml`:
 
 ```yaml
 capture:
-  min_value_score: 0.5  # 最低记录分数
-  max_memories_per_session: 3  # 每次会话最多记录数
+  min_value_score: 0.5  # minimum score to record
+  max_memories_per_session: 3  # maximum memories per session
 ```
 
-### 自定义高价值模式
+### Customising High-Value Patterns
 
-在代码中添加自定义模式：
+Add custom patterns in the code:
 
 ```typescript
 // src/core/noise-filter.ts
 const CUSTOM_HIGH_VALUE_PATTERNS = [
-  /你的项目特定关键词/i,
+  /your-project-specific-keyword/i,
 ];
 ```
 
 ---
 
-## 总结
+## Summary
 
-**好的记忆特征：**
-- ✅ 解决了实际问题
-- ✅ 包含决策理由
-- ✅ 可以复用
-- ✅ 有代码或示例
-- ✅ 结构化清晰
+**Characteristics of a good memory:**
+- ✅ Solves a real problem
+- ✅ Contains the reasoning behind a decision
+- ✅ Can be reused
+- ✅ Has code or examples
+- ✅ Clearly structured
 
-**不好的记忆特征：**
-- ❌ 简单操作记录
-- ❌ 琐碎修改
-- ❌ 临时方案
-- ❌ 个人偏好
-- ❌ 无上下文
+**Characteristics of a poor memory:**
+- ❌ Records simple actions
+- ❌ Trivial changes
+- ❌ Temporary solutions
+- ❌ Personal preferences
+- ❌ Lacks context
 
-**黄金法则：**
-> 记录未来的你会感谢的内容，而不是过去的你做过的事情。
+**The Golden Rule:**
+> Record what your future self will thank you for, not merely what your past self has done.

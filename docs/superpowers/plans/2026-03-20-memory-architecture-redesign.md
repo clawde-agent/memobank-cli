@@ -981,7 +981,7 @@ export function resetEpoch(repoRoot: string): void {
 }
 ```
 
-Also update `recordAccess` to initialize `epochAccessCount` and `team_epoch` on new entries:
+Also update `recordAccess` to initialise `epochAccessCount` and `team_epoch` on new entries:
 
 ```typescript
 // In recordAccess, update the initialization block:

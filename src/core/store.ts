@@ -25,6 +25,12 @@ export function getWorkspaceDir(workspaceName: string): string {
   return path.join(osHomeDir(), '.memobank', '_workspace', workspaceName);
 }
 
+/** Directories that are never a memobank project dir */
+const SKIP_DIRS = new Set([
+  'node_modules', '.git', 'dist', 'build', 'coverage',
+  '.next', '.nuxt', '.turbo', 'out', 'tmp', '.cache',
+]);
+
 export function findRepoRoot(cwd: string, repoFlag?: string): string {
   if (repoFlag) { return path.resolve(repoFlag); }
   const envRepo = process.env.MEMOBANK_REPO;
@@ -32,8 +38,20 @@ export function findRepoRoot(cwd: string, repoFlag?: string): string {
 
   let current = cwd;
   while (current !== path.dirname(current)) {
-    const configPath = path.join(current, '.memobank', 'meta', 'config.yaml');
-    if (fs.existsSync(configPath)) { return path.join(current, '.memobank'); }
+    // Fast path: check default .memobank dir first
+    const defaultConfigPath = path.join(current, '.memobank', 'meta', 'config.yaml');
+    if (fs.existsSync(defaultConfigPath)) { return path.join(current, '.memobank'); }
+
+    // Scan immediate subdirs for a custom-named memobank dir
+    try {
+      const entries = fs.readdirSync(current, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory() || SKIP_DIRS.has(entry.name) || entry.name === '.memobank') { continue; }
+        const customConfigPath = path.join(current, entry.name, 'meta', 'config.yaml');
+        if (fs.existsSync(customConfigPath)) { return path.join(current, entry.name); }
+      }
+    } catch { /* ignore permission errors */ }
+
     // Legacy: meta/config.yaml at root
     if (fs.existsSync(path.join(current, 'meta', 'config.yaml'))) { return current; }
     current = path.dirname(current);
@@ -48,6 +66,16 @@ export function findRepoRoot(cwd: string, repoFlag?: string): string {
   } catch (e) { /* ignore */ }
 
   return path.join(osHomeDir(), '.memobank', 'default');
+}
+
+/** Find the git repo root (the dir containing .git), or return cwd. */
+export function findGitRoot(cwd: string): string {
+  let current = cwd;
+  while (current !== path.dirname(current)) {
+    if (fs.existsSync(path.join(current, '.git'))) { return current; }
+    current = path.dirname(current);
+  }
+  return cwd;
 }
 
 function loadFromDir(baseDir: string, scope: MemoryScope): MemoryFile[] {
@@ -181,9 +209,8 @@ export function writeMemoryMd(
   query: string,
   engine: string
 ): void {
-  const memoryDir = path.join(repoRoot, 'memory');
-  if (!fs.existsSync(memoryDir)) { fs.mkdirSync(memoryDir, { recursive: true }); }
-  const filePath = path.join(memoryDir, 'MEMORY.md');
+  if (!fs.existsSync(repoRoot)) { fs.mkdirSync(repoRoot, { recursive: true }); }
+  const filePath = path.join(repoRoot, 'MEMORY.md');
 
   let markdown = `<!-- Last updated: ${new Date().toISOString()} | query: "${query}" | engine: ${engine} | top ${results.length} -->\n\n`;
   markdown += `## Recalled Memory\n\n`;
@@ -207,7 +234,7 @@ export function writeMemoryMd(
 }
 
 export function readMemoryMd(repoRoot: string): string | null {
-  const filePath = path.join(repoRoot, 'memory', 'MEMORY.md');
+  const filePath = path.join(repoRoot, 'MEMORY.md');
   if (!fs.existsSync(filePath)) { return null; }
   return fs.readFileSync(filePath, 'utf-8');
 }
