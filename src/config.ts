@@ -1,22 +1,19 @@
-/**
- * Config module
- * Read and write meta/config.yaml
- */
-
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { MemoConfig, Engine, TeamConfig } from './types';
+import { MemoConfig, Engine, WorkspaceConfig, LifecycleConfig } from './types';
+
+const DEFAULT_LIFECYCLE: LifecycleConfig = {
+  experimental_ttl_days: 30,
+  active_to_review_days: 90,
+  review_to_deprecated_days: 90,
+  review_recall_threshold: 3,
+  decay_window_days: 180,
+};
 
 const DEFAULT_CONFIG: MemoConfig = {
-  project: {
-    name: 'default',
-    description: '',
-  },
-  memory: {
-    token_budget: 500,
-    top_k: 5,
-  },
+  project: { name: 'default', description: '' },
+  memory: { token_budget: 500, top_k: 5 },
   embedding: {
     engine: 'text' as Engine,
     provider: 'openai',
@@ -24,60 +21,37 @@ const DEFAULT_CONFIG: MemoConfig = {
     dimensions: 1536,
     base_url: undefined,
   },
-  search: {
-    use_tags: true,
-    use_summary: true,
-  },
-  review: {
-    enabled: true,
-  },
+  search: { use_tags: true, use_summary: true },
+  review: { enabled: true },
+  lifecycle: { ...DEFAULT_LIFECYCLE },
 };
 
-/**
- * Get config file path
- */
 function getConfigPath(repoRoot: string): string {
   return path.join(repoRoot, 'meta', 'config.yaml');
 }
 
-/**
- * Load config from repo root
- * Falls back to defaults if file doesn't exist
- */
 export function loadConfig(repoRoot: string): MemoConfig {
   const configPath = getConfigPath(repoRoot);
-
-  if (!fs.existsSync(configPath)) {
-    return { ...DEFAULT_CONFIG };
-  }
+  if (!fs.existsSync(configPath)) { return { ...DEFAULT_CONFIG }; }
 
   try {
     const content = fs.readFileSync(configPath, 'utf-8');
-    const loaded = yaml.load(content) as Partial<MemoConfig>;
+    const loaded = yaml.load(content) as any;
 
-    // Merge with defaults
+    // Alias team: → workspace: for backward compat
+    if (loaded?.team && !loaded?.workspace) {
+      loaded.workspace = loaded.team;
+      delete loaded.team;
+    }
+
     return {
-      project: {
-        ...DEFAULT_CONFIG.project,
-        ...loaded?.project,
-      },
-      memory: {
-        ...DEFAULT_CONFIG.memory,
-        ...loaded?.memory,
-      },
-      embedding: {
-        ...DEFAULT_CONFIG.embedding,
-        ...loaded?.embedding,
-      },
-      search: {
-        ...DEFAULT_CONFIG.search,
-        ...loaded?.search,
-      },
-      review: {
-        ...DEFAULT_CONFIG.review,
-        ...loaded?.review,
-      },
-      ...(loaded?.team ? { team: loaded.team as TeamConfig } : {}),
+      project: { ...DEFAULT_CONFIG.project, ...loaded?.project },
+      memory: { ...DEFAULT_CONFIG.memory, ...loaded?.memory },
+      embedding: { ...DEFAULT_CONFIG.embedding, ...loaded?.embedding },
+      search: { ...DEFAULT_CONFIG.search, ...loaded?.search },
+      review: { ...DEFAULT_CONFIG.review, ...loaded?.review },
+      lifecycle: { ...DEFAULT_LIFECYCLE, ...loaded?.lifecycle },
+      ...(loaded?.workspace ? { workspace: loaded.workspace as WorkspaceConfig } : {}),
       ...(loaded?.reranker ? { reranker: loaded.reranker } : {}),
     };
   } catch (error) {
@@ -86,18 +60,10 @@ export function loadConfig(repoRoot: string): MemoConfig {
   }
 }
 
-/**
- * Write config to repo root
- */
 export function writeConfig(repoRoot: string, config: MemoConfig): void {
   const configPath = getConfigPath(repoRoot);
   const configDir = path.dirname(configPath);
-
-  // Ensure meta directory exists
-  if (!fs.existsSync(configDir)) {
-    fs.mkdirSync(configDir, { recursive: true });
-  }
-
+  if (!fs.existsSync(configDir)) { fs.mkdirSync(configDir, { recursive: true }); }
   try {
     const content = yaml.dump(config, { indent: 2 });
     fs.writeFileSync(configPath, content, 'utf-8');
@@ -106,16 +72,8 @@ export function writeConfig(repoRoot: string, config: MemoConfig): void {
   }
 }
 
-/**
- * Initialize config with project name
- */
 export function initConfig(repoRoot: string, projectName: string): void {
-  const config: MemoConfig = {
-    ...DEFAULT_CONFIG,
-    project: {
-      name: projectName,
-    },
-  };
-
-  writeConfig(repoRoot, config);
+  writeConfig(repoRoot, { ...DEFAULT_CONFIG, project: { name: projectName } });
 }
+
+export { DEFAULT_LIFECYCLE };
