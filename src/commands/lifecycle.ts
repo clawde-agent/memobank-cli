@@ -11,6 +11,8 @@ import {
   deleteMemory,
   getFlaggedMemories,
   recordCorrection,
+  resetEpoch,
+  runLifecycleScan,
   LifecycleConfig,
 } from '../core/lifecycle-manager';
 
@@ -21,6 +23,8 @@ export interface LifecycleOptions {
   delete?: boolean;
   flagged?: boolean;
   tier?: 'core' | 'working' | 'peripheral';
+  resetEpoch?: boolean;
+  scan?: boolean;
 }
 
 const DEFAULT_CONFIG: LifecycleConfig = {
@@ -35,6 +39,18 @@ const DEFAULT_CONFIG: LifecycleConfig = {
 export async function lifecycleCommand(options: LifecycleOptions = {}): Promise<void> {
   const cwd = process.cwd();
   const repoRoot = findRepoRoot(cwd, options.repo);
+
+  if (options.resetEpoch) {
+    resetEpoch(repoRoot);
+    console.log('✓ Epoch reset. epochAccessCount zeroed for all memories.');
+    return;
+  }
+
+  if (options.scan) {
+    runLifecycleScan(repoRoot);
+    console.log('✓ Lifecycle scan complete. Status updated for all memories.');
+    return;
+  }
 
   // Generate report
   if (options.report || !options.archive && !options.delete && !options.flagged && !options.tier) {
