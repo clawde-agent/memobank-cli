@@ -77,7 +77,16 @@ Priority (highest → lowest):
 3. Org      — broad organizational knowledge
 ```
 
-Scope is surfaced in results so users know where each memory comes from.
+**Merge / deduplication rules:**
+- Results from all tiers are scored independently and combined into a single ranked list
+- If the same filename exists in multiple tiers, the highest-priority tier's version wins (Project > Personal > Org); lower-tier duplicates are suppressed
+- Each result includes a `scope` field (`project | personal | org`) shown in output so users know the source
+- If org tier is not configured or its local clone does not exist, recall silently skips that tier (no error)
+
+**Org sync during recall:**
+- `auto_sync: false` (default): recall uses the last-synced local clone of org memories; if no clone exists, org tier is skipped silently
+- If org remote is unreachable during `memo org sync`, the command fails with an error but existing local clone remains usable
+- `memo recall` itself never triggers a network request regardless of `auto_sync` setting
 
 ---
 
@@ -154,15 +163,21 @@ status: deprecated     # not recalled for 180 days after needs-review; effective
 
 ### Bidirectional Auto-Update
 
-Status is updated silently during `memo recall` — no user interaction required.
+Status is evaluated and updated in two places:
+1. **On every `memo recall`** — upgrades and downgrades are checked for any memory returned in results
+2. **On `memo lifecycle`** — full scan of all memories, applies downgrades to memories not recently recalled (catches memories that were never returned in recall results)
 
-| Transition | Trigger | Direction |
+`memo recall` alone is sufficient for memories that are actively used. `memo lifecycle` is a periodic maintenance command (can be run manually or via CI).
+
+| Transition | Trigger | Checked by |
 |-----------|---------|-----------|
-| `experimental` → `active` | Recalled ≥ 1 time | Upgrade |
-| `needs-review` → `active` | Recalled ≥ 3 times (configurable) | Upgrade |
-| `active` → `needs-review` | Not recalled for 90 days | Downgrade |
-| `needs-review` → `deprecated` | Not recalled for 90 more days | Downgrade |
-| `experimental` → `deprecated` | Not recalled for 30 days | Downgrade |
+| `experimental` → `active` | Recalled ≥ 1 time in current epoch | recall |
+| `needs-review` → `active` | Recalled ≥ 3 times in current epoch | recall |
+| `active` → `needs-review` | 0 recalls in last 90 days | lifecycle |
+| `needs-review` → `deprecated` | 0 recalls in 90 days after entering needs-review | lifecycle |
+| `experimental` → `deprecated` | 0 recalls in 30 days since creation | lifecycle |
+
+The asymmetry between upgrade thresholds (1 vs 3) is intentional: a single accidental recall should not validate a `needs-review` memory; it takes deliberate repeated use to confirm it is still relevant.
 
 Transitions write to frontmatter in place. The Git diff on `.memobank/` naturally surfaces which memories are gaining or losing relevance — this becomes the team's ambient health signal.
 
@@ -213,17 +228,40 @@ score = epochAccessCount × 1.0
 
 Old team's access history contributes positively but fades to zero over 180 days (configurable). New team's usage drives the score fully from day one.
 
-### Epoch Reset (Handoff)
+### Deprecated Memory Re-recall
 
-When a new team takes over a project, they run:
+If a `deprecated` memory is explicitly recalled (e.g., via `memo search --include-deprecated` followed by direct use, or if it surfaces via org sync), it transitions back to `needs-review` — not directly to `active`. This requires at least 3 more recalls to re-validate, preventing accidental resurrection.
 
-```bash
-memo org sync    # pull latest org knowledge
+### Epoch Decay Function
+
+The decay formula uses **linear decay** from 1.0 to 0.0 over `decay_window_days` (default 180):
+
+```
+decay(daysSinceEpoch, window) = max(0, 1 - daysSinceEpoch / window)
 ```
 
-No special handoff command needed for the project layer. The epoch resets naturally: new team members start recalling the memories they actually need, frequency scores rebuild organically, unused memories fade via status downgrade.
+Linear decay is chosen for predictability — contributors can reason about how fast old-team history fades without needing to understand an exponential curve.
 
-For an explicit checkpoint (optional):
+---
+
+### Epoch Reset (Handoff)
+
+`team_epoch` is set on `memo init` (project or global) and can be explicitly reset:
+
+```bash
+memo lifecycle --reset-epoch    # reset epoch to now, epochAccessCount → 0 for all memories
+```
+
+When a new team takes over a project:
+1. Clone the repo (project-tier memories arrive automatically)
+2. Run `memo org sync` to pull latest org knowledge
+3. Run `memo lifecycle --reset-epoch` to start fresh decay tracking
+
+If no org layer is configured, step 2 is skipped. The epoch still resets via step 3.
+
+The epoch reset does not change any `status` values — status continues to evolve based on how often the new team recalls each memory. Unused memories fade naturally via the downgrade path.
+
+For an explicit handoff record (optional):
 
 ```bash
 memo write decision --name "team-handoff-$(date +%Y-%m-%d)"
@@ -236,16 +274,25 @@ memo write decision --name "team-handoff-$(date +%Y-%m-%d)"
 Users with existing `personal/` and `team/` structures run once:
 
 ```bash
-memo migrate
+memo migrate --dry-run   # preview: show every file move, no changes made
+memo migrate             # execute after reviewing dry-run output
 ```
 
-This command:
+**Steps executed:**
 1. Moves `personal/` contents → `~/.memobank/<project-name>/` (global tier)
 2. Flattens `team/` contents → `.memobank/` root (project tier, if team remote was configured)
-3. Updates `meta/config.yaml` to new schema
-4. Prints a summary of what moved
+3. Renames `team:` key → `org:` in `meta/config.yaml`
+4. Old configs with `team:` key continue to work during transition (aliased to `org:`)
+5. Prints a per-file summary of what moved
 
-The migration is non-destructive — originals are preserved until the user confirms with `--confirm`.
+**Conflict handling (same filename in multiple tiers):**
+- If a file from `personal/` and `team/` share the same name, the user is prompted to choose which to keep; the other is saved as `<name>.bak.md` in place
+- Migration is idempotent: re-running after partial completion skips already-migrated files
+
+**Rollback:**
+- Original directories (`personal/`, `team/`) are renamed to `personal.bak/` and `team.bak/` rather than deleted
+- User can restore by renaming back; `memo migrate --rollback` automates this
+- Backups can be removed manually once the user is satisfied
 
 ---
 
@@ -280,20 +327,48 @@ org:
 
 | File | Change |
 |------|--------|
-| `src/types.ts` | Add `status` field to `MemoryFile`; update `MemoryScope` to `'personal' \| 'project' \| 'org'`; update `TeamConfig` → `OrgConfig` |
-| `src/config.ts` | Update config schema; add `lifecycle` thresholds; rename `team` → `org` |
-| `src/core/store.ts` | Rewrite path resolution for three-tier lookup; `getGlobalDir()`, `getProjectDir()`, `getOrgDir()`; remove `getPersonalDir()`, `getTeamDir()` |
-| `src/core/lifecycle-manager.ts` | Add status auto-update on access; add epoch-aware scoring |
-| `src/core/decay-engine.ts` | Integrate dual-track epoch scoring |
-| `src/commands/team.ts` | Remove file; replace with `src/commands/org.ts` |
-| `src/commands/org.ts` | New file: `orgInit`, `orgSync`, `orgPublish`, `orgStatus` |
-| `src/commands/recall.ts` | Trigger status update after successful recall |
-| `src/commands/migrate.ts` | New file: migration from old `personal/`+`team/` layout |
-| `src/cli.ts` | Replace `team` subcommand with `org`; add `migrate` command |
-| `src/onboarding.tsx` | Update wizard: ask global vs project; ask org remote (optional) |
+| `src/types.ts` | Add `status: Status` field to `MemoryFile`; add `Status` type; update `MemoryScope` to `'personal' \| 'project' \| 'org'`; rename `TeamConfig` → `OrgConfig` |
+| `src/config.ts` | Update config schema; add `lifecycle` thresholds block; alias `team:` → `org:` for backward compat |
+| `src/core/store.ts` | Rewrite path resolution: `getGlobalDir()`, `getProjectDir()`, `getOrgDir()`; three-tier `loadAll()`; remove `getPersonalDir()`, `getTeamDir()`, `migrateToPersonal()` |
+| `src/core/retriever.ts` | Update to merge results from three tiers; apply tier priority deduplication; add `scope` to `RecallResult` |
+| `src/core/lifecycle-manager.ts` | Add `updateStatusOnRecall()` (called by recall); add `runLifecycleScan()` (called by lifecycle command); add epoch-aware scoring; add `resetEpoch()` |
+| `src/core/decay-engine.ts` | Integrate dual-track epoch scoring formula |
+| `src/commands/team.ts` | **Delete** |
+| `src/commands/org.ts` | **New**: `orgInit`, `orgSync`, `orgPublish`, `orgStatus` |
+| `src/commands/recall.ts` | Call `updateStatusOnRecall()` after results returned |
+| `src/commands/lifecycle.ts` | Add `--reset-epoch` flag; call `runLifecycleScan()` for full status sweep |
+| `src/commands/write.ts` | Set `status: experimental` on all newly created memories |
+| `src/commands/migrate.ts` | **New**: dry-run + execute migration; conflict handling; rollback support |
+| `src/commands/init.ts` | **New** (or extend onboarding): handle `memo init` and `memo init --global` |
+| `src/cli.ts` | Replace `team` subcommand with `org`; add `migrate` and `init` commands |
+| `src/onboarding.tsx` | Ask global vs project tier; ask org remote URL (optional, skippable) |
 
 ---
 
-## Open Questions
+## Edge Case Behavior
 
-None blocking implementation.
+### Onboarding when org remote is pre-configured
+
+If `org.remote` is already set in `config.yaml` and the user runs `memo onboarding` or `memo init` without specifying org, the existing org config is preserved untouched. Skipping the org step in onboarding only means "don't configure now" — it does not disable or remove a pre-existing org remote.
+
+### `memo org init` subdirectory handling
+
+When `org.path` is set to a subdirectory (e.g., `.memobank` inside a larger repo), `memo org init` clones the entire remote repo to `~/.memobank/_org/<org-name>/` and reads memories from the specified `org.path` subdirectory within that clone. If the subdirectory does not exist in the remote, `memo org init` creates it with an empty `.gitkeep` and commits it as part of initialization.
+
+### `memo init` conflicts
+
+- Running `memo init` when `.memobank/` already exists: prints a warning and exits (no-op); user must run `memo migrate` if upgrading from old layout
+- Running `memo init --global` when `~/.memobank/<project>/` already exists: same behavior
+- Both personal and project tiers can coexist simultaneously; recall merges both
+
+### `memo org publish` secret scanning
+
+- Uses the same regex-based scanner as `memo scan` (`src/commands/scan.ts`)
+- If secrets are found: command aborts, lists findings, instructs user to fix before publishing
+- No automatic stripping — user must manually redact and re-run
+- If the same filename already exists in the org local clone: user is prompted to confirm overwrite; the org repo's PR review is the final governance gate
+
+### `memo org sync --push` conflict handling
+
+- If remote has changes not in local clone: `sync --push` is rejected with an error; user must `memo org sync` (pull) first, resolve conflicts via standard `git` commands, then retry push
+- This mirrors standard Git push-rejection behavior; no special tooling needed
