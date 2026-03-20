@@ -6,8 +6,10 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { MemoryFile, MemoryType, Confidence } from '../types';
-import { loadAll, findRepoRoot, writeMemory } from './store';
+import matter from 'gray-matter';
+import { MemoryFile, MemoryType, Confidence, Status } from '../types';
+import { loadAll, findRepoRoot, writeMemory, updateMemoryStatus } from './store';
+import { loadConfig } from '../config';
 
 /**
  * Memory tiers based on usage and importance
@@ -22,6 +24,8 @@ export interface AccessLog {
   lastAccessed: Date;
   accessCount: number;
   recallQueries: string[]; // Recent queries that recalled this memory
+  epochAccessCount: number;  // recalls since current team_epoch
+  team_epoch: string;        // ISO timestamp of current epoch start
 }
 
 /**
@@ -121,6 +125,8 @@ export function recordAccess(
       lastAccessed: now,
       accessCount: 0,
       recallQueries: [],
+      epochAccessCount: 0,
+      team_epoch: now.toISOString(),
     };
   }
   
@@ -419,4 +425,80 @@ export function generateLifecycleReport(
   }
   
   return report;
+}
+
+/**
+ * Called after a successful recall.
+ * Increments epochAccessCount and applies status upgrades.
+ */
+export function updateStatusOnRecall(repoRoot: string, memoryPath: string): void {
+  const logs = loadAccessLogs(repoRoot);
+  const log = logs[memoryPath];
+  if (!log) { return; }
+
+  // Increment epoch count
+  log.epochAccessCount = (log.epochAccessCount ?? 0) + 1;
+  saveAccessLogs(repoRoot, logs);
+
+  // Read current status
+  let currentStatus: Status = 'experimental';
+  try {
+    const content = fs.readFileSync(memoryPath, 'utf-8');
+    const parsed = matter(content);
+    currentStatus = parsed.data.status ?? 'experimental';
+  } catch { return; }
+
+  // Apply upgrade rules
+  const config = loadConfig(repoRoot);
+  const threshold = config.lifecycle?.review_recall_threshold ?? 3;
+
+  if (currentStatus === 'experimental') {
+    updateMemoryStatus(memoryPath, 'active');
+  } else if (currentStatus === 'needs-review' && log.epochAccessCount >= threshold) {
+    updateMemoryStatus(memoryPath, 'active');
+  } else if (currentStatus === 'deprecated') {
+    updateMemoryStatus(memoryPath, 'needs-review');
+  }
+}
+
+/**
+ * Full scan of all memories — applies downgrade rules.
+ * Run periodically (manually or via CI).
+ */
+export function runLifecycleScan(repoRoot: string, globalDir?: string): void {
+  const config = loadConfig(repoRoot);
+  const lc = config.lifecycle!;
+  const logs = loadAccessLogs(repoRoot);
+  const memories = loadAll(repoRoot, 'all', globalDir);
+  const now = Date.now();
+
+  for (const memory of memories) {
+    const log = logs[memory.path];
+    const lastAccessed = log?.lastAccessed ? new Date(log.lastAccessed).getTime() : null;
+    const daysSinceAccess = lastAccessed ? (now - lastAccessed) / 86400000 : Infinity;
+    const currentStatus: Status = memory.status ?? 'experimental';
+    const created = new Date(memory.created).getTime();
+    const daysSinceCreation = (now - created) / 86400000;
+
+    if (currentStatus === 'active' && daysSinceAccess > lc.active_to_review_days) {
+      updateMemoryStatus(memory.path, 'needs-review');
+    } else if (currentStatus === 'needs-review' && daysSinceAccess > lc.review_to_deprecated_days) {
+      updateMemoryStatus(memory.path, 'deprecated');
+    } else if (currentStatus === 'experimental' && daysSinceCreation > lc.experimental_ttl_days) {
+      updateMemoryStatus(memory.path, 'deprecated');
+    }
+  }
+}
+
+/**
+ * Reset team_epoch to now and zero out epochAccessCount for all entries.
+ */
+export function resetEpoch(repoRoot: string): void {
+  const logs = loadAccessLogs(repoRoot);
+  const newEpoch = new Date().toISOString();
+  for (const key of Object.keys(logs)) {
+    logs[key]!.epochAccessCount = 0;
+    logs[key]!.team_epoch = newEpoch;
+  }
+  saveAccessLogs(repoRoot, logs);
 }
