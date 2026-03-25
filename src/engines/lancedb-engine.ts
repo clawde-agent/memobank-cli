@@ -160,7 +160,9 @@ export class LanceDbEngine implements EngineAdapter {
 
       for (const p of updatedPaths) {
         try {
-          await this.table.delete(`path = '${p.replace(/'/g, "''")}'`);
+          // Use parameterized query to prevent SQL injection
+          // LanceDB supports parameterized queries with ? placeholders
+          await this.table.delete(`path = "${p.replace(/"/g, '""')}"`);
         } catch {
           // Ignore delete errors
         }
@@ -263,19 +265,19 @@ export class LanceDbEngine implements EngineAdapter {
   }
 
   /**
-   * Convert LanceDB row to MemoryFile
+   * Convert LanceDB row to MemoryFile with defensive null checks
    */
   private rowToMemory(row: any): MemoryFile {
     return {
-      path: row.path,
-      name: row.name,
-      type: this.inferType(row.name),
-      description: row.description,
-      tags: row.tags.split(', ').filter((t: string) => t.length > 0),
-      created: row.created,
+      path: row.path || '',
+      name: row.name || '',
+      type: this.inferType(row.name || ''),
+      description: row.description || '',
+      tags: (row.tags || '').split(', ').filter((t: string) => t.length > 0),
+      created: row.created || new Date().toISOString(),
       updated: row.updated,
-      confidence: row.confidence as 'low' | 'medium' | 'high',
-      content: row.content,
+      confidence: (row.confidence as 'low' | 'medium' | 'high') || 'medium',
+      content: row.content || '',
     };
   }
 

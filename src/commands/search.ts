@@ -19,6 +19,17 @@ export interface SearchOptions {
 }
 
 export async function search(query: string, options: SearchOptions = {}): Promise<void> {
+  // Validate query
+  if (!query || !query.trim()) {
+    console.error('Error: Query cannot be empty');
+    process.exit(1);
+  }
+
+  if (query.length > 1000) {
+    console.error('Error: Query too long (max 1000 characters)');
+    process.exit(1);
+  }
+
   const cwd = process.cwd();
   const repoRoot = findRepoRoot(cwd, options.repo);
   const config = loadConfig(repoRoot);

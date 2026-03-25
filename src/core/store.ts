@@ -159,8 +159,8 @@ export function loadFile(filePath: string): MemoryFile {
     created: data.created,
     updated: data.updated,
     review_after: data.review_after,
-    confidence: data.confidence as Confidence,
-    status: data.status as Status | undefined,
+    confidence: (data.confidence as Confidence) || 'medium',
+    status: (data.status as Status) || 'experimental',
     content: parsed.content,
   };
 }

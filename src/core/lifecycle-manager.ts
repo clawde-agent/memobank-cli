@@ -62,6 +62,78 @@ function getAccessLogPath(repoRoot: string): string {
 }
 
 /**
+ * Lock file path for access log
+ */
+function getAccessLogLockPath(repoRoot: string): string {
+  return path.join(repoRoot, 'meta', 'access-log.lock');
+}
+
+/**
+ * Acquire lock for access log operations
+ * Uses file-based locking to prevent race conditions
+ */
+function acquireLock(repoRoot: string, timeoutMs: number = 5000): boolean {
+  const lockPath = getAccessLogLockPath(repoRoot);
+  const lockDir = path.dirname(lockPath);
+
+  if (!fs.existsSync(lockDir)) {
+    fs.mkdirSync(lockDir, { recursive: true });
+  }
+
+  const startTime = Date.now();
+  while (Date.now() - startTime < timeoutMs) {
+    try {
+      // Try to create lock file exclusively
+      fs.writeFileSync(lockPath, process.pid.toString(), { flag: 'wx' });
+      return true;
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      if (err.code === 'EEXIST') {
+        // Lock exists, check if it's stale (process no longer running)
+        try {
+          const lockPid = parseInt(fs.readFileSync(lockPath, 'utf-8').trim(), 10);
+          if (!Number.isNaN(lockPid)) {
+            try {
+              // Check if process is still running
+              process.kill(lockPid, 0);
+            } catch {
+              // Process is dead, remove stale lock
+              fs.unlinkSync(lockPath);
+              continue;
+            }
+          }
+        } catch {
+          // Can't read lock file, remove it
+          try { fs.unlinkSync(lockPath); } catch { /* ignore */ }
+          continue;
+        }
+        // Wait and retry
+        const waitTime = Math.min(50, timeoutMs - (Date.now() - startTime));
+        if (waitTime > 0) {
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, waitTime);
+        }
+      } else {
+        // Other error, try to remove and retry
+        try { fs.unlinkSync(lockPath); } catch { /* ignore */ }
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Release lock for access log operations
+ */
+function releaseLock(repoRoot: string): void {
+  const lockPath = getAccessLogLockPath(repoRoot);
+  try {
+    fs.unlinkSync(lockPath);
+  } catch {
+    // Ignore errors when releasing lock
+  }
+}
+
+/**
  * Corrections log file path
  */
 function getCorrectionsPath(repoRoot: string): string {
@@ -100,49 +172,61 @@ export function loadAccessLogs(repoRoot: string): Record<string, AccessLog> {
 export function saveAccessLogs(repoRoot: string, logs: Record<string, AccessLog>): void {
   const accessLogPath = getAccessLogPath(repoRoot);
   const logDir = path.dirname(accessLogPath);
-  
+
   if (!fs.existsSync(logDir)) {
     fs.mkdirSync(logDir, { recursive: true });
   }
-  
+
   fs.writeFileSync(accessLogPath, JSON.stringify(logs, null, 2), 'utf-8');
 }
 
 /**
- * Record memory access
+ * Record memory access with file locking to prevent race conditions
  */
 export function recordAccess(
   repoRoot: string,
   memoryPath: string,
   query?: string
 ): AccessLog {
-  const logs = loadAccessLogs(repoRoot);
-  const now = new Date();
-  
-  if (!logs[memoryPath]) {
-    logs[memoryPath] = {
-      memoryPath,
-      lastAccessed: now,
-      accessCount: 0,
-      recallQueries: [],
-      epochAccessCount: 0,
-      team_epoch: now.toISOString(),
-    };
+  // Acquire lock before reading/writing access logs
+  const lockAcquired = acquireLock(repoRoot);
+  if (!lockAcquired) {
+    console.warn('Could not acquire access log lock, recording may be inconsistent');
   }
-  
-  const log = logs[memoryPath];
-  log.lastAccessed = now;
-  log.accessCount++;
-  
-  if (query) {
-    log.recallQueries.unshift(query);
-    if (log.recallQueries.length > 10) {
-      log.recallQueries.pop(); // Keep last 10 queries
+
+  try {
+    const logs = loadAccessLogs(repoRoot);
+    const now = new Date();
+
+    if (!logs[memoryPath]) {
+      logs[memoryPath] = {
+        memoryPath,
+        lastAccessed: now,
+        accessCount: 0,
+        recallQueries: [],
+        epochAccessCount: 0,
+        team_epoch: now.toISOString(),
+      };
+    }
+
+    const log = logs[memoryPath];
+    log.lastAccessed = now;
+    log.accessCount++;
+
+    if (query) {
+      log.recallQueries.unshift(query);
+      if (log.recallQueries.length > 10) {
+        log.recallQueries.pop(); // Keep last 10 queries
+      }
+    }
+
+    saveAccessLogs(repoRoot, logs);
+    return log;
+  } finally {
+    if (lockAcquired) {
+      releaseLock(repoRoot);
     }
   }
-  
-  saveAccessLogs(repoRoot, logs);
-  return log;
 }
 
 /**
@@ -432,32 +516,44 @@ export function generateLifecycleReport(
  * Increments epochAccessCount and applies status upgrades.
  */
 export function updateStatusOnRecall(repoRoot: string, memoryPath: string): void {
-  const logs = loadAccessLogs(repoRoot);
-  const log = logs[memoryPath];
-  if (!log) { return; }
+  // Acquire lock before reading/writing access logs
+  const lockAcquired = acquireLock(repoRoot);
+  if (!lockAcquired) {
+    console.warn('Could not acquire access log lock, status update may be inconsistent');
+  }
 
-  // Increment epoch count
-  log.epochAccessCount = (log.epochAccessCount ?? 0) + 1;
-  saveAccessLogs(repoRoot, logs);
-
-  // Read current status
-  let currentStatus: Status = 'experimental';
   try {
-    const content = fs.readFileSync(memoryPath, 'utf-8');
-    const parsed = matter(content);
-    currentStatus = parsed.data.status ?? 'experimental';
-  } catch { return; }
+    const logs = loadAccessLogs(repoRoot);
+    const log = logs[memoryPath];
+    if (!log) { return; }
 
-  // Apply upgrade rules
-  const config = loadConfig(repoRoot);
-  const threshold = config.lifecycle?.review_recall_threshold ?? 3;
+    // Increment epoch count
+    log.epochAccessCount = (log.epochAccessCount ?? 0) + 1;
+    saveAccessLogs(repoRoot, logs);
 
-  if (currentStatus === 'experimental') {
-    updateMemoryStatus(memoryPath, 'active');
-  } else if (currentStatus === 'needs-review' && log.epochAccessCount >= threshold) {
-    updateMemoryStatus(memoryPath, 'active');
-  } else if (currentStatus === 'deprecated') {
-    updateMemoryStatus(memoryPath, 'needs-review');
+    // Read current status
+    let currentStatus: Status = 'experimental';
+    try {
+      const content = fs.readFileSync(memoryPath, 'utf-8');
+      const parsed = matter(content);
+      currentStatus = parsed.data.status ?? 'experimental';
+    } catch { return; }
+
+    // Apply upgrade rules
+    const config = loadConfig(repoRoot);
+    const threshold = config.lifecycle?.review_recall_threshold ?? 3;
+
+    if (currentStatus === 'experimental') {
+      updateMemoryStatus(memoryPath, 'active');
+    } else if (currentStatus === 'needs-review' && log.epochAccessCount >= threshold) {
+      updateMemoryStatus(memoryPath, 'active');
+    } else if (currentStatus === 'deprecated') {
+      updateMemoryStatus(memoryPath, 'needs-review');
+    }
+  } finally {
+    if (lockAcquired) {
+      releaseLock(repoRoot);
+    }
   }
 }
 
