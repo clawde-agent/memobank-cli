@@ -1,46 +1,42 @@
-<!-- Thank you for contributing! Please fill out this template. -->
-
 ## Description
 
-<!-- Describe your changes in detail. What problem does this solve? -->
+Please include a summary of the changes and which issue is fixed.
 
-## Related Issue
-
-<!-- Link to the issue this PR addresses (e.g., Fixes #123 or Closes #456) -->
+Fixes # (issue)
 
 ## Type of Change
 
-<!-- Mark the appropriate option with an [x] -->
-
-- [ ] 🐛 Bug fix (non-breaking change that fixes an issue)
-- [ ] ✨ New feature (non-breaking change that adds functionality)
-- [ ] 💥 Breaking change (fix or feature that would cause existing functionality to change)
-- [ ] 📚 Documentation update
-- [ ] 🧹 Code cleanup / Refactoring
-- [ ] ⚡ Performance improvement
-- [ ] 🧪 Test addition
-
-## Testing
-
-<!-- Describe how you tested your changes -->
-
-- [ ] Tests pass locally
-- [ ] New tests added for new functionality (if applicable)
-- [ ] Manual testing completed
+- [ ] Bug fix (non-breaking change which fixes an issue)
+- [ ] New feature (non-breaking change which adds functionality)
+- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [ ] Documentation update
 
 ## Checklist
 
-- [ ] My code follows the project's coding style
-- [ ] I have updated the documentation accordingly (if needed)
-- [ ] I have updated `CHANGELOG.md` (for user-facing changes)
-- [ ] I have checked that there are no TypeScript errors
-- [ ] I have checked that linting passes
-- [ ] My commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)
+Before submitting this PR, please confirm:
 
-## Screenshots
+- [ ] I have read the [CONTRIBUTING.md](CONTRIBUTING.md) guide
+- [ ] My code follows the project's style guidelines (`npm run lint`, `npm run format`)
+- [ ] I have performed a self-review of my code
+- [ ] I have commented my code, particularly in hard-to-understand areas
+- [ ] I have updated the documentation accordingly
+- [ ] I have added tests that prove my fix/feature works
+- [ ] All new and existing tests pass locally (`npm test`)
+- [ ] Any dependent changes have been merged and published
 
-<!-- Add screenshots if this is a UI change (if applicable) -->
+## Testing
 
-## Additional Context
+Please describe the tests that you ran to verify your changes:
 
-<!-- Add any other context about the pull request here -->
+```bash
+# Test commands you ran
+npm test
+```
+
+## Screenshots (if applicable)
+
+Add screenshots to help explain your changes.
+
+## Additional Notes
+
+Any other information that would help reviewers understand your PR.
