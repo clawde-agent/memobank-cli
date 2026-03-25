@@ -106,6 +106,16 @@ export async function workspacePublish(
     throw new Error(`File not found: ${filePath}`);
   }
 
+  // Resolve to absolute paths for security checks
+  const absoluteFilePath = path.resolve(filePath);
+  const absoluteRepoRoot = path.resolve(repoRoot);
+
+  // Security: Ensure filePath is within repoRoot to prevent path traversal
+  const rel = path.relative(absoluteRepoRoot, absoluteFilePath);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    throw new Error(`Security: File must be within repo root. Got: ${filePath}`);
+  }
+
   // Secret scan
   try {
     const findings = scanFile(filePath);
@@ -130,8 +140,15 @@ export async function workspacePublish(
     throw new Error(`Workspace not initialized. Run: memo workspace init <remote-url>`);
   }
 
-  const rel = path.relative(repoRoot, filePath);
   const dst = path.join(wsDir, rel);
+
+  // Security: Ensure destination is within wsDir
+  const absoluteDst = path.resolve(dst);
+  const absoluteWsDir = path.resolve(wsDir);
+  const dstRel = path.relative(absoluteWsDir, absoluteDst);
+  if (dstRel.startsWith('..') || path.isAbsolute(dstRel)) {
+    throw new Error(`Security: Destination must be within workspace directory`);
+  }
 
   if (fs.existsSync(dst)) {
     console.warn(`⚠️  File already exists in workspace: ${rel}`);
