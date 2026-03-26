@@ -32,6 +32,10 @@ export class EmbeddingGenerator {
     });
   }
 
+  getDimensions(): number {
+    return this.config.dimensions;
+  }
+
   /**
    * Get default base URL for provider
    */
@@ -129,7 +133,9 @@ export class EmbeddingGenerator {
       apiKey = undefined;
     } else if (provider === 'jina') {
       apiKey = process.env.JINA_API_KEY;
-      if (!apiKey) return null;
+      if (!apiKey) {
+        return null;
+      }
     } else {
       // OpenAI, Azure, etc. need API key from environment
       apiKey = process.env.OPENAI_API_KEY || process.env.AZURE_API_KEY;

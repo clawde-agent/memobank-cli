@@ -10,7 +10,7 @@ import { initConfig } from '../config';
 
 const MEMORY_TYPES = ['lesson', 'decision', 'workflow', 'architecture'];
 
-export async function initCommand(options: { global?: boolean; name?: string }): Promise<void> {
+export function initCommand(options: { global?: boolean; name?: string }): void {
   const cwd = process.cwd();
   const projectName = options.name ?? path.basename(cwd);
 
@@ -57,6 +57,9 @@ function ensureGitignore(repoRoot: string): void {
   }
   const content = fs.readFileSync(gitignorePath, 'utf-8');
   if (!content.includes(entry)) {
-    fs.appendFileSync(gitignorePath, `\n# memobank — access log is local, not team state\n${entry}\n`);
+    fs.appendFileSync(
+      gitignorePath,
+      `\n# memobank — access log is local, not team state\n${entry}\n`
+    );
   }
 }

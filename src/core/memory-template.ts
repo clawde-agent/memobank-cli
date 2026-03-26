@@ -4,8 +4,6 @@
  * Aligned with: https://github.com/clawde-agent/memobank/blob/master/docs/specs/2026-03-17-memobank-design.md
  */
 
-import * as path from 'path';
-
 export type MemoryType = 'lesson' | 'decision' | 'workflow' | 'architecture';
 export type Confidence = 'low' | 'medium' | 'high';
 

@@ -8,7 +8,7 @@ import { loadConfig } from '../config';
 import { recall, writeRecallResults } from '../core/retriever';
 import { TextEngine } from '../engines/text-engine';
 import { EmbeddingGenerator } from '../core/embedding';
-import { MemoryScope } from '../types';
+import type { MemoryScope } from '../types';
 
 export interface RecallOptions {
   top?: number;
@@ -24,7 +24,9 @@ export async function recallCommand(query: string, options: RecallOptions): Prom
   const repoRoot = findRepoRoot(process.cwd(), options.repo);
   const config = loadConfig(repoRoot);
 
-  if (options.top) { config.memory.top_k = options.top; }
+  if (options.top) {
+    config.memory.top_k = options.top;
+  }
 
   const scope = (options.scope as MemoryScope) || 'all';
   const explain = options.explain || false;
@@ -43,10 +45,13 @@ export async function recallCommand(query: string, options: RecallOptions): Prom
       const msg = (err as Error).message;
       const provider = config.embedding?.provider ?? 'ollama';
       const model = config.embedding?.model ?? 'mxbai-embed-large';
-      const hint = provider === 'ollama'
-        ? `  Check: ollama serve && ollama pull ${model}`
-        : `  Check: ${provider.toUpperCase()}_API_KEY is set`;
-      process.stderr.write(`\n⚠  Vector search unavailable (${msg})\n${hint}\n  Falling back to text search.\n\n`);
+      const hint =
+        provider === 'ollama'
+          ? `  Check: ollama serve && ollama pull ${model}`
+          : `  Check: ${provider.toUpperCase()}_API_KEY is set`;
+      process.stderr.write(
+        `\n⚠  Vector search unavailable (${msg})\n${hint}\n  Falling back to text search.\n\n`
+      );
       engine = new TextEngine();
     }
   }

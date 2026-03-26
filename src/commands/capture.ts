@@ -11,14 +11,8 @@ import { extract } from '../core/smart-extractor';
 import { sanitize } from '../core/sanitizer';
 import { writeMemory, loadAll, findRepoRoot } from '../core/store';
 import { loadConfig } from '../config';
-import { MemoryFile } from '../types';
-import {
-  isNoise,
-  hasHighValueIndicators,
-  calculateValueScore,
-  getCaptureRecommendation,
-  filterAndRank,
-} from '../core/noise-filter';
+import type { MemoryFile } from '../types';
+import { calculateValueScore, getCaptureRecommendation } from '../core/noise-filter';
 
 export interface CaptureOptions {
   session?: string;
@@ -46,15 +40,19 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
   const cwd = process.cwd();
   const repoRoot = findRepoRoot(cwd, options.repo);
   const config = loadConfig(repoRoot);
-  
+
   // Silent mode for hooks
   const isSilent = options.silent || process.env.SILENT === '1';
-  
-  const log = (...args: any[]) => {
-    if (!isSilent) console.log(...args);
+
+  const log = (...args: unknown[]): void => {
+    if (!isSilent) {
+      console.log(...args);
+    }
   };
-  const error = (...args: any[]) => {
-    if (!isSilent) console.error(...args);
+  const error = (...args: unknown[]): void => {
+    if (!isSilent) {
+      console.error(...args);
+    }
   };
 
   // 1. Get session text
@@ -71,11 +69,17 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
       const files = fs
         .readdirSync(autoMemoryDir)
         .filter((f) => {
-          if (!f.endsWith('.md') || f === 'MEMORY.md') { return false; }
+          if (!f.endsWith('.md') || f === 'MEMORY.md') {
+            return false;
+          }
           const fullPath = path.join(autoMemoryDir, f);
           // Skip subdirectories (memobank structured tiers)
-          if (fs.statSync(fullPath).isDirectory()) { return false; }
-          if (STRUCTURED_DIRS.has(f.replace(/\.md$/, ''))) { return false; }
+          if (fs.statSync(fullPath).isDirectory()) {
+            return false;
+          }
+          if (STRUCTURED_DIRS.has(f.replace(/\.md$/, ''))) {
+            return false;
+          }
           return true;
         })
         .map((f) => path.join(autoMemoryDir, f))
@@ -195,8 +199,8 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
 function readStdin(): Promise<string> {
   return new Promise((resolve) => {
     let data = '';
-    process.stdin.on('data', (chunk) => {
-      data += chunk;
+    process.stdin.on('data', (chunk: Buffer | string) => {
+      data += typeof chunk === 'string' ? chunk : chunk.toString();
     });
     process.stdin.on('end', () => {
       resolve(data);

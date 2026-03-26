@@ -3,12 +3,12 @@
  * Manual debugging - never writes MEMORY.md
  */
 
-import { recall as runRecall } from '../core/retriever';
 import { loadConfig } from '../config';
 import { findRepoRoot, loadAll } from '../core/store';
 import { TextEngine } from '../engines/text-engine';
 import { EmbeddingGenerator } from '../core/embedding';
-import { MemoryFile } from '../types';
+import type { MemoryFile } from '../types';
+import type { LanceDbEngine } from '../engines/lancedb-engine';
 
 export interface SearchOptions {
   engine?: string;
@@ -16,6 +16,11 @@ export interface SearchOptions {
   type?: string;
   format?: string;
   repo?: string;
+}
+
+interface SearchResult {
+  memory: MemoryFile;
+  score: number;
 }
 
 export async function search(query: string, options: SearchOptions = {}): Promise<void> {
@@ -36,7 +41,7 @@ export async function search(query: string, options: SearchOptions = {}): Promis
   }
 
   // Get engine
-  let engine: any;
+  let engine: TextEngine | LanceDbEngine | undefined;
   const engineName = options.engine ?? config.embedding.engine;
   if (engineName === 'lancedb') {
     try {
@@ -51,10 +56,13 @@ export async function search(query: string, options: SearchOptions = {}): Promis
       const msg = (e as Error).message;
       const provider = config.embedding?.provider ?? 'ollama';
       const model = config.embedding?.model ?? 'mxbai-embed-large';
-      const hint = provider === 'ollama'
-        ? `  Check: ollama serve && ollama pull ${model}`
-        : `  Check: ${provider.toUpperCase()}_API_KEY is set`;
-      process.stderr.write(`\n⚠  Vector search unavailable (${msg})\n${hint}\n  Falling back to text search.\n\n`);
+      const hint =
+        provider === 'ollama'
+          ? `  Check: ollama serve && ollama pull ${model}`
+          : `  Check: ${provider.toUpperCase()}_API_KEY is set`;
+      process.stderr.write(
+        `\n⚠  Vector search unavailable (${msg})\n${hint}\n  Falling back to text search.\n\n`
+      );
       engine = new TextEngine();
     }
   } else {
@@ -73,7 +81,7 @@ export async function search(query: string, options: SearchOptions = {}): Promis
     if (results.length === 0) {
       console.log('*No memories found*');
     } else {
-      for (const result of results) {
+      for (const result of results as SearchResult[]) {
         const { memory, score } = result;
         const confidenceStr = memory.confidence ? ` · ${memory.confidence} confidence` : '';
         const tagStr = memory.tags.length > 0 ? ` · tags: ${memory.tags.join(', ')}` : '';

@@ -7,7 +7,8 @@
 
 import { Command } from 'commander';
 import { installCommand } from './commands/install';
-import { recallCommand, RecallOptions } from './commands/recall';
+import type { RecallOptions } from './commands/recall';
+import { recallCommand } from './commands/recall';
 import { search } from './commands/search';
 import { capture } from './commands/capture';
 import { writeMemoryCommand } from './commands/write';
@@ -17,14 +18,18 @@ import { mapCommand } from './commands/map';
 import { importMemories } from './commands/import';
 import { onboardingCommand } from './commands/onboarding';
 import { lifecycleCommand, correctCommand } from './commands/lifecycle';
-import { workspaceInit, workspaceSync, workspacePublish, workspaceStatus } from './commands/workspace';
+import {
+  workspaceInit,
+  workspaceSync,
+  workspacePublish,
+  workspaceStatus,
+} from './commands/workspace';
 import { initCommand } from './commands/init';
 import { migrate } from './commands/migrate';
-import { resetEpoch, runLifecycleScan } from './core/lifecycle-manager';
 import { scanCommand } from './commands/scan';
 import { findRepoRoot } from './core/store';
 import { loadConfig } from './config';
-import { MemoryType } from './types';
+import type { MemoryType } from './types';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -46,7 +51,10 @@ program
   .command('install')
   .description('Set up memobank directory structure (use "memo onboarding" for interactive setup)')
   .option('--repo <path>', 'Point to an existing memobank repo')
-  .option('--platform <name>', 'Install adapter for specific platform: claude-code|codex|gemini|qwen|cursor|all')
+  .option(
+    '--platform <name>',
+    'Install adapter for specific platform: claude-code|codex|gemini|qwen|cursor|all'
+  )
   .action(async (options) => {
     try {
       await installCommand(options);
@@ -277,7 +285,14 @@ program
       } else {
         await lifecycleCommand({
           repo: options.repo,
-          report: options.report || (!options.tier && !options.archive && !options.delete && !options.flagged && !options.resetEpoch && !options.scan),
+          report:
+            options.report ||
+            (!options.tier &&
+              !options.archive &&
+              !options.delete &&
+              !options.flagged &&
+              !options.resetEpoch &&
+              !options.scan),
           archive: options.archive,
           delete: options.delete,
           flagged: options.flagged,
@@ -317,8 +332,12 @@ program
   .option('--global', 'Initialize personal tier in ~/.memobank/<project>/')
   .option('--name <name>', 'Project name (defaults to directory name)')
   .action(async (options) => {
-    try { await initCommand(options); }
-    catch (error) { console.error(`Error: ${(error as Error).message}`); process.exit(1); }
+    try {
+      await initCommand(options);
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
   });
 
 // Migrate command
@@ -336,7 +355,10 @@ program
       const home = process.env.HOME || process.env.USERPROFILE || '';
       const globalDir = options.globalDir ?? path.join(home, '.memobank', config.project.name);
       await migrate(repoRoot, globalDir, { dryRun: options.dryRun, rollback: options.rollback });
-    } catch (error) { console.error(`Error: ${(error as Error).message}`); process.exit(1); }
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
   });
 
 // Workspace commands
@@ -352,7 +374,10 @@ workspace
     try {
       const repoRoot = findRepoRoot(process.cwd(), options.repo);
       await workspaceInit(remoteUrl, repoRoot);
-    } catch (error) { console.error(`Error: ${(error as Error).message}`); process.exit(1); }
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
   });
 
 workspace
@@ -364,7 +389,10 @@ workspace
     try {
       const repoRoot = findRepoRoot(process.cwd(), options.repo);
       await workspaceSync(repoRoot, options.push);
-    } catch (error) { console.error(`Error: ${(error as Error).message}`); process.exit(1); }
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
   });
 
 workspace
@@ -375,7 +403,10 @@ workspace
     try {
       const repoRoot = findRepoRoot(process.cwd(), options.repo);
       await workspacePublish(file, repoRoot);
-    } catch (error) { console.error(`Error: ${(error as Error).message}`); process.exit(1); }
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
   });
 
 workspace
@@ -386,7 +417,10 @@ workspace
     try {
       const repoRoot = findRepoRoot(process.cwd(), options.repo);
       await workspaceStatus(repoRoot);
-    } catch (error) { console.error(`Error: ${(error as Error).message}`); process.exit(1); }
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
   });
 
 // Scan command

@@ -30,7 +30,9 @@ describe('migrate --dry-run', () => {
     expect(result.personalMoves.length).toBeGreaterThan(0);
     expect(result.teamMoves.length).toBeGreaterThan(0);
     // Files unchanged
-    expect(fs.existsSync(path.join(repo, 'personal', 'lesson', '2026-01-01-personal.md'))).toBe(true);
+    expect(fs.existsSync(path.join(repo, 'personal', 'lesson', '2026-01-01-personal.md'))).toBe(
+      true
+    );
     fs.rmSync(repo, { recursive: true });
     fs.rmSync(globalDir, { recursive: true });
   });
@@ -56,7 +58,7 @@ describe('migrate', () => {
     const repo = makeLegacyRepo();
     const globalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-global-'));
     await migrate(repo, globalDir, {});
-    await migrate(repo, globalDir, {});  // should not throw
+    await migrate(repo, globalDir, {}); // should not throw
     fs.rmSync(repo, { recursive: true });
     fs.rmSync(globalDir, { recursive: true });
   });

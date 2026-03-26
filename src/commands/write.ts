@@ -9,7 +9,7 @@ import * as os from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { writeMemory, findRepoRoot } from '../core/store';
-import { MemoryType, Confidence } from '../types';
+import type { MemoryType, Confidence } from '../types';
 import {
   generateMemoryFile,
   getTemplateByType,
@@ -232,7 +232,7 @@ export async function writeMemoryCommand(
 
   // Write memory
   try {
-    const { fileName, content: fileContent } = generateMemoryFile({
+    const { fileName } = generateMemoryFile({
       name: memoryData.name,
       type: memoryData.type,
       description: memoryData.description,
@@ -245,7 +245,9 @@ export async function writeMemoryCommand(
     // Update memoryData with generated file name
     memoryData.name = fileName.replace('.md', '').replace(/^\d{4}-\d{2}-\d{2}-/, '');
 
-    if (!memoryData.status) { memoryData.status = 'experimental'; }
+    if (!memoryData.status) {
+      memoryData.status = 'experimental';
+    }
     const filePath = writeMemory(repoRoot, memoryData);
     console.log(`✅ Created: ${filePath}`);
   } catch (error) {

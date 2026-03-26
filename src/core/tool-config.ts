@@ -27,7 +27,7 @@ function getClaudeSettingsPath(scope: 'global' | 'project', projectPath?: string
 /**
  * Configure Claude Code to use memobank
  */
-export async function configureClaudeCode(config: ToolConfig): Promise<void> {
+export function configureClaudeCode(config: ToolConfig): void {
   const settingsPath = getClaudeSettingsPath(config.scope, config.projectPath);
   const settingsDir = path.dirname(settingsPath);
 
@@ -37,7 +37,7 @@ export async function configureClaudeCode(config: ToolConfig): Promise<void> {
   }
 
   // Load existing settings or create new
-  let settings: Record<string, any> = {};
+  let settings: Record<string, unknown> = {};
   if (fs.existsSync(settingsPath)) {
     settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
   }
@@ -71,7 +71,7 @@ function getGeminiConfigPath(scope: 'global' | 'project', projectPath?: string):
 /**
  * Configure Gemini CLI to use memobank
  */
-export async function configureGeminiCli(config: ToolConfig): Promise<void> {
+export function configureGeminiCli(config: ToolConfig): void {
   const configPath = getGeminiConfigPath(config.scope, config.projectPath);
   const configDir = path.dirname(configPath);
 
@@ -81,7 +81,7 @@ export async function configureGeminiCli(config: ToolConfig): Promise<void> {
   }
 
   // Load existing config or create new
-  let geminiConfig: Record<string, any> = {};
+  let geminiConfig: Record<string, unknown> = {};
   if (fs.existsSync(configPath)) {
     geminiConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
   }
@@ -146,7 +146,7 @@ function getQwenConfigPath(scope: 'global' | 'project', projectPath?: string): s
 /**
  * Configure Qwen Code to use memobank
  */
-export async function configureQwenCode(config: ToolConfig): Promise<void> {
+export function configureQwenCode(config: ToolConfig): void {
   const configPath = getQwenConfigPath(config.scope, config.projectPath);
   const configDir = path.dirname(configPath);
 
@@ -156,7 +156,7 @@ export async function configureQwenCode(config: ToolConfig): Promise<void> {
   }
 
   // Load existing config or create new
-  let qwenConfig: Record<string, any> = {};
+  let qwenConfig: Record<string, unknown> = {};
   if (fs.existsSync(configPath)) {
     qwenConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
   }
@@ -211,18 +211,18 @@ Memories are automatically recalled at session start and captured at session end
 /**
  * Configure all selected tools
  */
-export async function configureTools(tools: ToolConfig[]): Promise<void> {
+export function configureTools(tools: ToolConfig[]): void {
   for (const tool of tools) {
     try {
       switch (tool.name) {
         case 'Claude Code':
-          await configureClaudeCode(tool);
+          configureClaudeCode(tool);
           break;
         case 'Gemini CLI':
-          await configureGeminiCli(tool);
+          configureGeminiCli(tool);
           break;
         case 'Qwen Code':
-          await configureQwenCode(tool);
+          configureQwenCode(tool);
           break;
         default:
           console.log(`⚠ Unknown tool: ${tool.name}`);

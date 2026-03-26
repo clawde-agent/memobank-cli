@@ -7,8 +7,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import matter from 'gray-matter';
-import { MemoryFile, MemoryType, Confidence, Status } from '../types';
-import { loadAll, findRepoRoot, writeMemory, updateMemoryStatus } from './store';
+import type { MemoryFile, Confidence, Status } from '../types';
+import { loadAll, writeMemory, updateMemoryStatus } from './store';
 import { loadConfig } from '../config';
 
 /**
@@ -24,8 +24,8 @@ export interface AccessLog {
   lastAccessed: Date;
   accessCount: number;
   recallQueries: string[]; // Recent queries that recalled this memory
-  epochAccessCount: number;  // recalls since current team_epoch
-  team_epoch: string;        // ISO timestamp of current epoch start
+  epochAccessCount: number; // recalls since current team_epoch
+  team_epoch: string; // ISO timestamp of current epoch start
 }
 
 /**
@@ -33,16 +33,16 @@ export interface AccessLog {
  */
 export interface LifecycleConfig {
   // Tier thresholds
-  coreThreshold: number;        // Access count to become core
-  peripheralThreshold: number;  // Days without access to become peripheral
-  
+  coreThreshold: number; // Access count to become core
+  peripheralThreshold: number; // Days without access to become peripheral
+
   // Archival settings
-  archiveAfterDays: number;     // Days without access before archival suggestion
-  deleteAfterDays: number;      // Days archived before deletion suggestion
-  
+  archiveAfterDays: number; // Days without access before archival suggestion
+  deleteAfterDays: number; // Days archived before deletion suggestion
+
   // Correction settings
   allowCorrections: boolean;
-  correctionThreshold: number;  // Number of corrections before flagging
+  correctionThreshold: number; // Number of corrections before flagging
 }
 
 const DEFAULT_CONFIG: LifecycleConfig = {
@@ -73,20 +73,20 @@ function getCorrectionsPath(repoRoot: string): string {
  */
 export function loadAccessLogs(repoRoot: string): Record<string, AccessLog> {
   const accessLogPath = getAccessLogPath(repoRoot);
-  
+
   if (!fs.existsSync(accessLogPath)) {
     return {};
   }
-  
+
   try {
     const content = fs.readFileSync(accessLogPath, 'utf-8');
     const data = JSON.parse(content);
-    
+
     // Convert string dates back to Date objects
     for (const key of Object.keys(data)) {
       data[key].lastAccessed = new Date(data[key].lastAccessed);
     }
-    
+
     return data;
   } catch (error) {
     console.warn(`Could not load access logs: ${(error as Error).message}`);
@@ -100,25 +100,21 @@ export function loadAccessLogs(repoRoot: string): Record<string, AccessLog> {
 export function saveAccessLogs(repoRoot: string, logs: Record<string, AccessLog>): void {
   const accessLogPath = getAccessLogPath(repoRoot);
   const logDir = path.dirname(accessLogPath);
-  
+
   if (!fs.existsSync(logDir)) {
     fs.mkdirSync(logDir, { recursive: true });
   }
-  
+
   fs.writeFileSync(accessLogPath, JSON.stringify(logs, null, 2), 'utf-8');
 }
 
 /**
  * Record memory access
  */
-export function recordAccess(
-  repoRoot: string,
-  memoryPath: string,
-  query?: string
-): AccessLog {
+export function recordAccess(repoRoot: string, memoryPath: string, query?: string): AccessLog {
   const logs = loadAccessLogs(repoRoot);
   const now = new Date();
-  
+
   if (!logs[memoryPath]) {
     logs[memoryPath] = {
       memoryPath,
@@ -129,18 +125,18 @@ export function recordAccess(
       team_epoch: now.toISOString(),
     };
   }
-  
+
   const log = logs[memoryPath];
   log.lastAccessed = now;
   log.accessCount++;
-  
+
   if (query) {
     log.recallQueries.unshift(query);
     if (log.recallQueries.length > 10) {
       log.recallQueries.pop(); // Keep last 10 queries
     }
   }
-  
+
   saveAccessLogs(repoRoot, logs);
   return log;
 }
@@ -154,22 +150,22 @@ export function getMemoryTier(
   config: LifecycleConfig = DEFAULT_CONFIG
 ): MemoryTier {
   const accessCount = accessLog?.accessCount || 0;
-  
+
   // High access count → core
   if (accessCount >= config.coreThreshold) {
     return 'core';
   }
-  
+
   // Check days since last access
   if (accessLog?.lastAccessed) {
     const daysSinceAccess = (Date.now() - accessLog.lastAccessed.getTime()) / (1000 * 60 * 60 * 24);
-    
+
     // Long time without access → peripheral
     if (daysSinceAccess > config.peripheralThreshold) {
       return 'peripheral';
     }
   }
-  
+
   // Default → working
   return 'working';
 }
@@ -194,18 +190,18 @@ export function analyzeLifecycle(
   const memories = loadAll(repoRoot);
   const accessLogs = loadAccessLogs(repoRoot);
   const now = Date.now();
-  
+
   return memories.map((memory) => {
     const accessLog = accessLogs[memory.path];
     const tier = getMemoryTier(memory, accessLog, config);
-    
+
     const daysSinceAccess = accessLog?.lastAccessed
       ? (now - accessLog.lastAccessed.getTime()) / (1000 * 60 * 60 * 24)
       : null;
-    
+
     const isArchivalCandidate = (daysSinceAccess || 0) > config.archiveAfterDays;
     const isDeletionCandidate = isArchivalCandidate && tier === 'peripheral';
-    
+
     let suggestion: string | undefined;
     if (tier === 'core') {
       suggestion = 'Keep - frequently accessed';
@@ -214,7 +210,7 @@ export function analyzeLifecycle(
     } else if (isArchivalCandidate) {
       suggestion = 'Consider archiving';
     }
-    
+
     return {
       memory,
       tier,
@@ -246,11 +242,11 @@ export interface CorrectionRecord {
  */
 export function loadCorrections(repoRoot: string): Record<string, CorrectionRecord> {
   const correctionsPath = getCorrectionsPath(repoRoot);
-  
+
   if (!fs.existsSync(correctionsPath)) {
     return {};
   }
-  
+
   try {
     return JSON.parse(fs.readFileSync(correctionsPath, 'utf-8'));
   } catch (error) {
@@ -262,14 +258,17 @@ export function loadCorrections(repoRoot: string): Record<string, CorrectionReco
 /**
  * Save corrections log
  */
-export function saveCorrections(repoRoot: string, corrections: Record<string, CorrectionRecord>): void {
+export function saveCorrections(
+  repoRoot: string,
+  corrections: Record<string, CorrectionRecord>
+): void {
   const correctionsPath = getCorrectionsPath(repoRoot);
   const logDir = path.dirname(correctionsPath);
-  
+
   if (!fs.existsSync(logDir)) {
     fs.mkdirSync(logDir, { recursive: true });
   }
-  
+
   fs.writeFileSync(correctionsPath, JSON.stringify(corrections, null, 2), 'utf-8');
 }
 
@@ -284,7 +283,7 @@ export function recordCorrection(
   reason: string
 ): CorrectionRecord {
   const corrections = loadCorrections(repoRoot);
-  
+
   if (!corrections[memoryPath]) {
     corrections[memoryPath] = {
       memoryPath,
@@ -292,7 +291,7 @@ export function recordCorrection(
       flaggedForReview: false,
     };
   }
-  
+
   const record = corrections[memoryPath];
   record.corrections.push({
     date: new Date().toISOString(),
@@ -300,12 +299,12 @@ export function recordCorrection(
     correctedText,
     reason,
   });
-  
+
   // Flag for review if too many corrections
   if (record.corrections.length >= 3) {
     record.flaggedForReview = true;
   }
-  
+
   saveCorrections(repoRoot, corrections);
   return record;
 }
@@ -316,13 +315,13 @@ export function recordCorrection(
 export function getFlaggedMemories(repoRoot: string): MemoryFile[] {
   const corrections = loadCorrections(repoRoot);
   const memories = loadAll(repoRoot);
-  
+
   const flaggedPaths = new Set(
     Object.entries(corrections)
       .filter(([_, record]) => record.flaggedForReview)
       .map(([path, _]) => path)
   );
-  
+
   return memories.filter((m) => flaggedPaths.has(m.path));
 }
 
@@ -333,11 +332,11 @@ export function archiveMemory(repoRoot: string, memoryPath: string): void {
   const archiveDir = path.join(repoRoot, 'archive');
   const memoryName = path.basename(memoryPath);
   const archivePath = path.join(archiveDir, memoryName);
-  
+
   if (!fs.existsSync(archiveDir)) {
     fs.mkdirSync(archiveDir, { recursive: true });
   }
-  
+
   fs.renameSync(memoryPath, archivePath);
   console.log(`Archived: ${memoryName}`);
 }
@@ -360,14 +359,14 @@ export function updateMemory(
 ): void {
   const memories = loadAll(repoRoot);
   const memory = memories.find((m) => m.path === memoryPath);
-  
+
   if (!memory) {
     throw new Error(`Memory not found: ${memoryPath}`);
   }
-  
+
   // Apply updates
   const updatedMemory = { ...memory, ...updates };
-  
+
   // Write updated memory
   writeMemory(repoRoot, {
     type: updatedMemory.type,
@@ -378,7 +377,7 @@ export function updateMemory(
     confidence: updatedMemory.confidence as Confidence,
     created: updatedMemory.created,
   });
-  
+
   console.log(`Updated: ${path.basename(memoryPath)}`);
 }
 
@@ -390,19 +389,19 @@ export function generateLifecycleReport(
   config: LifecycleConfig = DEFAULT_CONFIG
 ): string {
   const analysis = analyzeLifecycle(repoRoot, config);
-  
+
   const core = analysis.filter((a) => a.tier === 'core');
   const working = analysis.filter((a) => a.tier === 'working');
   const peripheral = analysis.filter((a) => a.tier === 'peripheral');
   const archival = analysis.filter((a) => a.isArchivalCandidate);
-  
+
   let report = '## Memory Lifecycle Report\n\n';
   report += `**Total Memories:** ${analysis.length}\n\n`;
   report += `### Tier Distribution\n`;
   report += `- Core (frequently accessed): ${core.length}\n`;
   report += `- Working (active): ${working.length}\n`;
   report += `- Peripheral (inactive): ${peripheral.length}\n\n`;
-  
+
   if (archival.length > 0) {
     report += `### Archival Candidates (${archival.length})\n`;
     for (const item of archival.slice(0, 10)) {
@@ -413,7 +412,7 @@ export function generateLifecycleReport(
     }
     report += '\n';
   }
-  
+
   const flagged = getFlaggedMemories(repoRoot);
   if (flagged.length > 0) {
     report += `### Flagged for Review (${flagged.length})\n`;
@@ -423,7 +422,7 @@ export function generateLifecycleReport(
     }
     report += '\n';
   }
-  
+
   return report;
 }
 
@@ -434,7 +433,9 @@ export function generateLifecycleReport(
 export function updateStatusOnRecall(repoRoot: string, memoryPath: string): void {
   const logs = loadAccessLogs(repoRoot);
   const log = logs[memoryPath];
-  if (!log) { return; }
+  if (!log) {
+    return;
+  }
 
   // Increment epoch count
   log.epochAccessCount = (log.epochAccessCount ?? 0) + 1;
@@ -446,7 +447,9 @@ export function updateStatusOnRecall(repoRoot: string, memoryPath: string): void
     const content = fs.readFileSync(memoryPath, 'utf-8');
     const parsed = matter(content);
     currentStatus = parsed.data.status ?? 'experimental';
-  } catch { return; }
+  } catch {
+    return;
+  }
 
   // Apply upgrade rules
   const config = loadConfig(repoRoot);
@@ -497,8 +500,8 @@ export function resetEpoch(repoRoot: string): void {
   const logs = loadAccessLogs(repoRoot);
   const newEpoch = new Date().toISOString();
   for (const key of Object.keys(logs)) {
-    logs[key]!.epochAccessCount = 0;
-    logs[key]!.team_epoch = newEpoch;
+    logs[key].epochAccessCount = 0;
+    logs[key].team_epoch = newEpoch;
   }
   saveAccessLogs(repoRoot, logs);
 }

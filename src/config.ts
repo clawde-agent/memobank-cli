@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { MemoConfig, Engine, WorkspaceConfig, LifecycleConfig } from './types';
+import type { MemoConfig, Engine, WorkspaceConfig, LifecycleConfig } from './types';
 
 const DEFAULT_LIFECYCLE: LifecycleConfig = {
   experimental_ttl_days: 30,
@@ -32,7 +32,9 @@ function getConfigPath(repoRoot: string): string {
 
 export function loadConfig(repoRoot: string): MemoConfig {
   const configPath = getConfigPath(repoRoot);
-  if (!fs.existsSync(configPath)) { return { ...DEFAULT_CONFIG }; }
+  if (!fs.existsSync(configPath)) {
+    return { ...DEFAULT_CONFIG };
+  }
 
   try {
     const content = fs.readFileSync(configPath, 'utf-8');
@@ -63,7 +65,9 @@ export function loadConfig(repoRoot: string): MemoConfig {
 export function writeConfig(repoRoot: string, config: MemoConfig): void {
   const configPath = getConfigPath(repoRoot);
   const configDir = path.dirname(configPath);
-  if (!fs.existsSync(configDir)) { fs.mkdirSync(configDir, { recursive: true }); }
+  if (!fs.existsSync(configDir)) {
+    fs.mkdirSync(configDir, { recursive: true });
+  }
   try {
     const content = yaml.dump(config, { indent: 2 });
     fs.writeFileSync(configPath, content, 'utf-8');

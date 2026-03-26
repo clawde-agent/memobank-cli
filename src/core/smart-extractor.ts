@@ -4,8 +4,7 @@
  * Ported from memory-lancedb-pro
  */
 
-import { ExtractionResult } from '../types';
-import { isNoise, hasHighValueIndicators, calculateValueScore } from './noise-filter';
+import type { ExtractionResult } from '../types';
 
 const SYSTEM_PROMPT = `You extract structured memories from AI coding session summaries.
 Return a JSON array. Each item:
@@ -84,10 +83,9 @@ export async function extract(
       return [];
     }
 
-    const data = (await response.json()) as any;
-    const content = data.content[0]?.text || '';
+    const data = await response.json();
+    const content = (data as any).content?.[0]?.text || '';
 
-    // Parse JSON from response
     const jsonMatch = content.match(/\[[\s\S]*\]/);
     if (!jsonMatch) {
       console.error('Could not parse JSON from LLM response');

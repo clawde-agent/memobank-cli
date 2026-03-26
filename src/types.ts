@@ -14,7 +14,7 @@ export interface MemoryFile {
   updated?: string;
   review_after?: string;
   confidence?: Confidence;
-  status?: Status;           // NEW
+  status?: Status; // NEW
   content: string;
   scope?: MemoryScope;
 }
@@ -31,12 +31,13 @@ export interface RecallResult {
   scoreBreakdown?: ScoreBreakdown;
 }
 
-export interface WorkspaceConfig {          // renamed from TeamConfig
+export interface WorkspaceConfig {
+  // renamed from TeamConfig
   remote: string;
-  enabled?: boolean;                        // opt-in flag
+  enabled?: boolean; // opt-in flag
   auto_sync: boolean;
   branch: string;
-  path?: string;                            // subdirectory within remote repo
+  path?: string; // subdirectory within remote repo
 }
 
 export interface LifecycleConfig {
@@ -59,8 +60,8 @@ export interface MemoConfig {
   };
   search: { use_tags: boolean; use_summary: boolean };
   review: { enabled: boolean };
-  lifecycle?: LifecycleConfig;              // NEW
-  workspace?: WorkspaceConfig;             // renamed from team
+  lifecycle?: LifecycleConfig; // NEW
+  workspace?: WorkspaceConfig; // renamed from team
   reranker?: {
     enabled: boolean;
     provider: 'jina' | 'cohere';
