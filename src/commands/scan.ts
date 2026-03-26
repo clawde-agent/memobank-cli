@@ -31,7 +31,7 @@ export function scanFile(filePath: string): string[] {
  */
 export function scanDirectory(dir: string): ScanResult[] {
   const results: ScanResult[] = [];
-  const files = glob.sync(path.join(dir, '**', '*.md'));
+  const files = glob.sync(path.join(dir, '**', '*.md').split(path.sep).join('/'));
 
   for (const file of files) {
     const findings = scanFile(file);

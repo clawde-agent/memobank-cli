@@ -44,7 +44,7 @@ export function migrate(
 
   // Collect personal/ moves
   if (fs.existsSync(personalDir)) {
-    const files = glob.sync(path.join(personalDir, '**', '*.md'));
+    const files = glob.sync(path.join(personalDir, '**', '*.md').split(path.sep).join('/'));
     for (const srcFile of files) {
       const rel = path.relative(personalDir, srcFile);
       const dst = path.join(globalDir, rel);
@@ -54,7 +54,7 @@ export function migrate(
 
   // Collect team/ moves
   if (fs.existsSync(teamDir)) {
-    const files = glob.sync(path.join(teamDir, '**', '*.md'));
+    const files = glob.sync(path.join(teamDir, '**', '*.md').split(path.sep).join('/'));
     for (const srcFile of files) {
       const rel = path.relative(teamDir, srcFile);
       const dst = path.join(repoRoot, rel);

@@ -181,7 +181,7 @@ export function writePending(memoBankDir: string, entry: PendingEntry): void {
 function loadFromDir(baseDir: string, scope: MemoryScope): MemoryFile[] {
   const memories: MemoryFile[] = [];
   for (const type of MEMORY_TYPES) {
-    const pattern = path.join(baseDir, type, '**', '*.md');
+    const pattern = path.join(baseDir, type, '**', '*.md').split(path.sep).join('/');
     const files = glob.sync(pattern);
     for (const filePath of files) {
       try {
