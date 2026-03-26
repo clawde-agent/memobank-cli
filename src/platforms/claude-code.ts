@@ -68,12 +68,15 @@ export function installClaudeCode(
     const stopHooks = hooks.Stop as unknown[];
     const filtered = stopHooks.filter((h: unknown) => {
       const hookObj = h as Record<string, unknown>;
+      // Legacy format: { hooks: [{ command: '...' }] }
       const hooksArray = hookObj.hooks as unknown[] | undefined;
-      if (!hooksArray || hooksArray.length === 0) {
-        return false;
+      if (hooksArray && hooksArray.length > 0) {
+        const firstHook = hooksArray[0] as Record<string, unknown> | undefined;
+        const command = firstHook?.command as string | undefined;
+        return !command?.includes('memo capture');
       }
-      const firstHook = hooksArray[0] as Record<string, unknown> | undefined;
-      const command = firstHook?.command as string | undefined;
+      // Flat format: { command: '...' } — keep unless it is a memo capture hook
+      const command = hookObj.command as string | undefined;
       return !command?.includes('memo capture');
     });
     const filteredUnknown = filtered as unknown;
@@ -85,6 +88,17 @@ export function installClaudeCode(
     if (Object.keys(hooks).length === 0) {
       delete settings.hooks;
     }
+  }
+
+  // Add process-queue Stop hook (merge, no duplicates)
+  const STOP_HOOK = 'memo process-queue --background';
+  if (!settings.hooks) {
+    settings.hooks = {};
+  }
+  const hookMap = settings.hooks;
+  const currentStop = (hookMap.Stop as Array<{ command: string }> | undefined) ?? [];
+  if (!currentStop.some((h) => h.command === STOP_HOOK)) {
+    hookMap.Stop = [...currentStop, { command: STOP_HOOK }];
   }
 
   // Write settings
