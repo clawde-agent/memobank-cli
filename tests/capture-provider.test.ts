@@ -35,6 +35,61 @@ describe('CaptureConfig', () => {
   });
 });
 
+import { buildUserMessage, validateExtractionResult } from '../src/core/capture-provider';
+
+describe('buildUserMessage', () => {
+  it('wraps text in session tags', () => {
+    expect(buildUserMessage('hello world')).toBe('<session>\nhello world\n</session>');
+  });
+
+  it('escapes < and > to prevent tag injection', () => {
+    const msg = buildUserMessage('use <session> tags');
+    expect(msg).toContain('&lt;session&gt;');
+    expect(msg).not.toMatch(/<session>use/);
+  });
+
+  it('escapes closing tags', () => {
+    expect(buildUserMessage('</session>')).toContain('&lt;/session&gt;');
+  });
+});
+
+describe('validateExtractionResult', () => {
+  const valid = {
+    name: 'my-lesson',
+    type: 'lesson',
+    description: 'A thing',
+    tags: ['api'],
+    confidence: 'medium',
+    content: 'Details',
+  };
+
+  it('returns the item when valid', () => {
+    expect(validateExtractionResult(valid)).not.toBeNull();
+  });
+
+  it('returns null for non-object', () => {
+    expect(validateExtractionResult('string')).toBeNull();
+    expect(validateExtractionResult(null)).toBeNull();
+  });
+
+  it('returns null when required fields missing', () => {
+    const { content: _c, ...noContent } = valid;
+    expect(validateExtractionResult(noContent)).toBeNull();
+  });
+
+  it('returns null for invalid type enum', () => {
+    expect(validateExtractionResult({ ...valid, type: 'hack' })).toBeNull();
+  });
+
+  it('returns null when name exceeds 100 chars', () => {
+    expect(validateExtractionResult({ ...valid, name: 'a'.repeat(101) })).toBeNull();
+  });
+
+  it('returns null when content exceeds 10 000 chars', () => {
+    expect(validateExtractionResult({ ...valid, content: 'x'.repeat(10_001) })).toBeNull();
+  });
+});
+
 describe('config — capture field', () => {
   let tmpDir: string;
 
