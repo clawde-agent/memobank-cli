@@ -57,7 +57,7 @@ describe('loadAll — three-tier', () => {
     const globalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-global-'));
     writeTestMemory(globalDir, 'lesson', '2026-01-01-global.md');
     const memories = loadAll(repo, 'all', globalDir);
-    expect(memories.some(m => m.scope === 'personal')).toBe(true);
+    expect(memories.some((m) => m.scope === 'personal')).toBe(true);
     fs.rmSync(repo, { recursive: true });
     fs.rmSync(globalDir, { recursive: true });
   });
@@ -69,7 +69,7 @@ describe('loadAll — three-tier', () => {
     writeTestMemory(repo, 'lesson', sameFile);
     writeTestMemory(globalDir, 'lesson', sameFile);
     const memories = loadAll(repo, 'all', globalDir);
-    const lessons = memories.filter(m => m.type === 'lesson');
+    const lessons = memories.filter((m) => m.type === 'lesson');
     expect(lessons.length).toBe(1);
     expect(lessons[0].scope).toBe('project');
     fs.rmSync(repo, { recursive: true });
@@ -89,8 +89,13 @@ describe('writeMemory', () => {
   it('writes status: experimental when status provided', () => {
     const repo = makeTempRepo();
     writeMemory(repo, {
-      name: 'test', type: 'lesson', description: 'desc', tags: [],
-      created: '2026-01-01', content: 'body', status: 'experimental',
+      name: 'test',
+      type: 'lesson',
+      description: 'desc',
+      tags: [],
+      created: '2026-01-01',
+      content: 'body',
+      status: 'experimental',
     });
     const files = fs.readdirSync(path.join(repo, 'lesson'));
     expect(files.length).toBe(1);

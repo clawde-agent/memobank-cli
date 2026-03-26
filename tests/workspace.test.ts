@@ -25,7 +25,10 @@ describe('workspacePublish', () => {
     // Create source file in repo/lesson/
     fs.mkdirSync(path.join(repo, 'lesson'), { recursive: true });
     const srcFile = path.join(repo, 'lesson', '2026-01-01-test.md');
-    fs.writeFileSync(srcFile, '---\nname: test\ntype: lesson\ndescription: desc\ntags: []\ncreated: "2026-01-01"\nstatus: active\n---\n\nContent');
+    fs.writeFileSync(
+      srcFile,
+      '---\nname: test\ntype: lesson\ndescription: desc\ntags: []\ncreated: "2026-01-01"\nstatus: active\n---\n\nContent'
+    );
     await workspacePublish(srcFile, repo, wsDir);
     expect(fs.existsSync(path.join(wsDir, 'lesson', '2026-01-01-test.md'))).toBe(true);
     fs.rmSync(repo, { recursive: true });
