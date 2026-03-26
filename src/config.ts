@@ -55,6 +55,7 @@ export function loadConfig(repoRoot: string): MemoConfig {
       lifecycle: { ...DEFAULT_LIFECYCLE, ...loaded?.lifecycle },
       ...(loaded?.workspace ? { workspace: loaded.workspace as WorkspaceConfig } : {}),
       ...(loaded?.reranker ? { reranker: loaded.reranker } : {}),
+      ...(loaded?.capture ? { capture: loaded.capture } : {}),
     };
   } catch (error) {
     console.warn(`Could not load config: ${(error as Error).message}`);
