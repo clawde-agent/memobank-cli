@@ -102,3 +102,8 @@ temp/
 # Test Data (memobank specific)
 # ======================
 test-memobank/
+
+# ======================
+# Memobank pending queue
+# ======================
+.memobank/.pending/
