@@ -110,7 +110,7 @@ function getDetectedPlatforms(items: MultiSelectItem[]): string[] {
   return items.filter(i => i.hint?.includes('✓')).map(i => i.value);
 }
 
-type Step = 'project-name' | 'project-dir' | 'platforms' | 'auto-memory-check' | 'workspace-remote' | 'search-engine' | 'embedding-provider' | 'ollama-url' | 'ollama-model' | 'openai-key' | 'jina-key' | 'reranker' | 'reranker-provider' | 'done';
+type Step = 'project-name' | 'project-dir' | 'platforms' | 'auto-memory-check' | 'workspace-remote' | 'search-engine' | 'embedding-provider' | 'ollama-url' | 'ollama-model' | 'openai-key' | 'jina-key' | 'reranker' | 'reranker-provider' | 'reranker-key' | 'done';
 
 interface OnboardingState {
   step: Step;
@@ -126,6 +126,7 @@ interface OnboardingState {
   embeddingApiKey: string;
   enableReranker: boolean;
   rerankerProvider: string;
+  rerankerApiKey: string;
 }
 
 async function runSetup(state: OnboardingState, gitRoot: string): Promise<{ lines: string[]; autoMemoryWarning: boolean }> {
@@ -228,7 +229,19 @@ async function runSetup(state: OnboardingState, gitRoot: string): Promise<{ line
     };
     writeConfig(repoRoot, config);
     const keyVar = state.rerankerProvider === 'jina' ? 'JINA_API_KEY' : 'COHERE_API_KEY';
-    summaryLines.push(`Reranker: ${state.rerankerProvider} (set ${keyVar} env var)`);
+    if (state.rerankerApiKey.trim()) {
+      const envPath = path.join(repoRoot, '.env');
+      const envLine = `${keyVar}=${state.rerankerApiKey.trim()}\n`;
+      const existing = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : '';
+      if (!existing.includes(`${keyVar}=`)) {
+        fs.writeFileSync(envPath, existing + envLine, 'utf-8');
+        summaryLines.push(`Reranker: ${state.rerankerProvider} — API key saved to ${envPath}`);
+      } else {
+        summaryLines.push(`Reranker: ${state.rerankerProvider} — ${keyVar} already in ${envPath}`);
+      }
+    } else {
+      summaryLines.push(`Reranker: ${state.rerankerProvider} — set ${keyVar} in ${path.join(repoRoot, '.env')} or your shell env`);
+    }
   }
 
   return { lines: summaryLines, autoMemoryWarning };
@@ -328,6 +341,7 @@ export async function onboardingCommand(): Promise<void> {
       embeddingApiKey: '',
       enableReranker: false,
       rerankerProvider: '',
+      rerankerApiKey: '',
     });
     const [nameInput, setNameInput] = useState(defaultName);
     const [projectDirInput, setProjectDirInput] = useState('.memobank');
@@ -336,6 +350,7 @@ export async function onboardingCommand(): Promise<void> {
     const [ollamaModelInput, setOllamaModelInput] = useState('mxbai-embed-large');
     const [openaiKeyInput, setOpenaiKeyInput] = useState('');
     const [jinaKeyInput, setJinaKeyInput] = useState('');
+    const [rerankerKeyInput, setRerankerKeyInput] = useState('');
     const [done, setDone] = useState(false);
     const [summary, setSummary] = useState<string[]>([]);
     const [autoMemoryWarning, setAutoMemoryWarning] = useState(false);
@@ -550,13 +565,26 @@ export async function onboardingCommand(): Promise<void> {
         React.createElement(Text, { bold: true }, 'Reranker provider:'),
         React.createElement(SelectInput, {
           items: [
-            { label: 'Jina AI  (set JINA_API_KEY)', value: 'jina' },
-            { label: 'Cohere   (set COHERE_API_KEY)', value: 'cohere' },
+            { label: 'Jina AI  (JINA_API_KEY)', value: 'jina' },
+            { label: 'Cohere   (COHERE_API_KEY)', value: 'cohere' },
           ],
           onSelect: (item: { label: string; value: unknown }) => {
+            setState(s => ({ ...s, step: 'reranker-key', enableReranker: true, rerankerProvider: String(item.value) }));
+          },
+        }),
+      ) : null,
+
+      state.step === 'reranker-key' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, { bold: true }, `${state.rerankerProvider === 'jina' ? 'Jina' : 'Cohere'} API key:`),
+        React.createElement(Text, { dimColor: true }, `  Will be saved to ${path.join(gitRoot, state.projectDir, '.env')}`),
+        React.createElement(Text, { dimColor: true }, '  Press Enter to skip and set the key manually later:'),
+        React.createElement(TextInput, {
+          value: rerankerKeyInput,
+          onChange: setRerankerKeyInput,
+          onSubmit: (value: string) => {
             if (setupRunning.current) return;
             setupRunning.current = true;
-            const finalState = { ...state, step: 'done' as Step, enableReranker: true, rerankerProvider: String(item.value) };
+            const finalState = { ...state, step: 'done' as Step, rerankerApiKey: value };
             setState(finalState);
             runSetup(finalState, gitRoot).then(({ lines, autoMemoryWarning: warn }) => {
               setSummary(lines);
