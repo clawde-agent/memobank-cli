@@ -39,6 +39,27 @@ Return a JSON array. Each item:
 
 Extract only significant learnings. Skip trivial actions. Max 3 items per session.`;
 /**
+ * Fetch with exponential backoff retry for transient failures
+ */
+async function fetchWithRetry(url, options, maxRetries = 3) {
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    for (let i = 0; i < maxRetries; i++) {
+        const response = await fetch(url, options);
+        // Success or client error (4xx) - don't retry
+        if (response.ok || response.status < 500) {
+            return response;
+        }
+        // Server error (5xx) - retry with exponential backoff
+        if (i < maxRetries - 1) {
+            const waitTime = Math.pow(2, i) * 1000; // 1s, 2s, 4s
+            console.warn(`API request failed (status: ${response.status}), retrying in ${waitTime}ms...`);
+            await sleep(waitTime);
+        }
+    }
+    // Final attempt - return whatever we get (will be handled by caller)
+    return fetch(url, options);
+}
+/**
  * Extract memories from session text using LLM
  * Falls back to no-op if no API key is configured
  */
@@ -50,8 +71,10 @@ async function extract(sessionText, apiKey, model = 'claude-3-5-sonnet-20241022'
         return [];
     }
     try {
-        // Call Claude API
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
+        // Call Claude API with timeout and retry
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+        const response = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -69,15 +92,30 @@ async function extract(sessionText, apiKey, model = 'claude-3-5-sonnet-20241022'
                     },
                 ],
             }),
+            signal: controller.signal,
         });
+        clearTimeout(timeoutId);
         if (!response.ok) {
-            const error = await response.text();
-            console.error(`LLM extraction failed: ${error}`);
+            const errorText = await response.text();
+            let errorMessage = `LLM extraction failed: ${response.status} ${response.statusText}`;
+            // Provide helpful error messages for common issues
+            if (response.status === 401) {
+                errorMessage += ' - Invalid API key. Check your ANTHROPIC_API_KEY environment variable.';
+            }
+            else if (response.status === 429) {
+                errorMessage += ' - Rate limit exceeded or insufficient credits.';
+            }
+            else if (response.status === 500) {
+                errorMessage += ' - Anthropic API server error. Try again later.';
+            }
+            else if (errorText) {
+                errorMessage += ` - ${errorText}`;
+            }
+            console.error(errorMessage);
             return [];
         }
-        const data = (await response.json());
-        const content = data.content[0]?.text || '';
-        // Parse JSON from response
+        const data = await response.json();
+        const content = data.content?.[0]?.text || '';
         const jsonMatch = content.match(/\[[\s\S]*\]/);
         if (!jsonMatch) {
             console.error('Could not parse JSON from LLM response');
@@ -95,7 +133,12 @@ async function extract(sessionText, apiKey, model = 'claude-3-5-sonnet-20241022'
         });
     }
     catch (error) {
-        console.error(`LLM extraction error: ${error.message}`);
+        if (error.name === 'AbortError') {
+            console.error('LLM extraction timed out after 30 seconds');
+        }
+        else {
+            console.error(`LLM extraction error: ${error.message}`);
+        }
         return [];
     }
 }

@@ -44,6 +44,26 @@ const retriever_1 = require("../core/retriever");
 const text_engine_1 = require("../engines/text-engine");
 const embedding_1 = require("../core/embedding");
 async function recallCommand(query, options) {
+    // Validate query
+    if (!query || !query.trim()) {
+        console.error('Error: Query cannot be empty');
+        process.exit(1);
+    }
+    if (query.length > 1000) {
+        console.error('Error: Query too long (max 1000 characters)');
+        process.exit(1);
+    }
+    // Validate top
+    if (options.top !== undefined) {
+        if (!Number.isInteger(options.top) || options.top < 1) {
+            console.error('Error: --top must be a positive integer');
+            process.exit(1);
+        }
+        if (options.top > 100) {
+            console.error('Error: --top cannot exceed 100');
+            process.exit(1);
+        }
+    }
     const repoRoot = (0, store_1.findRepoRoot)(process.cwd(), options.repo);
     const config = (0, config_1.loadConfig)(repoRoot);
     if (options.top) {

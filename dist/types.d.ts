@@ -16,6 +16,7 @@ export interface MemoryFile {
     status?: Status;
     content: string;
     scope?: MemoryScope;
+    project?: string;
 }
 export interface ScoreBreakdown {
     keyword: number;

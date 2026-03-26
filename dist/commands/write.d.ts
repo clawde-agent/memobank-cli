@@ -2,7 +2,7 @@
  * Write command
  * Interactive + non-interactive memory creation
  */
-import { MemoryType } from '../types';
+import type { MemoryType } from '../types';
 export interface WriteOptions {
     name?: string;
     description?: string;

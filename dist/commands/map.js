@@ -6,7 +6,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.mapCommand = mapCommand;
 const store_1 = require("../core/store");
-async function mapCommand(options = {}) {
+function mapCommand(options = {}) {
     const cwd = process.cwd();
     const repoRoot = (0, store_1.findRepoRoot)(cwd, options.repo);
     let memories = (0, store_1.loadAll)(repoRoot);

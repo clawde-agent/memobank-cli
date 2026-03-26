@@ -3,7 +3,7 @@
  * LLM-powered extraction for memo capture
  * Ported from memory-lancedb-pro
  */
-import { ExtractionResult } from '../types';
+import type { ExtractionResult } from '../types';
 /**
  * Extract memories from session text using LLM
  * Falls back to no-op if no API key is configured

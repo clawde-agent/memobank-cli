@@ -80,7 +80,7 @@ For more information, run: \`memo --help\`
 /**
  * Install memobank for Cursor
  */
-async function installCursor(cwd) {
+function installCursor(cwd) {
     const cursorDir = path.join(cwd, '.cursor', 'rules');
     // Ensure .cursor/rules directory exists
     if (!fs.existsSync(cursorDir)) {
@@ -89,24 +89,24 @@ async function installCursor(cwd) {
         }
         catch (error) {
             console.error(`Could not create .cursor/rules: ${error.message}`);
-            return false;
+            return Promise.resolve(false);
         }
     }
     const rulePath = path.join(cursorDir, 'memobank.mdc');
     // Check if already exists
     if (fs.existsSync(rulePath)) {
         console.log('⊘ Cursor: memobank.mdc already exists');
-        return true;
+        return Promise.resolve(true);
     }
     // Write rule file
     try {
         fs.writeFileSync(rulePath, MEMOBANK_RULE, 'utf-8');
         console.log(`✓ Cursor: memobank.mdc created`);
-        return true;
+        return Promise.resolve(true);
     }
     catch (error) {
         console.error(`Could not write memobank.mdc: ${error.message}`);
-        return false;
+        return Promise.resolve(false);
     }
 }
 //# sourceMappingURL=cursor.js.map

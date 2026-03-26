@@ -3,7 +3,7 @@
  * Ported from memory-lancedb-pro
  * Formula: score = recency_weight × frequency_weight × importance_weight
  */
-import { MemoryFile } from '../types';
+import type { MemoryFile } from '../types';
 /**
  * Compute decay score for a memory (0-1)
  * Based on recency, access frequency, and confidence
