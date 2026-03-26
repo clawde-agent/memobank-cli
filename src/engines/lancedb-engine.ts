@@ -270,19 +270,19 @@ export class LanceDbEngine implements EngineAdapter {
   }
 
   /**
-   * Convert LanceDB row to MemoryFile
+   * Convert LanceDB row to MemoryFile with defensive null checks
    */
   private rowToMemory(row: Record<string, unknown>): MemoryFile {
     return {
-      path: row.path as string,
-      name: row.name as string,
-      type: this.inferType(row.name as string),
-      description: row.description as string,
-      tags: (row.tags as string).split(', ').filter((t: string) => t.length > 0),
-      created: row.created as string,
+      path: (row.path as string) || '',
+      name: (row.name as string) || '',
+      type: this.inferType((row.name as string) || ''),
+      description: (row.description as string) || '',
+      tags: ((row.tags as string) || '').split(', ').filter((t: string) => t.length > 0),
+      created: (row.created as string) || new Date().toISOString(),
       updated: row.updated as string,
-      confidence: row.confidence as 'low' | 'medium' | 'high',
-      content: row.content as string,
+      confidence: (row.confidence as 'low' | 'medium' | 'high') || 'medium',
+      content: (row.content as string) || '',
     };
   }
 

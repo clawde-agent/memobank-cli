@@ -100,7 +100,12 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
     // Read from provided session text or file
     if (options.session === '-') {
       // Read from stdin
-      sessionText = await readStdin();
+      try {
+        sessionText = await readStdin();
+      } catch (err) {
+        error(`Failed to read from stdin: ${(err as Error).message}`);
+        return;
+      }
     } else if (fs.existsSync(options.session)) {
       sessionText = fs.readFileSync(options.session, 'utf-8');
     } else {
@@ -194,16 +199,25 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
 }
 
 /**
- * Read from stdin
+ * Read from stdin with timeout
  */
-function readStdin(): Promise<string> {
-  return new Promise((resolve) => {
+function readStdin(timeoutMs: number = 30000): Promise<string> {
+  return new Promise((resolve, reject) => {
     let data = '';
+    const timeoutId = setTimeout(() => {
+      reject(new Error('Stdin read timeout after 30 seconds'));
+    }, timeoutMs);
+
     process.stdin.on('data', (chunk: Buffer | string) => {
       data += typeof chunk === 'string' ? chunk : chunk.toString();
     });
     process.stdin.on('end', () => {
+      clearTimeout(timeoutId);
       resolve(data);
+    });
+    process.stdin.on('error', (err) => {
+      clearTimeout(timeoutId);
+      reject(err);
     });
   });
 }

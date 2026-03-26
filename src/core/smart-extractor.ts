@@ -40,6 +40,36 @@ Return a JSON array. Each item:
 Extract only significant learnings. Skip trivial actions. Max 3 items per session.`;
 
 /**
+ * Fetch with exponential backoff retry for transient failures
+ */
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries: number = 3
+): Promise<Response> {
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  for (let i = 0; i < maxRetries; i++) {
+    const response = await fetch(url, options);
+
+    // Success or client error (4xx) - don't retry
+    if (response.ok || response.status < 500) {
+      return response;
+    }
+
+    // Server error (5xx) - retry with exponential backoff
+    if (i < maxRetries - 1) {
+      const waitTime = Math.pow(2, i) * 1000; // 1s, 2s, 4s
+      console.warn(`API request failed (status: ${response.status}), retrying in ${waitTime}ms...`);
+      await sleep(waitTime);
+    }
+  }
+
+  // Final attempt - return whatever we get (will be handled by caller)
+  return fetch(url, options);
+}
+
+/**
  * Extract memories from session text using LLM
  * Falls back to no-op if no API key is configured
  */
@@ -56,8 +86,11 @@ export async function extract(
   }
 
   try {
-    // Call Claude API
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    // Call Claude API with timeout and retry
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
+    const response = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -75,11 +108,27 @@ export async function extract(
           },
         ],
       }),
+      signal: controller.signal,
     });
 
+    clearTimeout(timeoutId);
+
     if (!response.ok) {
-      const error = await response.text();
-      console.error(`LLM extraction failed: ${error}`);
+      const errorText = await response.text();
+      let errorMessage = `LLM extraction failed: ${response.status} ${response.statusText}`;
+
+      // Provide helpful error messages for common issues
+      if (response.status === 401) {
+        errorMessage += ' - Invalid API key. Check your ANTHROPIC_API_KEY environment variable.';
+      } else if (response.status === 429) {
+        errorMessage += ' - Rate limit exceeded or insufficient credits.';
+      } else if (response.status === 500) {
+        errorMessage += ' - Anthropic API server error. Try again later.';
+      } else if (errorText) {
+        errorMessage += ` - ${errorText}`;
+      }
+
+      console.error(errorMessage);
       return [];
     }
 
@@ -106,7 +155,11 @@ export async function extract(
       );
     });
   } catch (error) {
-    console.error(`LLM extraction error: ${(error as Error).message}`);
+    if ((error as Error).name === 'AbortError') {
+      console.error('LLM extraction timed out after 30 seconds');
+    } else {
+      console.error(`LLM extraction error: ${(error as Error).message}`);
+    }
     return [];
   }
 }
