@@ -54,6 +54,7 @@ const workspace_1 = require("./commands/workspace");
 const init_1 = require("./commands/init");
 const migrate_1 = require("./commands/migrate");
 const scan_1 = require("./commands/scan");
+const process_queue_1 = require("./commands/process-queue");
 const store_1 = require("./core/store");
 const config_1 = require("./config");
 const fs = __importStar(require("fs"));
@@ -304,7 +305,13 @@ program
         else {
             await (0, lifecycle_1.lifecycleCommand)({
                 repo: options.repo,
-                report: options.report || (!options.tier && !options.archive && !options.delete && !options.flagged && !options.resetEpoch && !options.scan),
+                report: options.report ||
+                    (!options.tier &&
+                        !options.archive &&
+                        !options.delete &&
+                        !options.flagged &&
+                        !options.resetEpoch &&
+                        !options.scan),
                 archive: options.archive,
                 delete: options.delete,
                 flagged: options.flagged,
@@ -455,6 +462,14 @@ program
         console.error(`Error: ${error.message}`);
         process.exit(1);
     }
+});
+// Process-queue command
+program
+    .command('process-queue')
+    .description('Process pending memory queue (write candidates to memory files)')
+    .option('--background', 'Spawn as background process and return immediately')
+    .action(async (options) => {
+    await (0, process_queue_1.processQueueCommand)({ background: options.background });
 });
 // Parse and execute
 program.parse(process.argv);

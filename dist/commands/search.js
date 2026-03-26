@@ -43,6 +43,15 @@ const store_1 = require("../core/store");
 const text_engine_1 = require("../engines/text-engine");
 const embedding_1 = require("../core/embedding");
 async function search(query, options = {}) {
+    // Validate query
+    if (!query || !query.trim()) {
+        console.error('Error: Query cannot be empty');
+        process.exit(1);
+    }
+    if (query.length > 1000) {
+        console.error('Error: Query too long (max 1000 characters)');
+        process.exit(1);
+    }
     const cwd = process.cwd();
     const repoRoot = (0, store_1.findRepoRoot)(cwd, options.repo);
     const config = (0, config_1.loadConfig)(repoRoot);

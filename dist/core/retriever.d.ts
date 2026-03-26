@@ -2,8 +2,8 @@
  * Retriever module
  * Orchestrates engine search and formats output for MEMORY.md injection
  */
-import { RecallResult, MemoConfig, MemoryScope } from '../types';
-import { EngineAdapter } from '../engines/engine-adapter';
+import type { RecallResult, MemoConfig, MemoryScope } from '../types';
+import type { EngineAdapter } from '../engines/engine-adapter';
 /**
  * Recall memories for a query
  */

@@ -2,9 +2,9 @@
  * LanceDB Engine
  * Vector search engine using LanceDB with hybrid BM25 + vector search
  */
-import { MemoryFile, RecallResult } from '../types';
-import { EngineAdapter } from './engine-adapter';
-import { EmbeddingGenerator } from '../core/embedding';
+import type { MemoryFile, RecallResult } from '../types';
+import type { EngineAdapter } from './engine-adapter';
+import type { EmbeddingGenerator } from '../core/embedding';
 export declare class LanceDbEngine implements EngineAdapter {
     private dbPath;
     private embeddingGenerator;
@@ -40,11 +40,11 @@ export declare class LanceDbEngine implements EngineAdapter {
      */
     private memoryId;
     /**
-     * Check if memory has been updated since last indexing
+     * Hash memory content for change detection
      */
-    private isMemoryUpdated;
+    private contentHash;
     /**
-     * Convert LanceDB row to MemoryFile
+     * Convert LanceDB row to MemoryFile with defensive null checks
      */
     private rowToMemory;
     /**

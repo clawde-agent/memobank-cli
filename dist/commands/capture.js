@@ -41,25 +41,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.capture = capture;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
-const crypto = __importStar(require("crypto"));
 const smart_extractor_1 = require("../core/smart-extractor");
 const sanitizer_1 = require("../core/sanitizer");
 const store_1 = require("../core/store");
+const queue_processor_1 = require("../core/queue-processor");
 const config_1 = require("../config");
 const noise_filter_1 = require("../core/noise-filter");
-/**
- * Hash a string for deduplication
- */
-function hashString(str) {
-    return crypto.createHash('sha256').update(str).digest('hex');
-}
-/**
- * Check if a memory already exists (by name hash)
- */
-function isDuplicate(name, existingMemories) {
-    const hash = hashString(name);
-    return existingMemories.some((m) => hashString(m.name) === hash);
-}
 async function capture(options = {}) {
     const cwd = process.cwd();
     const repoRoot = (0, store_1.findRepoRoot)(cwd, options.repo);
@@ -67,12 +54,14 @@ async function capture(options = {}) {
     // Silent mode for hooks
     const isSilent = options.silent || process.env.SILENT === '1';
     const log = (...args) => {
-        if (!isSilent)
+        if (!isSilent) {
             console.log(...args);
+        }
     };
     const error = (...args) => {
-        if (!isSilent)
+        if (!isSilent) {
             console.error(...args);
+        }
     };
     // 1. Get session text
     let sessionText = '';
@@ -120,7 +109,13 @@ async function capture(options = {}) {
         // Read from provided session text or file
         if (options.session === '-') {
             // Read from stdin
-            sessionText = await readStdin();
+            try {
+                sessionText = await readStdin();
+            }
+            catch (err) {
+                error(`Failed to read from stdin: ${err.message}`);
+                return;
+            }
         }
         else if (fs.existsSync(options.session)) {
             sessionText = fs.readFileSync(options.session, 'utf-8');
@@ -167,47 +162,50 @@ async function capture(options = {}) {
         return;
     }
     console.log(`✓ ${highValueMemories.length} memories passed value filter\n`);
-    // 5. Load existing memories for deduplication
-    const existingMemories = (0, store_1.loadAll)(repoRoot);
-    // 6. Deduplicate and write
-    let written = 0;
-    for (const item of highValueMemories) {
-        if (isDuplicate(item.name, existingMemories)) {
-            console.log(`Skipping duplicate: ${item.name}`);
-            continue;
-        }
-        const memory = {
+    // 5. Write to pending queue, then process immediately
+    // (Phase 2/3: replace processQueue call here with an async trigger)
+    const entry = {
+        id: `LRN-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: new Date().toISOString(),
+        projectId: (0, store_1.resolveProjectId)(repoRoot),
+        candidates: highValueMemories.map((item) => ({
             name: item.name,
             type: item.type,
             description: item.description,
             tags: item.tags,
             confidence: item.confidence,
             content: item.content,
-            created: new Date().toISOString(),
-        };
-        const filePath = (0, store_1.writeMemory)(repoRoot, memory);
-        console.log(`Created: ${filePath}`);
-        written++;
-    }
-    // 7. Print summary
-    console.log(`\n📝 Captured ${written} high-value memories`);
-    console.log(`   Skipped ${extracted.length - written} low-value or duplicate items\n`);
-    // 7. Note: index update is no-op for text engine
+        })),
+    };
+    (0, store_1.writePending)(repoRoot, entry);
+    await (0, queue_processor_1.processQueue)(repoRoot);
+    // 6. Print summary
+    console.log(`\n📝 Captured up to ${highValueMemories.length} high-value memories`);
+    console.log(`   (duplicates skipped silently)\n`);
+    // Note: index update is no-op for text engine
     if (config.embedding.engine === 'lancedb') {
         console.log('Run: memo index --incremental to update LanceDB');
     }
 }
 /**
- * Read from stdin
+ * Read from stdin with timeout
  */
-function readStdin() {
-    return new Promise((resolve) => {
+function readStdin(timeoutMs = 30000) {
+    return new Promise((resolve, reject) => {
         let data = '';
+        const timeoutId = setTimeout(() => {
+            reject(new Error('Stdin read timeout after 30 seconds'));
+        }, timeoutMs);
         process.stdin.on('data', (chunk) => {
-            data += chunk;
+            data += typeof chunk === 'string' ? chunk : chunk.toString();
         });
         process.stdin.on('end', () => {
+            clearTimeout(timeoutId);
             resolve(data);
+        });
+        process.stdin.on('error', (err) => {
+            clearTimeout(timeoutId);
+            reject(err);
         });
     });
 }

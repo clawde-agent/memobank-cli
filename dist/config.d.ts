@@ -1,4 +1,4 @@
-import { MemoConfig, LifecycleConfig } from './types';
+import type { MemoConfig, LifecycleConfig } from './types';
 declare const DEFAULT_LIFECYCLE: LifecycleConfig;
 export declare function loadConfig(repoRoot: string): MemoConfig;
 export declare function writeConfig(repoRoot: string, config: MemoConfig): void;

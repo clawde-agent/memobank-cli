@@ -2,6 +2,7 @@
 /**
  * Claude Code platform install helper
  * Sets autoMemoryDirectory in ~/.claude/settings.json
+ * Schema: https://www.schemastore.org/claude-code-settings.json
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -51,7 +52,7 @@ function getSettingsPath() {
  * Install memobank for Claude Code
  * @param enableAutoMemory - explicitly set autoMemoryEnabled in settings (true to enable, false to leave unchanged)
  */
-async function installClaudeCode(repoRoot, enableAutoMemory = true) {
+function installClaudeCode(repoRoot, enableAutoMemory = true) {
     const settingsPath = getSettingsPath();
     const settingsDir = path.dirname(settingsPath);
     // Ensure .claude directory exists
@@ -63,11 +64,12 @@ async function installClaudeCode(repoRoot, enableAutoMemory = true) {
     if (fs.existsSync(settingsPath)) {
         try {
             const content = fs.readFileSync(settingsPath, 'utf-8');
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             settings = JSON.parse(content);
         }
         catch (error) {
             console.warn(`Could not read Claude settings: ${error.message}`);
-            return false;
+            return Promise.resolve(false);
         }
     }
     // Only set autoMemoryEnabled when the user explicitly agreed during setup.
@@ -80,24 +82,44 @@ async function installClaudeCode(repoRoot, enableAutoMemory = true) {
     settings.autoMemoryDirectory = repoRoot;
     // Remove any legacy memobank Stop hook (no longer needed — Claude Code's
     // native auto-memory writes directly to autoMemoryDirectory).
-    if (settings.hooks?.Stop) {
-        settings.hooks.Stop = settings.hooks.Stop.filter((h) => !(h.hooks?.[0]?.command?.includes('memo capture')));
-        if (settings.hooks.Stop.length === 0) {
-            delete settings.hooks.Stop;
+    const hooks = settings.hooks;
+    if (hooks?.Stop) {
+        const stopHooks = hooks.Stop;
+        const filtered = stopHooks.filter((h) => {
+            // Check for legacy memo capture hooks
+            if (h.hooks && h.hooks.length > 0) {
+                return !h.hooks.some((cmd) => cmd.type === 'command' && cmd.command?.includes('memo capture'));
+            }
+            return true;
+        });
+        hooks.Stop = filtered;
+        if (hooks.Stop.length === 0) {
+            delete hooks.Stop;
         }
-        if (Object.keys(settings.hooks).length === 0) {
+        if (Object.keys(hooks).length === 0) {
             delete settings.hooks;
         }
+    }
+    // Add process-queue Stop hook (merge, no duplicates)
+    const STOP_HOOK = 'memo process-queue --background';
+    if (!settings.hooks) {
+        settings.hooks = {};
+    }
+    const hookMap = settings.hooks;
+    const currentStop = hookMap.Stop ?? [];
+    const hasStopHook = currentStop.some((h) => h.hooks?.some((cmd) => cmd.type === 'command' && cmd.command === STOP_HOOK));
+    if (!hasStopHook) {
+        hookMap.Stop = [...currentStop, { matcher: '', hooks: [{ type: 'command', command: STOP_HOOK }] }];
     }
     // Write settings
     try {
         fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
         console.log(`✓ Claude Code: autoMemoryDirectory configured`);
-        return true;
+        return Promise.resolve(true);
     }
     catch (error) {
         console.error(`Could not write Claude settings: ${error.message}`);
-        return false;
+        return Promise.resolve(false);
     }
 }
 //# sourceMappingURL=claude-code.js.map

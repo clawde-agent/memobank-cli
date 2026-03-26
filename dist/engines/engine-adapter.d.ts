@@ -2,7 +2,7 @@
  * Shared engine adapter interface
  * All search engines must implement this interface
  */
-import { MemoryFile, RecallResult } from '../types';
+import type { MemoryFile, RecallResult } from '../types';
 export interface EngineAdapter {
     /**
      * Search for memories matching a query

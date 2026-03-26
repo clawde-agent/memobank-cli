@@ -60,7 +60,7 @@ async function recall(query, repoRoot, config, engine, scope = 'all', explain = 
     const accessLogs = (0, lifecycle_manager_1.loadAccessLogs)(repoRoot);
     let results = await searchEngine.search(query, memories, config.memory.top_k);
     // Apply access frequency boost
-    results = results.map(result => {
+    results = results.map((result) => {
         const log = accessLogs[result.memory.path];
         const accessCount = log?.accessCount ?? 0;
         const boost = Math.min(1.5, 1.0 + Math.log1p(accessCount) / 10);
@@ -88,7 +88,7 @@ async function recall(query, repoRoot, config, engine, scope = 'all', explain = 
             console.warn(`Reranker skipped: ${e.message}`);
         }
     }
-    if (explain && results.length > 0 && results.every(r => !r.scoreBreakdown)) {
+    if (explain && results.length > 0 && results.every((r) => !r.scoreBreakdown)) {
         console.warn('--explain: score breakdown not available for the current engine.');
     }
     let markdown = formatResultsAsMarkdown(results, query, config.embedding.engine, memories.length, scope, explain);
@@ -135,7 +135,11 @@ function formatResultsAsMarkdown(results, query, engine, totalMemories, scope = 
             markdown += `### [score: ${score.toFixed(2)}${sourcePart}] ${memory.name}${confidenceStr}\n`;
             if (explain && result.scoreBreakdown) {
                 const b = result.scoreBreakdown;
-                const parts = [`keyword(${b.keyword.toFixed(2)})`, `tags(${b.tags.toFixed(2)})`, `recency(${b.recency.toFixed(2)})`];
+                const parts = [
+                    `keyword(${b.keyword.toFixed(2)})`,
+                    `tags(${b.tags.toFixed(2)})`,
+                    `recency(${b.recency.toFixed(2)})`,
+                ];
                 markdown += `  matched: ${parts.join(' + ')}\n`;
             }
             markdown += `> ${memory.description}\n`;

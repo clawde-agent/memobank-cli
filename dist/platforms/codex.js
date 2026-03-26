@@ -74,29 +74,29 @@ function findAgentsMd(startDir) {
 /**
  * Install memobank for Codex
  */
-async function installCodex(cwd) {
+function installCodex(cwd) {
     const agentsPath = findAgentsMd(cwd);
     if (!agentsPath) {
         console.log('⊘ Codex: AGENTS.md not found (skipping)');
-        return false;
+        return Promise.resolve(false);
     }
     // Read AGENTS.md
     const content = fs.readFileSync(agentsPath, 'utf-8');
     // Check if memobank is already present
     if (content.includes('## Memory Protocol') && content.includes('memo recall')) {
         console.log('⊘ Codex: Memory protocol already exists in AGENTS.md');
-        return true;
+        return Promise.resolve(true);
     }
     // Append memory protocol
     const updated = content + MEMORY_PROTOCOL_SECTION;
     try {
         fs.writeFileSync(agentsPath, updated, 'utf-8');
         console.log(`✓ Codex: Memory protocol added to AGENTS.md`);
-        return true;
+        return Promise.resolve(true);
     }
     catch (error) {
         console.error(`Could not write AGENTS.md: ${error.message}`);
-        return false;
+        return Promise.resolve(false);
     }
 }
 //# sourceMappingURL=codex.js.map

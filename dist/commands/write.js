@@ -227,7 +227,7 @@ async function writeMemoryCommand(type, options = {}) {
     console.log(`✓ Abstraction level: ${abstractionLevel}\n`);
     // Write memory
     try {
-        const { fileName, content: fileContent } = (0, memory_template_1.generateMemoryFile)({
+        const { fileName } = (0, memory_template_1.generateMemoryFile)({
             name: memoryData.name,
             type: memoryData.type,
             description: memoryData.description,
