@@ -17,6 +17,7 @@ npm run format         # Prettier
 ```
 
 Run a single test file:
+
 ```bash
 NODE_OPTIONS=--experimental-vm-modules npx jest tests/store.test.ts
 ```
@@ -29,25 +30,26 @@ The CLI binary is `memo` (dist/cli.js). During development: `npm run dev -- <com
 
 ### Three-Tier Memory Model
 
-| Tier | Location | Committed? | Use |
-|------|----------|-----------|-----|
-| Personal | `~/.memobank/<project-name>/` | No | Private lessons |
-| Project | `.memobank/` in repo | Yes | Shared team knowledge |
-| Workspace | `~/.memobank/_workspace/<name>/` | Separate remote | Org-wide patterns |
+| Tier      | Location                         | Committed?      | Use                   |
+| --------- | -------------------------------- | --------------- | --------------------- |
+| Personal  | `~/.memobank/<project-name>/`    | No              | Private lessons       |
+| Project   | `.memobank/` in repo             | Yes             | Shared team knowledge |
+| Workspace | `~/.memobank/_workspace/<name>/` | Separate remote | Org-wide patterns     |
 
 Recall priority: **Project > Personal > Workspace** (higher-priority tier wins on duplicate filenames).
 
 ### Memory File Format
 
 Markdown with YAML frontmatter (parsed with `gray-matter`):
+
 ```yaml
 ---
 name: api-timeout-handling
-type: lesson            # lesson | decision | workflow | architecture
-description: "..."
+type: lesson # lesson | decision | workflow | architecture
+description: '...'
 tags: [api, reliability]
 created: 2026-03-17
-status: active          # experimental → active → needs-review → deprecated
+status: active # experimental → active → needs-review → deprecated
 confidence: medium
 ---
 ## Problem / Context / Solution ...
@@ -60,17 +62,20 @@ src/
   cli.ts              # Commander CLI entry point, registers all commands
   types.ts            # Shared TypeScript types (MemoryFile, MemoConfig, etc.)
   core/
-    store.ts          # Three-tier directory resolution, file I/O
+    store.ts          # Three-tier directory resolution, file I/O, resolveProjectId, writePending
     config.ts         # YAML config loading/writing
     retriever.ts      # Search orchestration, ranking, token budgeting, access logging
     lifecycle-manager.ts  # Status promotion/demotion based on access frequency
     sanitizer.ts      # Auto-redacts 20+ secret patterns before writes
     embedding.ts      # OpenAI-compatible embeddings (Ollama/Azure/Jina/custom)
     decay-engine.ts   # Recency scoring with 180-day decay window
+    queue-processor.ts  # Drains .pending/*.json → deduplicates → writes memory files
+    dedup.ts          # Two-stage dedup: Jaccard (stage 1) + optional LLM batch (stage 2)
   commands/           # One file per CLI subcommand
     onboarding.tsx    # Interactive React/Ink setup wizard
     recall.ts         # Search + write results to MEMORY.md
-    capture.ts        # LLM-powered extraction from session text
+    capture.ts        # LLM-powered extraction → writes to .pending/, calls processQueue
+    process-queue.ts  # memo process-queue command; --background spawns detached child
     workspace.ts      # Workspace remote config, sync, publish
     ...
   engines/
@@ -87,6 +92,9 @@ docs/                 # Extended guides (lifecycle, onboarding, memory value)
 - **Text engine is zero-dependency** (default). LanceDB is optional for vector search. The engine is selected via config `engine: text | lancedb`.
 - **Secret sanitization** runs automatically before any memory write — 20+ patterns (API keys, JWTs, AWS credentials, etc.).
 - **Lifecycle tracking**: access logs + epoch scoring auto-demote stale memories (`active → needs-review → deprecated`).
+- **Async pending queue**: `memo capture` writes to `.pending/<id>.json` then immediately calls `processQueue()`. `memo process-queue` (and the Claude Code Stop hook) also drain the queue. This decouples extraction from writing.
+- **Project boundary**: every pending entry is stamped with `projectId` (resolved via git remote → `config.project.name` → dirname). `processQueue` deletes cross-project entries. `workspace publish` rejects memories whose `project:` frontmatter doesn't match the current repo.
+- **Two-stage dedup** in `processQueue`: Jaccard similarity (word + trigram) as Stage 1 — exact match or ≥ 0.8 → skip, < 0.4 → write, 0.4–0.8 → Stage 2 LLM batch call (single call per queue drain, graceful degradation if no LLM).
 - **React/Ink** powers interactive prompts (onboarding wizard, selection menus).
 - **ESLint enforces**: no `any`, explicit return types, `import type` for type-only imports.
 - The `workspace` tier uses a separate Git remote; `memo workspace sync` pulls/pushes it. Secret scan (`memo scan`) must pass before `memo workspace publish`.

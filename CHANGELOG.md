@@ -7,12 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned
+## [0.7.0] - 2026-03-26
 
-- Web UI for memory management
-- Memory sharing and collaboration features
-- Advanced search filters
-- Memory export formats (PDF, HTML)
+### Added
+
+- **Async pending queue** — `memo capture` writes extracted candidates to `.pending/<id>.json` then immediately drains via `processQueue()`. Decouples extraction from writing; future triggers only need to change _when_ the queue is drained.
+- **`memo process-queue` command** — manually drain the pending queue. Exits silently when empty; errors go to stderr.
+- **`memo process-queue --background`** — spawns a detached child process and returns immediately (used by the Stop hook).
+- **Claude Code Stop hook** — `memo install` now adds `memo process-queue --background` to the `Stop` hooks in `~/.claude/settings.json`, so the queue is drained at the end of every Claude Code session.
+- **Project boundary enforcement** — every pending entry is stamped with `projectId` (resolved via git remote origin → `config.project.name` → directory name). `processQueue` deletes cross-project entries; `workspace publish` rejects memories whose `project:` frontmatter doesn't match the current repo.
+- **Two-stage dedup in `processQueue`** — Stage 1: Jaccard similarity (word + trigram) — exact match or ≥ 0.8 skip, < 0.4 write, 0.4–0.8 sent to Stage 2. Stage 2: single LLM batch call returning `DUPLICATE | KEEP_BOTH` per pair. Gracefully degrades to `KEEP_BOTH` when no LLM is configured or the call fails.
+- **`project` frontmatter field** — all memories written through `processQueue` now carry a `project:` tag in their frontmatter for workspace boundary enforcement.
+
+### Fixed
+
+- `glob.sync()` on Windows returned empty results for backslash paths produced by `path.join()`. Normalized to forward slashes in `store.ts`, `scan.ts`, and `migrate.ts`.
 
 ## [0.6.0] - 2026-03-20
 
@@ -43,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Core Features
+
 - **Interactive Onboarding** - Menu-driven setup with arrow key navigation
   - `memo onboarding` command (aliases: `memo init`, `memo setup`)
   - Quick Setup (automated recommended configuration)
@@ -78,11 +88,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Custom embedding endpoints
 
 #### Platform Integrations
+
 - Claude Code (autoMemoryDirectory)
 - Codex (AGENTS.md protocol)
 - Cursor (.cursor/rules/memobank.mdc)
 
 #### Commands
+
 - `memo onboarding` - Interactive setup
 - `memo init` - Alias for onboarding
 - `memo import` - Import memories
@@ -97,6 +109,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `memo map` - Show statistics
 
 #### Documentation
+
 - `docs/ONBOARDING-GUIDE.md` - Interactive setup guide
 - `docs/MEMORY-VALUE-GUIDE.md` - What to remember
 - `docs/LIFECYCLE-MANAGEMENT.md` - Memory optimization
