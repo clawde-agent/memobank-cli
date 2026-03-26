@@ -52,11 +52,11 @@ Claude Code loads the first 200 lines of `.memobank/MEMORY.md` at every session 
 
 memobank uses three memory tiers — like `git config` levels, each with a different scope:
 
-| Tier | Location | Committed? | Scope |
-|------|----------|-----------|-------|
-| Personal | `~/.memobank/<project>/` | No | Your machine only |
-| Project | `<repo>/<dir>/` (default: `.memobank/`) | Yes | Everyone who clones |
-| Workspace | `~/.memobank/_workspace/` | Separate remote | Across multiple repos |
+| Tier      | Location                                | Committed?      | Scope                 |
+| --------- | --------------------------------------- | --------------- | --------------------- |
+| Personal  | `~/.memobank/<project>/`                | No              | Your machine only     |
+| Project   | `<repo>/<dir>/` (default: `.memobank/`) | Yes             | Everyone who clones   |
+| Workspace | `~/.memobank/_workspace/`               | Separate remote | Across multiple repos |
 
 Most teams only ever need **Personal + Project**. Workspace is opt-in.
 The project directory name (default `.memobank`) can be customized during `memo onboarding`.
@@ -72,6 +72,7 @@ type: decision
 status: active
 tags: [tooling, packages]
 ---
+
 We switched from npm to pnpm in March 2026. Faster installs, better monorepo support.
 ```
 
@@ -94,24 +95,29 @@ Claude Code's auto-memory is personal and machine-local by default. memobank add
 ## Features
 
 **Memory management**
+
 - Four types: `lesson`, `decision`, `workflow`, `architecture`
 - Status lifecycle: `experimental → active → needs-review → deprecated`
 - Automatic stale memory detection via `memo review`
 
 **Search**
+
 - Default: keyword + tag + recency scoring, zero external dependencies
 - Optional: vector search via LanceDB (Ollama, OpenAI, Azure, Jina)
 
 **Safety**
+
 - Automatic secret redaction before every write (API keys, tokens, credentials)
 - `memo scan` blocks workspace publish if secrets are detected
 
 **Integrations**
+
 - Claude Code — `autoMemoryDirectory` points to `.memobank/`, loads at session start
 - Cursor, Codex, Gemini CLI, Qwen Code — hooks installed via `memo onboarding`
 - Import from Claude Code, Gemini, and Qwen: `memo import --claude`
 
 **Team workflows**
+
 - Workspace tier: cross-repo knowledge synced via separate Git remote
 - Epoch-aware scoring: team knowledge naturally fades during handoffs
 - `memo map` for memory statistics, `memo lifecycle` for health scans
@@ -124,12 +130,12 @@ Memobank organizes memory into three tiers, each with a distinct scope and use c
 
 ### Tier 1 — Personal (Private)
 
-| | |
-|---|---|
-| **Location** | `~/.memobank/<project-name>/` |
-| **Committed to Git** | Never |
-| **Who sees it** | Only you, on this machine |
-| **Activate** | `memo init --global` |
+|                      |                               |
+| -------------------- | ----------------------------- |
+| **Location**         | `~/.memobank/<project-name>/` |
+| **Committed to Git** | Never                         |
+| **Who sees it**      | Only you, on this machine     |
+| **Activate**         | `memo init --global`          |
 
 **Use when:** You want to keep private notes about a project — experiments that didn't pan out, personal shortcuts, machine-specific env quirks. This tier never touches the repo and is never shared.
 
@@ -145,12 +151,12 @@ Memobank organizes memory into three tiers, each with a distinct scope and use c
 
 ### Tier 2 — Project (Team)
 
-| | |
-|---|---|
-| **Location** | `<repo-root>/.memobank/` |
+|                      |                                  |
+| -------------------- | -------------------------------- |
+| **Location**         | `<repo-root>/.memobank/`         |
 | **Committed to Git** | Yes — like any other source file |
-| **Who sees it** | Everyone who clones the repo |
-| **Activate** | `memo init` (default) |
+| **Who sees it**      | Everyone who clones the repo     |
+| **Activate**         | `memo init` (default)            |
 
 **Use when:** You want the team to share knowledge about this repo. Adding a memory = opening a PR. Reviewing a memory = code review. History = `git log`. No extra commands needed — standard Git workflow handles everything.
 
@@ -166,6 +172,7 @@ your-project/
 ```
 
 **Differentiated use cases vs. personal:**
+
 - Bug post-mortems the whole team should know about → **project**
 - "I personally keep forgetting to run `npm run generate` before building" → **personal**
 - Architecture decision records (ADRs) → **project**
@@ -175,12 +182,12 @@ your-project/
 
 ### Tier 3 — Workspace (Organization, Optional)
 
-| | |
-|---|---|
-| **Location** | `~/.memobank/_workspace/<workspace-name>/` (local clone) |
+|                      |                                                          |
+| -------------------- | -------------------------------------------------------- |
+| **Location**         | `~/.memobank/_workspace/<workspace-name>/` (local clone) |
 | **Committed to Git** | To a designated remote repo (infra, platform-docs, etc.) |
-| **Who sees it** | Entire organization, across all repos |
-| **Activate** | `memo workspace init <remote-url>` |
+| **Who sees it**      | Entire organization, across all repos                    |
+| **Activate**         | `memo workspace init <remote-url>`                       |
 
 **Use when:** You have knowledge that spans multiple repos or services — inter-service contracts, company-wide architecture patterns, platform team decisions. Any existing Git repo can serve as the workspace remote; updates flow through standard PRs.
 
@@ -194,6 +201,7 @@ Organization knowledge (cross-repo):
 ```
 
 **Differentiated use cases vs. project:**
+
 - "Redis connection pooling pattern for this service" → **project**
 - "Redis connection pooling pattern for all services" → **workspace**
 - "We switched to Postgres in this repo" → **project**
@@ -220,46 +228,48 @@ If the same filename exists in multiple tiers, the higher-priority tier's versio
 
 ### Setup & Configuration
 
-| Command | Description |
-|---------|-------------|
-| `memo onboarding` | Interactive setup wizard (recommended) |
-| `memo init` | Alias for onboarding |
-| `memo init --global` | Set up personal (private) tier only |
-| `memo install` | Set up directory structure and platform hooks |
-| `memo import` | Import memories from other AI tools |
-| `memo migrate` | Migrate from old `personal/`+`team/` layout to three-tier |
+| Command              | Description                                               |
+| -------------------- | --------------------------------------------------------- |
+| `memo onboarding`    | Interactive setup wizard (recommended)                    |
+| `memo init`          | Alias for onboarding                                      |
+| `memo init --global` | Set up personal (private) tier only                       |
+| `memo install`       | Set up directory structure and platform hooks             |
+| `memo import`        | Import memories from other AI tools                       |
+| `memo migrate`       | Migrate from old `personal/`+`team/` layout to three-tier |
 
 ### Memory Operations
 
-| Command | Description |
-|---------|-------------|
-| `memo recall <query>` | Search all tiers and write results to MEMORY.md |
-| `memo search <query>` | Debug search without modifying MEMORY.md |
-| `memo write <type>` | Create a new memory (interactive or non-interactive) |
-| `memo capture` | Extract learnings from session text |
+| Command                           | Description                                                          |
+| --------------------------------- | -------------------------------------------------------------------- |
+| `memo recall <query>`             | Search all tiers and write results to MEMORY.md                      |
+| `memo search <query>`             | Debug search without modifying MEMORY.md                             |
+| `memo write <type>`               | Create a new memory (interactive or non-interactive)                 |
+| `memo capture`                    | Extract learnings from session text via LLM, writes to pending queue |
+| `memo process-queue`              | Drain the pending queue — deduplicates and writes to memory files    |
+| `memo process-queue --background` | Same, but spawns a detached background process (used by Stop hook)   |
 
 ### Workspace Commands
 
-| Command | Description |
-|---------|-------------|
-| `memo workspace init <url>` | Configure workspace remote, clone to `~/.memobank/_workspace/` |
-| `memo workspace sync` | Pull latest workspace memories from remote |
-| `memo workspace sync --push` | Push local workspace changes to remote |
-| `memo workspace publish <file>` | Copy a project memory to workspace (+ secret scan) |
-| `memo workspace status` | Show git status of local workspace clone |
+| Command                         | Description                                                    |
+| ------------------------------- | -------------------------------------------------------------- |
+| `memo workspace init <url>`     | Configure workspace remote, clone to `~/.memobank/_workspace/` |
+| `memo workspace sync`           | Pull latest workspace memories from remote                     |
+| `memo workspace sync --push`    | Push local workspace changes to remote                         |
+| `memo workspace publish <file>` | Copy a project memory to workspace (+ secret scan)             |
+| `memo workspace status`         | Show git status of local workspace clone                       |
 
 ### Management
 
-| Command | Description |
-|---------|-------------|
-| `memo index` | Build/update search index |
-| `memo review` | List memories due for review |
-| `memo map` | Show memory statistics |
-| `memo lifecycle` | View memory lifecycle report |
-| `memo lifecycle --scan` | Run full status sweep (downgrades stale memories) |
+| Command                        | Description                                                |
+| ------------------------------ | ---------------------------------------------------------- |
+| `memo index`                   | Build/update search index                                  |
+| `memo review`                  | List memories due for review                               |
+| `memo map`                     | Show memory statistics                                     |
+| `memo lifecycle`               | View memory lifecycle report                               |
+| `memo lifecycle --scan`        | Run full status sweep (downgrades stale memories)          |
 | `memo lifecycle --reset-epoch` | Reset epoch for team handoff (new team starts fresh decay) |
-| `memo correct <path>` | Record a memory correction |
-| `memo scan` | Scan for secrets before pushing |
+| `memo correct <path>`          | Record a memory correction                                 |
+| `memo scan`                    | Scan for secrets before pushing                            |
 
 ---
 
@@ -359,12 +369,12 @@ memo import --all       # Import from all available tools
 
 ## 📁 Memory Types
 
-| Type | Directory | Purpose |
-|------|-----------|---------|
-| **Lesson** | `lesson/` | Post-mortems, bugs fixed, gotchas |
-| **Decision** | `decision/` | ADRs: context, options, decision, consequences |
-| **Workflow** | `workflow/` | Runbooks, deploy flows, onboarding |
-| **Architecture** | `architecture/` | System diagrams, component descriptions |
+| Type             | Directory       | Purpose                                        |
+| ---------------- | --------------- | ---------------------------------------------- |
+| **Lesson**       | `lesson/`       | Post-mortems, bugs fixed, gotchas              |
+| **Decision**     | `decision/`     | ADRs: context, options, decision, consequences |
+| **Workflow**     | `workflow/`     | Runbooks, deploy flows, onboarding             |
+| **Architecture** | `architecture/` | System diagrams, component descriptions        |
 
 ### Memory File Format
 
@@ -372,7 +382,7 @@ memo import --all       # Import from all available tools
 ---
 name: api-timeout-handling
 type: lesson
-description: "Use async job queue to prevent API timeout"
+description: 'Use async job queue to prevent API timeout'
 tags: [api, reliability, async]
 created: 2026-03-17
 status: active
@@ -399,14 +409,15 @@ confidence: medium
 
 Every memory has a `status` field that evolves based on how often it is recalled:
 
-| Status | Meaning | Transition |
-|--------|---------|-----------|
-| `experimental` | Newly written, unverified | Default on creation |
-| `active` | Recalled at least once; trusted | Promoted on first recall |
-| `needs-review` | Not recalled in 90 days; may be stale | Downgraded by `memo lifecycle --scan` |
-| `deprecated` | Not recalled in 90 days after `needs-review` | Excluded from default recall |
+| Status         | Meaning                                      | Transition                            |
+| -------------- | -------------------------------------------- | ------------------------------------- |
+| `experimental` | Newly written, unverified                    | Default on creation                   |
+| `active`       | Recalled at least once; trusted              | Promoted on first recall              |
+| `needs-review` | Not recalled in 90 days; may be stale        | Downgraded by `memo lifecycle --scan` |
+| `deprecated`   | Not recalled in 90 days after `needs-review` | Excluded from default recall          |
 
 **Rules:**
+
 - `experimental → active`: recalled ≥ 1 time
 - `needs-review → active`: recalled ≥ 3 times (deliberate re-validation required)
 - `deprecated` memories remain searchable via `memo search --include-deprecated` but are excluded from `memo recall`
@@ -432,16 +443,16 @@ Configuration lives in `meta/config.yaml` (inside each tier's root):
 
 ```yaml
 project:
-  name: "my-project"
-  description: "Optional description"
+  name: 'my-project'
+  description: 'Optional description'
 
 memory:
   token_budget: 2000
   top_k: 5
 
 embedding:
-  engine: text        # or 'lancedb'
-  provider: ollama    # or 'openai', 'azure'
+  engine: text # or 'lancedb'
+  provider: ollama # or 'openai', 'azure'
   model: mxbai-embed-large
   dimensions: 1024
 
@@ -459,18 +470,18 @@ lifecycle:
 workspace:
   enabled: true
   remote: git@github.com:mycompany/platform-docs.git
-  path: .memobank      # subdirectory within remote repo (optional)
+  path: .memobank # subdirectory within remote repo (optional)
   branch: main
-  auto_sync: false     # manual sync by default; no network on every recall
+  auto_sync: false # manual sync by default; no network on every recall
 ```
 
 ### Embedding Providers
 
-| Provider | Model | Dimensions | API Key |
-|----------|-------|------------|---------|
-| **Ollama** | mxbai-embed-large | 1024 | Not required |
-| **OpenAI** | text-embedding-3-small | 1536 | Required |
-| **Azure** | text-embedding-ada-002 | 1536 | Required |
+| Provider   | Model                  | Dimensions | API Key      |
+| ---------- | ---------------------- | ---------- | ------------ |
+| **Ollama** | mxbai-embed-large      | 1024       | Not required |
+| **OpenAI** | text-embedding-3-small | 1536       | Required     |
+| **Azure**  | text-embedding-ada-002 | 1536       | Required     |
 
 ---
 
@@ -479,12 +490,15 @@ workspace:
 After running `memo install --all`:
 
 ### Claude Code
-Sets `autoMemoryDirectory` in `~/.claude/settings.json`
+
+Sets `autoMemoryDirectory` in `~/.claude/settings.json` and installs a `Stop` hook that runs `memo process-queue --background` at the end of every session
 
 ### Codex
+
 Appends memory protocol to `AGENTS.md`
 
 ### Cursor
+
 Creates `.cursor/rules/memobank.mdc` with `alwaysApply: true`
 
 ---
@@ -492,6 +506,7 @@ Creates `.cursor/rules/memobank.mdc` with `alwaysApply: true`
 ## 🛡️ Security
 
 Memobank automatically sanitizes secrets before publishing to workspace:
+
 - ✅ API keys and tokens
 - ✅ Passwords and secrets
 - ✅ IP addresses and hostnames
