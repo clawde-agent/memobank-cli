@@ -33,6 +33,10 @@ import { loadConfig } from './config';
 import type { MemoryType } from './types';
 import * as fs from 'fs';
 import * as path from 'path';
+import dotenv from 'dotenv';
+
+// Load project .memobank/.env if present; shell env takes precedence (override: false)
+dotenv.config({ path: path.join(process.cwd(), '.memobank', '.env'), override: false });
 
 const program = new Command();
 
