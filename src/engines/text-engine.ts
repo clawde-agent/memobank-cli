@@ -4,8 +4,8 @@
  * Zero external dependencies
  */
 
-import { MemoryFile, RecallResult } from '../types';
-import { EngineAdapter } from './engine-adapter';
+import type { MemoryFile, RecallResult } from '../types';
+import type { EngineAdapter } from './engine-adapter';
 import { computeDecayScore } from '../core/decay-engine';
 
 export class TextEngine implements EngineAdapter {
@@ -110,7 +110,7 @@ export class TextEngine implements EngineAdapter {
   /**
    * Index is a no-op for text engine - searches live files directly
    */
-  async index(memories: MemoryFile[], incremental: boolean): Promise<void> {
+  async index(_memories: MemoryFile[], _incremental: boolean): Promise<void> {
     // No-op - text engine doesn't need indexing
   }
 }

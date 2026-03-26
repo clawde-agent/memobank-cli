@@ -47,7 +47,7 @@ For more information, run: \`memo --help\`
 /**
  * Install memobank for Cursor
  */
-export async function installCursor(cwd: string): Promise<boolean> {
+export function installCursor(cwd: string): Promise<boolean> {
   const cursorDir = path.join(cwd, '.cursor', 'rules');
 
   // Ensure .cursor/rules directory exists
@@ -56,7 +56,7 @@ export async function installCursor(cwd: string): Promise<boolean> {
       fs.mkdirSync(cursorDir, { recursive: true });
     } catch (error) {
       console.error(`Could not create .cursor/rules: ${(error as Error).message}`);
-      return false;
+      return Promise.resolve(false);
     }
   }
 
@@ -65,16 +65,16 @@ export async function installCursor(cwd: string): Promise<boolean> {
   // Check if already exists
   if (fs.existsSync(rulePath)) {
     console.log('⊘ Cursor: memobank.mdc already exists');
-    return true;
+    return Promise.resolve(true);
   }
 
   // Write rule file
   try {
     fs.writeFileSync(rulePath, MEMOBANK_RULE, 'utf-8');
     console.log(`✓ Cursor: memobank.mdc created`);
-    return true;
+    return Promise.resolve(true);
   } catch (error) {
     console.error(`Could not write memobank.mdc: ${(error as Error).message}`);
-    return false;
+    return Promise.resolve(false);
   }
 }

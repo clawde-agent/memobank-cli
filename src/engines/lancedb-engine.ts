@@ -3,13 +3,11 @@
  * Vector search engine using LanceDB with hybrid BM25 + vector search
  */
 
-import * as fs from 'fs';
 import * as path from 'path';
-import * as yaml from 'js-yaml';
 import { createHash } from 'crypto';
-import { MemoryFile, RecallResult } from '../types';
-import { EngineAdapter } from './engine-adapter';
-import { EmbeddingGenerator } from '../core/embedding';
+import type { MemoryFile, RecallResult } from '../types';
+import type { EngineAdapter } from './engine-adapter';
+import type { EmbeddingGenerator } from '../core/embedding';
 import { computeDecayScore } from '../core/decay-engine';
 
 // LanceDB types (dynamic import)
@@ -116,7 +114,7 @@ export class LanceDbEngine implements EngineAdapter {
     if (incremental) {
       try {
         const allData = await this.table.query().limit(10000).toArray();
-        existingPaths = new Set(allData.map((row: any) => row.path));
+        existingPaths = new Set(allData.map((row: any) => row.path as string));
       } catch {
         // Table empty or error
       }
@@ -213,7 +211,8 @@ export class LanceDbEngine implements EngineAdapter {
       // Convert to RecallResult with hybrid scoring
       const results: RecallResult[] = queryResult.map((row: any) => {
         const memory = this.rowToMemory(row);
-        const vectorScore = 1 - (row._distance || 0); // Convert distance to similarity
+        const distance = (row as Record<string, unknown>)._distance as number | undefined;
+        const vectorScore = 1 - (distance ?? 0); // Convert distance to similarity
 
         // Combine with decay score
         const decayScore = computeDecayScore(memory);
@@ -265,17 +264,17 @@ export class LanceDbEngine implements EngineAdapter {
   /**
    * Convert LanceDB row to MemoryFile
    */
-  private rowToMemory(row: any): MemoryFile {
+  private rowToMemory(row: Record<string, unknown>): MemoryFile {
     return {
-      path: row.path,
-      name: row.name,
-      type: this.inferType(row.name),
-      description: row.description,
-      tags: row.tags.split(', ').filter((t: string) => t.length > 0),
-      created: row.created,
-      updated: row.updated,
+      path: row.path as string,
+      name: row.name as string,
+      type: this.inferType(row.name as string),
+      description: row.description as string,
+      tags: (row.tags as string).split(', ').filter((t: string) => t.length > 0),
+      created: row.created as string,
+      updated: row.updated as string,
       confidence: row.confidence as 'low' | 'medium' | 'high',
-      content: row.content,
+      content: row.content as string,
     };
   }
 
@@ -284,10 +283,18 @@ export class LanceDbEngine implements EngineAdapter {
    */
   private inferType(name: string): MemoryFile['type'] {
     const lower = name.toLowerCase();
-    if (lower.includes('lesson')) return 'lesson';
-    if (lower.includes('decision')) return 'decision';
-    if (lower.includes('workflow')) return 'workflow';
-    if (lower.includes('architecture')) return 'architecture';
+    if (lower.includes('lesson')) {
+      return 'lesson';
+    }
+    if (lower.includes('decision')) {
+      return 'decision';
+    }
+    if (lower.includes('workflow')) {
+      return 'workflow';
+    }
+    if (lower.includes('architecture')) {
+      return 'architecture';
+    }
     return 'lesson'; // default
   }
 }

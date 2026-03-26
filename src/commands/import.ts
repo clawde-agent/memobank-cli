@@ -8,7 +8,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { findRepoRoot } from '../core/store';
 import { writeMemory } from '../core/store';
-import { MemoryType, Confidence } from '../types';
+import type { MemoryType, Confidence } from '../types';
 import {
   sanitizeContent,
   validateMemoryContent,
@@ -139,12 +139,16 @@ function parseClaudeMemory(
 
   for (const section of sections) {
     const lines = section.split('\n').filter((l) => l.trim());
-    if (lines.length === 0) continue;
+    if (lines.length === 0) {
+      continue;
+    }
 
     const title = lines[0]?.trim() ?? '';
     const body = lines.slice(1).join('\n').trim();
 
-    if (!title || body.length < 20) continue; // Skip very short sections
+    if (!title || body.length < 20) {
+      continue;
+    } // Skip very short sections
 
     // Infer type from section title
     let type: MemoryType = 'lesson';
@@ -199,15 +203,21 @@ function parseGenericMemory(
 
   for (const section of sections) {
     const lines = section.split('\n').filter((l) => l.trim());
-    if (lines.length === 0) continue;
+    if (lines.length === 0) {
+      continue;
+    }
 
     const title = lines[0]?.trim() ?? '';
     const body = lines.slice(1).join('\n').trim();
 
     // Skip Qwen Added Memories header
-    if (title.includes('Qwen Added Memories')) continue;
+    if (title.includes('Qwen Added Memories')) {
+      continue;
+    }
 
-    if (!title || body.length < 10) continue;
+    if (!title || body.length < 10) {
+      continue;
+    }
 
     // Infer type
     let type: MemoryType = 'lesson';
@@ -254,7 +264,7 @@ function parseGenericMemory(
 /**
  * Import memories from specified tools
  */
-export async function importMemories(options: ImportOptions = {}): Promise<void> {
+export function importMemories(options: ImportOptions = {}): void {
   const cwd = process.cwd();
   const repoRoot = findRepoRoot(cwd, options.repo);
 

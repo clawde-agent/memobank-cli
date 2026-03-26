@@ -4,7 +4,7 @@
  * Formula: score = recency_weight × frequency_weight × importance_weight
  */
 
-import { MemoryFile, Confidence } from '../types';
+import type { MemoryFile, Confidence } from '../types';
 
 /**
  * Compute decay score for a memory (0-1)
@@ -85,7 +85,7 @@ function parseReviewDuration(duration: string): number {
   }
 
   const value = parseInt(match[1], 10);
-  const unit = match[2] as string;
+  const unit = match[2];
 
   const msPerDay = 24 * 60 * 60 * 1000;
 

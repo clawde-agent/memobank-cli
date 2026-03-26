@@ -14,7 +14,7 @@ import { scanFile } from './scan';
 
 const MEMORY_TYPES = ['lesson', 'decision', 'workflow', 'architecture', 'meta'];
 
-export async function workspaceInit(remoteUrl: string, repoRoot: string): Promise<void> {
+export function workspaceInit(remoteUrl: string, repoRoot: string): void {
   const config = loadConfig(repoRoot);
   const wsName = path.basename(remoteUrl, '.git');
   const home = process.env.HOME || process.env.USERPROFILE || '';
@@ -30,7 +30,9 @@ export async function workspaceInit(remoteUrl: string, repoRoot: string): Promis
     execSync(`git clone "${remoteUrl}" "${wsDir}"`, { stdio: 'pipe' });
     cloned = true;
     console.log('✓ Cloned workspace repository.');
-  } catch { /* remote may be empty */ }
+  } catch {
+    /* remote may be empty */
+  }
 
   if (!cloned) {
     fs.mkdirSync(wsDir, { recursive: true });
@@ -41,10 +43,14 @@ export async function workspaceInit(remoteUrl: string, repoRoot: string): Promis
       fs.writeFileSync(path.join(wsDir, type, '.gitkeep'), '');
     }
     execSync(`git -C "${wsDir}" add -A`, { stdio: 'pipe' });
-    execSync(`git -C "${wsDir}" commit -m "chore: initialize workspace memory repo"`, { stdio: 'pipe' });
+    execSync(`git -C "${wsDir}" commit -m "chore: initialize workspace memory repo"`, {
+      stdio: 'pipe',
+    });
     try {
       execSync(`git -C "${wsDir}" push -u origin main`, { stdio: 'pipe' });
-    } catch { /* push may fail for empty remotes — ok */ }
+    } catch {
+      /* push may fail for empty remotes — ok */
+    }
     console.log('✓ Initialized workspace repository.');
   }
 
@@ -53,7 +59,7 @@ export async function workspaceInit(remoteUrl: string, repoRoot: string): Promis
   console.log(`✓ Workspace remote configured: ${remoteUrl}`);
 }
 
-export async function workspaceSync(repoRoot: string, push = false): Promise<void> {
+export function workspaceSync(repoRoot: string, push = false): void {
   const config = loadConfig(repoRoot);
   if (!config.workspace?.remote) {
     console.error('No workspace remote configured. Run: memo workspace init <remote-url>');
@@ -71,11 +77,16 @@ export async function workspaceSync(repoRoot: string, push = false): Promise<voi
   if (push) {
     execSync(`git -C "${wsDir}" add -A`, { stdio: 'pipe' });
     let hasChanges = false;
-    try { execSync(`git -C "${wsDir}" diff --staged --quiet`, { stdio: 'pipe' }); }
-    catch { hasChanges = true; }
+    try {
+      execSync(`git -C "${wsDir}" diff --staged --quiet`, { stdio: 'pipe' });
+    } catch {
+      hasChanges = true;
+    }
 
     if (hasChanges) {
-      execSync(`git -C "${wsDir}" commit -m "chore: workspace sync [memo workspace sync]"`, { stdio: 'inherit' });
+      execSync(`git -C "${wsDir}" commit -m "chore: workspace sync [memo workspace sync]"`, {
+        stdio: 'inherit',
+      });
       execFileSync('git', ['-C', wsDir, 'push', 'origin', branch], { stdio: 'inherit' });
       console.log('✓ Pushed to workspace remote.');
     } else {
@@ -86,11 +97,7 @@ export async function workspaceSync(repoRoot: string, push = false): Promise<voi
   }
 }
 
-export async function workspacePublish(
-  filePath: string,
-  repoRoot: string,
-  wsDirOverride?: string
-): Promise<void> {
+export function workspacePublish(filePath: string, repoRoot: string, wsDirOverride?: string): void {
   if (!fs.existsSync(filePath)) {
     throw new Error(`File not found: ${filePath}`);
   }
@@ -100,11 +107,13 @@ export async function workspacePublish(
     const findings = scanFile(filePath);
     if (findings.length > 0) {
       console.error('⚠️  Potential secrets found — aborting publish:');
-      findings.forEach(f => console.error(`  ${f}`));
+      findings.forEach((f) => console.error(`  ${f}`));
       console.error('→ Fix manually or run: memo scan --fix <file>');
       process.exit(1);
     }
-  } catch { /* scan module unavailable — skip */ }
+  } catch {
+    /* scan module unavailable — skip */
+  }
 
   const config = loadConfig(repoRoot);
   const wsName = config.workspace?.remote
@@ -131,7 +140,7 @@ export async function workspacePublish(
   console.log('  Run: memo workspace sync --push to share with team.');
 }
 
-export async function workspaceStatus(repoRoot: string): Promise<void> {
+export function workspaceStatus(repoRoot: string): void {
   const config = loadConfig(repoRoot);
   if (!config.workspace?.remote) {
     console.log('No workspace configured. Run: memo workspace init <remote-url>');
@@ -148,8 +157,11 @@ export async function workspaceStatus(repoRoot: string): Promise<void> {
   try {
     const status = execFileSync('git', ['-C', wsDir, 'status', '--short'], { encoding: 'utf-8' });
     let log = '';
-    try { log = execFileSync('git', ['-C', wsDir, 'log', '--oneline', '-5'], { encoding: 'utf-8' }); }
-    catch { log = '(no commits)'; }
+    try {
+      log = execFileSync('git', ['-C', wsDir, 'log', '--oneline', '-5'], { encoding: 'utf-8' });
+    } catch {
+      log = '(no commits)';
+    }
     console.log('Workspace repository status:');
     console.log(status || '  (clean)');
     console.log('\nRecent commits:');

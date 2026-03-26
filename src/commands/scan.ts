@@ -48,16 +48,17 @@ export function scanDirectory(dir: string): ScanResult[] {
  */
 function getStagedMdFiles(cwd: string): string[] {
   try {
-    const output = execSync(
-      'git diff --staged --name-only --diff-filter=ACM',
-      { cwd, encoding: 'utf-8', stdio: 'pipe' }
-    );
+    const output = execSync('git diff --staged --name-only --diff-filter=ACM', {
+      cwd,
+      encoding: 'utf-8',
+      stdio: 'pipe',
+    });
     return output
       .trim()
       .split('\n')
       .filter(Boolean)
-      .filter(f => f.endsWith('.md'))
-      .map(f => path.join(cwd, f));
+      .filter((f) => f.endsWith('.md'))
+      .map((f) => path.join(cwd, f));
   } catch {
     return [];
   }
@@ -70,7 +71,7 @@ export interface ScanCommandOptions {
   repo?: string;
 }
 
-export async function scanCommand(scanPath: string | undefined, options: ScanCommandOptions): Promise<void> {
+export function scanCommand(scanPath: string | undefined, options: ScanCommandOptions): void {
   let results: ScanResult[] = [];
 
   if (options.staged) {

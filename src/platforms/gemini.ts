@@ -43,35 +43,36 @@ function getGeminiMdPath(): string {
 
 export function detectGemini(): boolean {
   const home = process.env.HOME || process.env.USERPROFILE || '';
-  return (
-    fs.existsSync(path.join(home, '.gemini')) ||
-    isInPath('gemini')
-  );
+  return fs.existsSync(path.join(home, '.gemini')) || isInPath('gemini');
 }
 
 function isInPath(cmd: string): boolean {
   try {
     execSync(`which ${cmd}`, { stdio: 'pipe' });
     return true;
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
-export async function installGemini(): Promise<boolean> {
+export function installGemini(): Promise<boolean> {
   const mdPath = getGeminiMdPath();
   const dir = path.dirname(mdPath);
 
-  if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
 
   let content = '';
   if (fs.existsSync(mdPath)) {
     content = fs.readFileSync(mdPath, 'utf-8');
     if (content.includes('memo recall "project context"')) {
       console.log('✓ Gemini: memobank protocol already installed');
-      return true;
+      return Promise.resolve(true);
     }
   }
 
   fs.writeFileSync(mdPath, content + GEMINI_PROTOCOL, 'utf-8');
   console.log(`✓ Gemini: memobank protocol added to ${mdPath}`);
-  return true;
+  return Promise.resolve(true);
 }

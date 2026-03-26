@@ -5,7 +5,6 @@
 
 import { loadAll, findRepoRoot } from '../core/store';
 import { isReviewDue } from '../core/decay-engine';
-import { MemoryFile } from '../types';
 
 export interface ReviewOptions {
   due?: boolean;
@@ -13,7 +12,7 @@ export interface ReviewOptions {
   repo?: string;
 }
 
-export async function reviewCommand(options: ReviewOptions = {}): Promise<void> {
+export function reviewCommand(options: ReviewOptions = {}): void {
   const cwd = process.cwd();
   const repoRoot = findRepoRoot(cwd, options.repo);
   const memories = loadAll(repoRoot);

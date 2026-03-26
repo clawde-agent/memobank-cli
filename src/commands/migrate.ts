@@ -19,11 +19,11 @@ export interface MigrateResult {
   conflicts: string[];
 }
 
-export async function migrate(
+export function migrate(
   repoRoot: string,
   globalDir: string,
   options: MigrateOptions
-): Promise<MigrateResult> {
+): MigrateResult {
   const result: MigrateResult = { personalMoves: [], teamMoves: [], conflicts: [] };
   const personalDir = path.join(repoRoot, 'personal');
   const teamDir = path.join(repoRoot, 'team');
@@ -76,7 +76,9 @@ export async function migrate(
 
   // Execute personal moves
   for (const { from, to } of result.personalMoves) {
-    if (fs.existsSync(to)) { continue; } // idempotent skip
+    if (fs.existsSync(to)) {
+      continue;
+    } // idempotent skip
     fs.mkdirSync(path.dirname(to), { recursive: true });
     fs.copyFileSync(from, to);
     console.log(`  personal → global: ${path.basename(from)}`);
@@ -84,7 +86,9 @@ export async function migrate(
 
   // Execute team moves
   for (const { from, to } of result.teamMoves) {
-    if (fs.existsSync(to)) { continue; }
+    if (fs.existsSync(to)) {
+      continue;
+    }
     fs.mkdirSync(path.dirname(to), { recursive: true });
     fs.copyFileSync(from, to);
     console.log(`  team → project: ${path.basename(from)}`);

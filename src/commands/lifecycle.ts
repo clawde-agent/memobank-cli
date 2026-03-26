@@ -4,16 +4,14 @@
  */
 
 import { findRepoRoot } from '../core/store';
+import type { LifecycleConfig } from '../core/lifecycle-manager';
 import {
   analyzeLifecycle,
   generateLifecycleReport,
-  archiveMemory,
-  deleteMemory,
   getFlaggedMemories,
   recordCorrection,
   resetEpoch,
   runLifecycleScan,
-  LifecycleConfig,
 } from '../core/lifecycle-manager';
 
 export interface LifecycleOptions {
@@ -36,7 +34,7 @@ const DEFAULT_CONFIG: LifecycleConfig = {
   correctionThreshold: 3,
 };
 
-export async function lifecycleCommand(options: LifecycleOptions = {}): Promise<void> {
+export function lifecycleCommand(options: LifecycleOptions = {}): void {
   const cwd = process.cwd();
   const repoRoot = findRepoRoot(cwd, options.repo);
 
@@ -53,7 +51,10 @@ export async function lifecycleCommand(options: LifecycleOptions = {}): Promise<
   }
 
   // Generate report
-  if (options.report || !options.archive && !options.delete && !options.flagged && !options.tier) {
+  if (
+    options.report ||
+    (!options.archive && !options.delete && !options.flagged && !options.tier)
+  ) {
     const report = generateLifecycleReport(repoRoot, DEFAULT_CONFIG);
     console.log(report);
     return;
@@ -129,10 +130,10 @@ export async function lifecycleCommand(options: LifecycleOptions = {}): Promise<
 /**
  * Record a correction for a memory
  */
-export async function correctCommand(
+export function correctCommand(
   memoryPath: string,
   options: { repo?: string; reason?: string }
-): Promise<void> {
+): void {
   const cwd = process.cwd();
   const repoRoot = findRepoRoot(cwd, options.repo);
 

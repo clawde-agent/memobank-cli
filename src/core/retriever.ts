@@ -4,8 +4,8 @@
  */
 
 import * as path from 'path';
-import { RecallResult, MemoConfig, MemoryScope } from '../types';
-import { EngineAdapter } from '../engines/engine-adapter';
+import type { RecallResult, MemoConfig, MemoryScope } from '../types';
+import type { EngineAdapter } from '../engines/engine-adapter';
 import { loadAll, writeMemoryMd, getGlobalDir, getWorkspaceDir } from './store';
 import { TextEngine } from '../engines/text-engine';
 import { recordAccess, loadAccessLogs, updateStatusOnRecall } from './lifecycle-manager';
@@ -36,7 +36,7 @@ export async function recall(
   let results = await searchEngine.search(query, memories, config.memory.top_k);
 
   // Apply access frequency boost
-  results = results.map(result => {
+  results = results.map((result) => {
     const log = accessLogs[result.memory.path];
     const accessCount = log?.accessCount ?? 0;
     const boost = Math.min(1.5, 1.0 + Math.log1p(accessCount) / 10);
@@ -67,17 +67,31 @@ export async function recall(
     }
   }
 
-  if (explain && results.length > 0 && results.every(r => !r.scoreBreakdown)) {
+  if (explain && results.length > 0 && results.every((r) => !r.scoreBreakdown)) {
     console.warn('--explain: score breakdown not available for the current engine.');
   }
 
-  let markdown = formatResultsAsMarkdown(results, query, config.embedding.engine, memories.length, scope, explain);
+  let markdown = formatResultsAsMarkdown(
+    results,
+    query,
+    config.embedding.engine,
+    memories.length,
+    scope,
+    explain
+  );
   let tokenCount = estimateTokenCount(markdown);
 
   if (tokenCount > config.memory.token_budget) {
     while (results.length > 0 && tokenCount > config.memory.token_budget) {
       results.pop();
-      markdown = formatResultsAsMarkdown(results, query, config.embedding.engine, memories.length, scope, explain);
+      markdown = formatResultsAsMarkdown(
+        results,
+        query,
+        config.embedding.engine,
+        memories.length,
+        scope,
+        explain
+      );
       tokenCount = estimateTokenCount(markdown);
     }
   }
@@ -85,10 +99,16 @@ export async function recall(
   return { results, markdown };
 }
 
-function scopeLabel(scope?: MemoryScope | string): string {
-  if (scope === 'workspace') { return '🌐 workspace'; }
-  if (scope === 'project') { return '📁 project'; }
-  if (scope === 'personal') { return '👤 personal'; }
+function scopeLabel(scope?: MemoryScope): string {
+  if (scope === 'workspace') {
+    return '🌐 workspace';
+  }
+  if (scope === 'project') {
+    return '📁 project';
+  }
+  if (scope === 'personal') {
+    return '👤 personal';
+  }
   return '';
 }
 
@@ -123,7 +143,11 @@ function formatResultsAsMarkdown(
 
       if (explain && result.scoreBreakdown) {
         const b = result.scoreBreakdown;
-        const parts = [`keyword(${b.keyword.toFixed(2)})`, `tags(${b.tags.toFixed(2)})`, `recency(${b.recency.toFixed(2)})`];
+        const parts = [
+          `keyword(${b.keyword.toFixed(2)})`,
+          `tags(${b.tags.toFixed(2)})`,
+          `recency(${b.recency.toFixed(2)})`,
+        ];
         markdown += `  matched: ${parts.join(' + ')}\n`;
       }
 

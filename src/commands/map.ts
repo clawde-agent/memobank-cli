@@ -4,14 +4,14 @@
  */
 
 import { loadAll, findRepoRoot } from '../core/store';
-import { MemoryFile, MemoryType } from '../types';
+import type { MemoryType } from '../types';
 
 export interface MapOptions {
   type?: string;
   repo?: string;
 }
 
-export async function mapCommand(options: MapOptions = {}): Promise<void> {
+export function mapCommand(options: MapOptions = {}): void {
   const cwd = process.cwd();
   const repoRoot = findRepoRoot(cwd, options.repo);
   let memories = loadAll(repoRoot);

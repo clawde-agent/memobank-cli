@@ -5,7 +5,6 @@
 
 import { loadAll, findRepoRoot } from '../core/store';
 import { loadConfig } from '../config';
-import { TextEngine } from '../engines/text-engine';
 import { EmbeddingGenerator } from '../core/embedding';
 
 export interface IndexOptions {
