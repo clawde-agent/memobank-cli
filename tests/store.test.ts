@@ -28,20 +28,21 @@ function writeTestMemory(dir: string, type: string, filename: string): void {
 
 describe('getGlobalDir', () => {
   it('returns ~/.memobank/<project> path', () => {
-    const home = process.env.HOME || '';
+    const home = process.env.HOME || process.env.USERPROFILE || '';
     expect(getGlobalDir('my-project')).toBe(path.join(home, '.memobank', 'my-project'));
   });
 });
 
 describe('getProjectDir', () => {
   it('returns .memobank/ directly under repoRoot', () => {
-    expect(getProjectDir('/repo/root')).toBe('/repo/root');
+    const tmpDir = path.join(os.tmpdir(), 'repo', 'root');
+    expect(getProjectDir(tmpDir)).toBe(tmpDir);
   });
 });
 
 describe('getWorkspaceDir', () => {
   it('returns ~/.memobank/_workspace/<name> path', () => {
-    const home = process.env.HOME || '';
+    const home = process.env.HOME || process.env.USERPROFILE || '';
     expect(getWorkspaceDir('myorg')).toBe(path.join(home, '.memobank', '_workspace', 'myorg'));
   });
 });
