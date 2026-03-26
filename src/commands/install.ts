@@ -71,7 +71,8 @@ function createDirectoryStructure(repoRoot: string): void {
 async function installPlatform(platform: string, repoRoot: string): Promise<void> {
   const { installClaudeCode: installCC } = await import('../platforms/claude-code');
   const { installCodex: installCx } = await import('../platforms/codex');
-  const { installGemini: installGem, detectGemini: detectGem } = await import('../platforms/gemini');
+  const { installGemini: installGem, detectGemini: detectGem } =
+    await import('../platforms/gemini');
   const { installQwen: installQw, detectQwen: detectQw } = await import('../platforms/qwen');
   const { installCursor: installCur } = await import('../platforms/cursor');
 
@@ -94,12 +95,18 @@ async function installPlatform(platform: string, repoRoot: string): Promise<void
     case 'all':
       await installCC(repoRoot);
       await installCx(process.cwd());
-      if (detectGem()) { await installGem(); }
-      if (detectQw()) { await installQw(); }
+      if (detectGem()) {
+        await installGem();
+      }
+      if (detectQw()) {
+        await installQw();
+      }
       await installCur(process.cwd());
       break;
     default:
-      console.error(`Unknown platform: ${platform}. Valid: claude-code, codex, gemini, qwen, cursor, all`);
+      console.error(
+        `Unknown platform: ${platform}. Valid: claude-code, codex, gemini, qwen, cursor, all`
+      );
   }
 }
 
@@ -159,8 +166,12 @@ export async function installCommand(options: InstallOptions = {}): Promise<void
   }
 
   if (allPlatforms) {
-    if (detectGemini()) { await installGemini(); }
-    if (detectQwen()) { await installQwen(); }
+    if (detectGemini()) {
+      await installGemini();
+    }
+    if (detectQwen()) {
+      await installQwen();
+    }
   }
 
   // Print success summary
