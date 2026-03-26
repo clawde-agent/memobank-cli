@@ -116,7 +116,7 @@ export async function extract(
     if (!response.ok) {
       const errorText = await response.text();
       let errorMessage = `LLM extraction failed: ${response.status} ${response.statusText}`;
-      
+
       // Provide helpful error messages for common issues
       if (response.status === 401) {
         errorMessage += ' - Invalid API key. Check your ANTHROPIC_API_KEY environment variable.';
@@ -127,7 +127,7 @@ export async function extract(
       } else if (errorText) {
         errorMessage += ` - ${errorText}`;
       }
-      
+
       console.error(errorMessage);
       return [];
     }

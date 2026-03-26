@@ -104,7 +104,11 @@ function acquireLock(repoRoot: string, timeoutMs: number = 5000): boolean {
           }
         } catch {
           // Can't read lock file, remove it
-          try { fs.unlinkSync(lockPath); } catch { /* ignore */ }
+          try {
+            fs.unlinkSync(lockPath);
+          } catch {
+            /* ignore */
+          }
           continue;
         }
         // Wait and retry
@@ -114,7 +118,11 @@ function acquireLock(repoRoot: string, timeoutMs: number = 5000): boolean {
         }
       } else {
         // Other error, try to remove and retry
-        try { fs.unlinkSync(lockPath); } catch { /* ignore */ }
+        try {
+          fs.unlinkSync(lockPath);
+        } catch {
+          /* ignore */
+        }
       }
     }
   }
@@ -183,11 +191,7 @@ export function saveAccessLogs(repoRoot: string, logs: Record<string, AccessLog>
 /**
  * Record memory access with file locking to prevent race conditions
  */
-export function recordAccess(
-  repoRoot: string,
-  memoryPath: string,
-  query?: string
-): AccessLog {
+export function recordAccess(repoRoot: string, memoryPath: string, query?: string): AccessLog {
   const lockAcquired = acquireLock(repoRoot);
   if (!lockAcquired) {
     console.warn('Could not acquire access log lock, recording may be inconsistent');
@@ -526,7 +530,9 @@ export function updateStatusOnRecall(repoRoot: string, memoryPath: string): void
   try {
     const logs = loadAccessLogs(repoRoot);
     const log = logs[memoryPath];
-    if (!log) { return; }
+    if (!log) {
+      return;
+    }
 
     // Increment epoch count
     log.epochAccessCount = (log.epochAccessCount ?? 0) + 1;
@@ -538,7 +544,9 @@ export function updateStatusOnRecall(repoRoot: string, memoryPath: string): void
       const content = fs.readFileSync(memoryPath, 'utf-8');
       const parsed = matter(content);
       currentStatus = parsed.data.status ?? 'experimental';
-    } catch { return; }
+    } catch {
+      return;
+    }
 
     // Apply upgrade rules
     const config = loadConfig(repoRoot);
