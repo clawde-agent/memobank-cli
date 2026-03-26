@@ -3,6 +3,14 @@ export type Engine = 'text' | 'lancedb';
 export type Confidence = 'low' | 'medium' | 'high';
 export type MemoryScope = 'personal' | 'project' | 'workspace';
 export type Status = 'experimental' | 'active' | 'needs-review' | 'deprecated';
+export type CaptureProviderName = 'anthropic' | 'openai' | 'gemini' | 'openrouter' | 'ollama';
+
+export interface CaptureConfig {
+  provider: CaptureProviderName;
+  model: string;
+  apiKey?: string; // undefined for ollama
+  baseUrl?: string; // openrouter / ollama only
+}
 
 export interface MemoryFile {
   path: string;
@@ -63,6 +71,11 @@ export interface MemoConfig {
   review: { enabled: boolean };
   lifecycle?: LifecycleConfig; // NEW
   workspace?: WorkspaceConfig; // renamed from team
+  capture?: {
+    provider: CaptureProviderName;
+    model: string;
+    base_url?: string;
+  };
   reranker?: {
     enabled: boolean;
     provider: 'jina' | 'cohere';
