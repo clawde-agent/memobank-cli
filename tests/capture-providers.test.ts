@@ -1,3 +1,10 @@
+jest.mock('openai', () => ({
+  __esModule: true,
+  default: jest.fn(),
+}));
+
+import OpenAI from 'openai';
+
 /**
  * Tests for individual capture provider modules.
  * Each provider is tested with mocked network calls — no real API calls.
@@ -66,5 +73,63 @@ describe('createAnthropicProvider', () => {
     const { createAnthropicProvider } = await import('../src/core/providers/anthropic');
     const results = await createAnthropicProvider('key', 'model').extract('text');
     expect(results).toHaveLength(1); // second item dropped
+  });
+});
+
+// ---- openai-compat ----
+describe('createOpenAICompatProvider', () => {
+  const validItem = {
+    name: 'compat-lesson',
+    type: 'decision',
+    description: 'A decision',
+    tags: [],
+    confidence: 'high',
+    content: 'Body',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('calls OpenAI chat completions and returns validated results', async () => {
+    (OpenAI as unknown as jest.Mock).mockImplementation(() => ({
+      chat: {
+        completions: {
+          create: jest.fn().mockResolvedValue({
+            choices: [{ message: { content: JSON.stringify([validItem]) } }],
+          }),
+        },
+      },
+    }));
+
+    const { createOpenAICompatProvider } = await import('../src/core/providers/openai-compat');
+    const results = await createOpenAICompatProvider('sk-test', 'gpt-4o-mini').extract('text');
+    expect(results).toHaveLength(1);
+    expect(results[0]?.name).toBe('compat-lesson');
+  });
+
+  it('passes baseURL for openrouter/ollama', async () => {
+    const mockCreate = jest.fn().mockResolvedValue({
+      choices: [{ message: { content: '[]' } }],
+    });
+    (OpenAI as unknown as jest.Mock).mockImplementation(() => ({
+      chat: { completions: { create: mockCreate } },
+    }));
+
+    const { createOpenAICompatProvider } = await import('../src/core/providers/openai-compat');
+    await createOpenAICompatProvider('key', 'model', 'https://openrouter.ai/api/v1').extract(
+      'text'
+    );
+    expect(OpenAI).toHaveBeenCalledWith(
+      expect.objectContaining({ baseURL: 'https://openrouter.ai/api/v1' })
+    );
+  });
+
+  it('returns [] on SDK error', async () => {
+    (OpenAI as unknown as jest.Mock).mockImplementation(() => ({
+      chat: { completions: { create: jest.fn().mockRejectedValue(new Error('API error')) } },
+    }));
+    const { createOpenAICompatProvider } = await import('../src/core/providers/openai-compat');
+    expect(await createOpenAICompatProvider('key', 'model').extract('text')).toEqual([]);
   });
 });
