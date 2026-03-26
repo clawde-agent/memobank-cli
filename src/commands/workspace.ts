@@ -97,7 +97,11 @@ export function workspaceSync(repoRoot: string, push = false): void {
   }
 }
 
-export function workspacePublish(filePath: string, repoRoot: string, wsDirOverride?: string): void {
+export async function workspacePublish(
+  filePath: string,
+  repoRoot: string,
+  wsDirOverride?: string
+): Promise<void> {
   if (!fs.existsSync(filePath)) {
     throw new Error(`File not found: ${filePath}`);
   }
