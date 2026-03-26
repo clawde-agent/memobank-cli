@@ -9,7 +9,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync, execFileSync } from 'child_process';
+import matter from 'gray-matter';
 import { loadConfig, writeConfig } from '../config';
+import { resolveProjectId } from '../core/store';
 import { scanFile } from './scan';
 
 const MEMORY_TYPES = ['lesson', 'decision', 'workflow', 'architecture', 'meta'];
@@ -127,6 +129,19 @@ export async function workspacePublish(
     }
   } catch {
     /* scan module unavailable — skip */
+  }
+
+  // Project boundary check: reject memories that belong to a different project
+  const fileContent = fs.readFileSync(absoluteFilePath, 'utf-8');
+  const { data: frontmatter } = matter(fileContent);
+  if (frontmatter.project) {
+    const currentProjectId = resolveProjectId(absoluteRepoRoot);
+    if (frontmatter.project !== currentProjectId) {
+      throw new Error(
+        `Project boundary violation: memory belongs to "${frontmatter.project as string}", ` +
+          `current project is "${currentProjectId}". Aborting publish.`
+      );
+    }
   }
 
   const config = loadConfig(repoRoot);

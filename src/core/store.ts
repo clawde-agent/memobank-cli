@@ -1,7 +1,9 @@
+import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import matter from 'gray-matter';
 import { glob } from 'glob';
+import * as yaml from 'js-yaml';
 import type { MemoryFile, MemoryType, Confidence, MemoryScope, Status } from '../types';
 
 const MEMORY_TYPES: MemoryType[] = ['lesson', 'decision', 'workflow', 'architecture'];
@@ -105,6 +107,77 @@ export function findGitRoot(cwd: string): string {
   return cwd;
 }
 
+/**
+ * Resolve a stable project identifier for the current repo.
+ * Priority: git remote origin → config.project.name → parent directory name.
+ * memoBankDir is the .memobank/ directory (e.g. /repo/.memobank).
+ */
+export function resolveProjectId(memoBankDir: string): string {
+  const gitCwd = path.dirname(memoBankDir);
+
+  // 1. git remote origin
+  try {
+    const remote = execSync('git remote get-url origin', {
+      cwd: gitCwd,
+      stdio: 'pipe',
+      encoding: 'utf-8',
+    }).trim();
+    const match = remote.match(/[:/]([^/:]+\/[^/.]+?)(?:\.git)?$/);
+    if (match?.[1]) {
+      return match[1];
+    }
+  } catch {
+    /* no remote or not a git repo — fall through */
+  }
+
+  // 2. explicit project.name in config YAML (parsed directly — no defaults applied)
+  try {
+    const configPath = path.join(memoBankDir, 'meta', 'config.yaml');
+    if (fs.existsSync(configPath)) {
+      const raw = yaml.load(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown> | null;
+      const name = (raw?.project as Record<string, unknown> | undefined)?.name as
+        | string
+        | undefined;
+      if (name) {
+        return name;
+      }
+    }
+  } catch {
+    /* config unreadable — fall through */
+  }
+
+  // 3. parent directory name
+  return path.basename(gitCwd);
+}
+
+export interface PendingCandidate {
+  name: string;
+  type: MemoryType;
+  description: string;
+  tags: string[];
+  confidence: Confidence;
+  content: string;
+}
+
+export interface PendingEntry {
+  id: string;
+  timestamp: string;
+  projectId: string;
+  candidates: PendingCandidate[];
+}
+
+export function writePending(memoBankDir: string, entry: PendingEntry): void {
+  const pendingDir = path.join(memoBankDir, '.pending');
+  if (!fs.existsSync(pendingDir)) {
+    fs.mkdirSync(pendingDir, { recursive: true });
+  }
+  fs.writeFileSync(
+    path.join(pendingDir, `${entry.id}.json`),
+    JSON.stringify(entry, null, 2),
+    'utf-8'
+  );
+}
+
 function loadFromDir(baseDir: string, scope: MemoryScope): MemoryFile[] {
   const memories: MemoryFile[] = [];
   for (const type of MEMORY_TYPES) {
@@ -198,6 +271,7 @@ export function loadFile(filePath: string): MemoryFile {
     confidence: (data.confidence as Confidence) || 'medium',
     status: (data.status as Status) || 'experimental',
     content: parsed.content,
+    project: data.project as string | undefined,
   };
 }
 
@@ -232,6 +306,9 @@ export function writeMemory(repoRoot: string, memory: Omit<MemoryFile, 'path' | 
   }
   if (memory.confidence) {
     frontmatter.confidence = memory.confidence;
+  }
+  if (memory.project) {
+    frontmatter.project = memory.project;
   }
 
   const fileContent = matter.stringify(memory.content, frontmatter);

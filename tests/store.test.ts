@@ -1,3 +1,4 @@
+import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -6,6 +7,9 @@ import {
   getProjectDir,
   getWorkspaceDir,
   loadAll,
+  loadFile,
+  resolveProjectId,
+  writePending,
   writeMemory,
 } from '../src/core/store';
 
@@ -101,6 +105,109 @@ describe('writeMemory', () => {
     expect(files.length).toBe(1);
     const written = fs.readFileSync(path.join(repo, 'lesson', files[0]!), 'utf-8');
     expect(written).toContain('status: experimental');
+    fs.rmSync(repo, { recursive: true });
+  });
+});
+
+describe('writeMemory / loadFile — project field', () => {
+  it('round-trips project field through frontmatter', () => {
+    const repo = makeTempRepo();
+    writeMemory(repo, {
+      name: 'proj-test',
+      type: 'lesson',
+      description: 'desc',
+      tags: [],
+      confidence: 'high',
+      status: 'active',
+      content: 'body',
+      created: '2026-03-26T00:00:00.000Z',
+      project: 'org/my-repo',
+    });
+    const files = fs.readdirSync(path.join(repo, 'lesson'));
+    const memory = loadFile(path.join(repo, 'lesson', files[0]!));
+    expect(memory.project).toBe('org/my-repo');
+    fs.rmSync(repo, { recursive: true });
+  });
+
+  it('loadFile returns undefined project when field is absent', () => {
+    const repo = makeTempRepo();
+    writeTestMemory(repo, 'lesson', '2026-01-01-no-project.md');
+    const memory = loadFile(path.join(repo, 'lesson', '2026-01-01-no-project.md'));
+    expect(memory.project).toBeUndefined();
+    fs.rmSync(repo, { recursive: true });
+  });
+});
+
+describe('resolveProjectId', () => {
+  it('falls back to config.project.name when no git remote', () => {
+    const repo = makeTempRepo(); // config.yaml: project.name = "test"
+    const projectId = resolveProjectId(repo);
+    expect(projectId).toBe('test');
+    fs.rmSync(repo, { recursive: true });
+  });
+
+  it('falls back to dirname when no git remote and no config name', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-pid-'));
+    fs.mkdirSync(path.join(dir, 'meta'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'meta', 'config.yaml'), 'project:\n  description: no name\n');
+    const projectId = resolveProjectId(dir);
+    expect(projectId).toBe(path.basename(path.dirname(dir)));
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  it('parses HTTPS git remote URL', () => {
+    const parentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-gitparent-'));
+    const memoBankDir = path.join(parentDir, '.memobank');
+    fs.mkdirSync(path.join(memoBankDir, 'meta'), { recursive: true });
+    fs.writeFileSync(path.join(memoBankDir, 'meta', 'config.yaml'), 'project:\n  name: fallback\n');
+    execSync('git init', { cwd: parentDir, stdio: 'pipe' });
+    execSync('git remote add origin https://github.com/myorg/myrepo.git', {
+      cwd: parentDir,
+      stdio: 'pipe',
+    });
+    const projectId = resolveProjectId(memoBankDir);
+    expect(projectId).toBe('myorg/myrepo');
+    fs.rmSync(parentDir, { recursive: true });
+  });
+});
+
+describe('writePending', () => {
+  it('creates .pending/<id>.json with correct content', () => {
+    const repo = makeTempRepo();
+    const entry = {
+      id: 'LRN-test-001',
+      timestamp: '2026-03-26T00:00:00.000Z',
+      projectId: 'org/repo',
+      candidates: [
+        {
+          name: 'test-lesson',
+          type: 'lesson' as const,
+          description: 'desc',
+          tags: ['a'],
+          confidence: 'high' as const,
+          content: 'body',
+        },
+      ],
+    };
+    writePending(repo, entry);
+    const filePath = path.join(repo, '.pending', 'LRN-test-001.json');
+    expect(fs.existsSync(filePath)).toBe(true);
+    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as typeof entry;
+    expect(parsed.projectId).toBe('org/repo');
+    expect(parsed.candidates[0]!.name).toBe('test-lesson');
+    fs.rmSync(repo, { recursive: true });
+  });
+
+  it('creates .pending/ directory if it does not exist', () => {
+    const repo = makeTempRepo();
+    expect(fs.existsSync(path.join(repo, '.pending'))).toBe(false);
+    writePending(repo, {
+      id: 'LRN-mkdir-test',
+      timestamp: '2026-03-26T00:00:00.000Z',
+      projectId: 'org/repo',
+      candidates: [],
+    });
+    expect(fs.existsSync(path.join(repo, '.pending'))).toBe(true);
     fs.rmSync(repo, { recursive: true });
   });
 });

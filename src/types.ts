@@ -17,6 +17,7 @@ export interface MemoryFile {
   status?: Status; // NEW
   content: string;
   scope?: MemoryScope;
+  project?: string; // source project ID (e.g. "org/repo"), written to frontmatter
 }
 
 export interface ScoreBreakdown {
