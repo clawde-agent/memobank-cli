@@ -32,6 +32,10 @@ export class EmbeddingGenerator {
     });
   }
 
+  getDimensions(): number {
+    return this.config.dimensions;
+  }
+
   /**
    * Get default base URL for provider
    */
