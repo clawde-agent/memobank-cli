@@ -6,12 +6,12 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as crypto from 'crypto';
 import { extract } from '../core/smart-extractor';
 import { sanitize } from '../core/sanitizer';
-import { writeMemory, loadAll, findRepoRoot } from '../core/store';
+import { findRepoRoot, resolveProjectId, writePending } from '../core/store';
+import { processQueue } from '../core/queue-processor';
 import { loadConfig } from '../config';
-import type { MemoryFile } from '../types';
+import type { PendingEntry } from '../core/store';
 import { calculateValueScore, getCaptureRecommendation } from '../core/noise-filter';
 
 export interface CaptureOptions {
@@ -19,21 +19,6 @@ export interface CaptureOptions {
   auto?: boolean;
   repo?: string;
   silent?: boolean;
-}
-
-/**
- * Hash a string for deduplication
- */
-function hashString(str: string): string {
-  return crypto.createHash('sha256').update(str).digest('hex');
-}
-
-/**
- * Check if a memory already exists (by name hash)
- */
-function isDuplicate(name: string, existingMemories: MemoryFile[]): boolean {
-  const hash = hashString(name);
-  return existingMemories.some((m) => hashString(m.name) === hash);
 }
 
 export async function capture(options: CaptureOptions = {}): Promise<void> {
@@ -162,37 +147,30 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
 
   console.log(`✓ ${highValueMemories.length} memories passed value filter\n`);
 
-  // 5. Load existing memories for deduplication
-  const existingMemories = loadAll(repoRoot);
-
-  // 6. Deduplicate and write
-  let written = 0;
-  for (const item of highValueMemories) {
-    if (isDuplicate(item.name, existingMemories)) {
-      console.log(`Skipping duplicate: ${item.name}`);
-      continue;
-    }
-
-    const memory = {
+  // 5. Write to pending queue, then process immediately
+  // (Phase 2/3: replace processQueue call here with an async trigger)
+  const entry: PendingEntry = {
+    id: `LRN-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    timestamp: new Date().toISOString(),
+    projectId: resolveProjectId(repoRoot),
+    candidates: highValueMemories.map((item) => ({
       name: item.name,
       type: item.type,
       description: item.description,
       tags: item.tags,
       confidence: item.confidence,
       content: item.content,
-      created: new Date().toISOString(),
-    };
+    })),
+  };
 
-    const filePath = writeMemory(repoRoot, memory);
-    console.log(`Created: ${filePath}`);
-    written++;
-  }
+  writePending(repoRoot, entry);
+  await processQueue(repoRoot);
 
-  // 7. Print summary
-  console.log(`\n📝 Captured ${written} high-value memories`);
-  console.log(`   Skipped ${extracted.length - written} low-value or duplicate items\n`);
+  // 6. Print summary
+  console.log(`\n📝 Captured up to ${highValueMemories.length} high-value memories`);
+  console.log(`   (duplicates skipped silently)\n`);
 
-  // 7. Note: index update is no-op for text engine
+  // Note: index update is no-op for text engine
   if (config.embedding.engine === 'lancedb') {
     console.log('Run: memo index --incremental to update LanceDB');
   }
