@@ -1,7 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { loadFile, writeMemory, resolveProjectId } from './store';
+import { deduplicate } from './dedup';
 import type { PendingEntry } from './store';
+import type { MemoryFile } from '../types';
 
 export async function processQueue(memoBankDir: string): Promise<void> {
   const pendingDir = path.join(memoBankDir, '.pending');
@@ -16,8 +18,8 @@ export async function processQueue(memoBankDir: string): Promise<void> {
 
   const currentProjectId = resolveProjectId(memoBankDir);
 
-  // Load existing memory names for deduplication
-  const existingNames = new Set<string>();
+  // Load all existing memories for dedup
+  const existing: MemoryFile[] = [];
   for (const type of ['lesson', 'decision', 'workflow', 'architecture']) {
     const typeDir = path.join(memoBankDir, type);
     if (!fs.existsSync(typeDir)) {
@@ -25,10 +27,9 @@ export async function processQueue(memoBankDir: string): Promise<void> {
     }
     for (const file of fs.readdirSync(typeDir).filter((f) => f.endsWith('.md'))) {
       try {
-        const memory = loadFile(path.join(typeDir, file));
-        existingNames.add(memory.name);
+        existing.push(loadFile(path.join(typeDir, file)));
       } catch {
-        /* skip unreadable files */
+        /* skip unreadable */
       }
     }
   }
@@ -51,16 +52,17 @@ export async function processQueue(memoBankDir: string): Promise<void> {
       continue;
     }
 
-    for (const candidate of entry.candidates) {
-      if (existingNames.has(candidate.name)) {
-        continue;
-      }
+    const { toWrite } = await deduplicate(entry.candidates, existing);
+    for (const candidate of toWrite) {
+      const created = new Date().toISOString();
+      // `created` is not in PendingCandidate — injected at write time
       writeMemory(memoBankDir, {
         ...candidate,
-        created: new Date().toISOString(),
+        created,
         project: entry.projectId,
       });
-      existingNames.add(candidate.name);
+      // Add to existing so subsequent pending files see newly written memories
+      existing.push({ ...candidate, path: '', created, status: 'experimental' });
     }
 
     fs.unlinkSync(filePath);

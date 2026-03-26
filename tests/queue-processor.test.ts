@@ -3,6 +3,15 @@ import * as os from 'os';
 import * as path from 'path';
 import { processQueue } from '../src/core/queue-processor';
 import { loadFile } from '../src/core/store';
+import { deduplicate } from '../src/core/dedup';
+jest.mock('../src/core/dedup');
+const mockDeduplicate = deduplicate as jest.MockedFunction<typeof deduplicate>;
+
+// Default: use real deduplicate logic so existing tests continue to pass
+beforeEach(() => {
+  const actual = jest.requireActual<typeof import('../src/core/dedup')>('../src/core/dedup');
+  mockDeduplicate.mockImplementation(actual.deduplicate);
+});
 
 function makeTempRepo(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-pq-'));
@@ -131,6 +140,142 @@ describe('processQueue', () => {
     expect(fs.existsSync(path.join(pendingDir, 'corrupt.json'))).toBe(false);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('corrupt'));
     warnSpy.mockRestore();
+    fs.rmSync(repo, { recursive: true });
+  });
+});
+
+describe('processQueue — dedup integration', () => {
+  beforeEach(() => {
+    mockDeduplicate.mockReset();
+  });
+
+  it('calls deduplicate() and writes only toWrite candidates', async () => {
+    const repo = makeTempRepo();
+    writePendingFile(repo, {
+      id: 'LRN-dedup',
+      timestamp: '2026-03-26T00:00:00.000Z',
+      projectId: 'test-project',
+      candidates: [
+        {
+          name: 'keep-this',
+          type: 'lesson',
+          description: 'keep',
+          tags: [],
+          confidence: 'high',
+          content: 'body',
+        },
+        {
+          name: 'skip-this',
+          type: 'lesson',
+          description: 'skip',
+          tags: [],
+          confidence: 'high',
+          content: 'body',
+        },
+      ],
+    });
+
+    mockDeduplicate.mockResolvedValue({
+      toWrite: [
+        {
+          name: 'keep-this',
+          type: 'lesson',
+          description: 'keep',
+          tags: [],
+          confidence: 'high',
+          content: 'body',
+        },
+      ],
+      toSkip: [
+        {
+          name: 'skip-this',
+          type: 'lesson',
+          description: 'skip',
+          tags: [],
+          confidence: 'high',
+          content: 'body',
+        },
+      ],
+    });
+
+    await processQueue(repo);
+
+    const lessonDir = path.join(repo, 'lesson');
+    const files = fs.readdirSync(lessonDir);
+    expect(files.length).toBe(1);
+    const memory = loadFile(path.join(lessonDir, files[0]!));
+    expect(memory.name).toBe('keep-this');
+    fs.rmSync(repo, { recursive: true });
+  });
+
+  it('second pending file sees memory written by first pending file (existing[] grows)', async () => {
+    const repo = makeTempRepo();
+    writePendingFile(repo, {
+      id: 'LRN-first',
+      timestamp: '2026-03-26T00:00:00.000Z',
+      projectId: 'test-project',
+      candidates: [
+        {
+          name: 'shared-lesson',
+          type: 'lesson',
+          description: 'd',
+          tags: [],
+          confidence: 'high',
+          content: 'body',
+        },
+      ],
+    });
+    writePendingFile(repo, {
+      id: 'LRN-second',
+      timestamp: '2026-03-26T00:00:01.000Z',
+      projectId: 'test-project',
+      candidates: [
+        {
+          name: 'shared-lesson',
+          type: 'lesson',
+          description: 'd',
+          tags: [],
+          confidence: 'high',
+          content: 'body',
+        },
+      ],
+    });
+
+    mockDeduplicate
+      .mockResolvedValueOnce({
+        toWrite: [
+          {
+            name: 'shared-lesson',
+            type: 'lesson',
+            description: 'd',
+            tags: [],
+            confidence: 'high',
+            content: 'body',
+          },
+        ],
+        toSkip: [],
+      })
+      .mockResolvedValueOnce({
+        toWrite: [],
+        toSkip: [
+          {
+            name: 'shared-lesson',
+            type: 'lesson',
+            description: 'd',
+            tags: [],
+            confidence: 'high',
+            content: 'body',
+          },
+        ],
+      });
+
+    await processQueue(repo);
+
+    const lessonDir = path.join(repo, 'lesson');
+    expect(fs.readdirSync(lessonDir).length).toBe(1);
+    expect(mockDeduplicate).toHaveBeenCalledTimes(2);
+    const secondCallExisting = mockDeduplicate.mock.calls[1]![1];
+    expect(secondCallExisting.some((m: { name: string }) => m.name === 'shared-lesson')).toBe(true);
     fs.rmSync(repo, { recursive: true });
   });
 });

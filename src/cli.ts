@@ -27,6 +27,7 @@ import {
 import { initCommand } from './commands/init';
 import { migrate } from './commands/migrate';
 import { scanCommand } from './commands/scan';
+import { processQueueCommand } from './commands/process-queue';
 import { findRepoRoot } from './core/store';
 import { loadConfig } from './config';
 import type { MemoryType } from './types';
@@ -443,6 +444,15 @@ program
       console.error(`Error: ${(error as Error).message}`);
       process.exit(1);
     }
+  });
+
+// Process-queue command
+program
+  .command('process-queue')
+  .description('Process pending memory queue (write candidates to memory files)')
+  .option('--background', 'Spawn as background process and return immediately')
+  .action(async (options) => {
+    await processQueueCommand({ background: options.background as boolean | undefined });
   });
 
 // Parse and execute
