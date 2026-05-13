@@ -25,6 +25,7 @@ module.exports = [
       '@typescript-eslint/explicit-function-return-type': 'warn',
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
       '@typescript-eslint/no-require-imports': 'warn',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     },
   },
 ];
