@@ -109,7 +109,10 @@ function installClaudeCode(repoRoot, enableAutoMemory = true) {
     const currentStop = hookMap.Stop ?? [];
     const hasStopHook = currentStop.some((h) => h.hooks?.some((cmd) => cmd.type === 'command' && cmd.command === STOP_HOOK));
     if (!hasStopHook) {
-        hookMap.Stop = [...currentStop, { matcher: '', hooks: [{ type: 'command', command: STOP_HOOK }] }];
+        hookMap.Stop = [
+            ...currentStop,
+            { matcher: '', hooks: [{ type: 'command', command: STOP_HOOK }] },
+        ];
     }
     // Write settings
     try {

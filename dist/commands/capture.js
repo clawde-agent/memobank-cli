@@ -163,7 +163,6 @@ async function capture(options = {}) {
     }
     console.log(`✓ ${highValueMemories.length} memories passed value filter\n`);
     // 5. Write to pending queue, then process immediately
-    // (Phase 2/3: replace processQueue call here with an async trigger)
     const entry = {
         id: `LRN-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         timestamp: new Date().toISOString(),

@@ -40,6 +40,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.recall = recall;
 exports.writeRecallResults = writeRecallResults;
 const path = __importStar(require("path"));
+const fs = __importStar(require("fs"));
 const store_1 = require("./store");
 const text_engine_1 = require("../engines/text-engine");
 const lifecycle_manager_1 = require("./lifecycle-manager");
@@ -50,7 +51,7 @@ function estimateTokenCount(text) {
 /**
  * Recall memories for a query
  */
-async function recall(query, repoRoot, config, engine, scope = 'all', explain = false) {
+async function recall(query, repoRoot, config, engine, scope = 'all', explain = false, withCode = false) {
     const globalDir = (0, store_1.getGlobalDir)(config.project.name);
     const workspaceDir = config.workspace?.enabled
         ? (0, store_1.getWorkspaceDir)(path.basename(config.workspace.remote ?? '', '.git'))
@@ -100,7 +101,31 @@ async function recall(query, repoRoot, config, engine, scope = 'all', explain = 
             tokenCount = estimateTokenCount(markdown);
         }
     }
-    return { results, markdown };
+    let symbolResults;
+    if (withCode) {
+        try {
+            const { CodeIndex } = await Promise.resolve().then(() => __importStar(require('../engines/code-index')));
+            const dbPath = CodeIndex.getDbPath(repoRoot);
+            if (fs.existsSync(dbPath)) {
+                const idx = new CodeIndex(dbPath);
+                symbolResults = idx.search(query, config.memory.top_k ?? 10);
+                idx.close();
+            }
+            else {
+                process.stderr.write('⚠  No code index found. Run: memo index-code [path]\n');
+            }
+        }
+        catch {
+            // better-sqlite3 not installed — silently skip
+        }
+    }
+    if (symbolResults && symbolResults.length > 0) {
+        markdown += '\n\n## Code Symbols\n\n';
+        for (const sr of symbolResults) {
+            markdown += formatSymbolResult(sr);
+        }
+    }
+    return { results, markdown, symbolResults };
 }
 function scopeLabel(scope) {
     if (scope === 'workspace') {
@@ -113,6 +138,15 @@ function scopeLabel(scope) {
         return '👤 personal';
     }
     return '';
+}
+function formatSymbolResult(result) {
+    const { symbol, score } = result;
+    const docLine = symbol.docstring ? `> ${symbol.docstring}\n` : '';
+    return (`### [score: ${score.toFixed(2)} | symbol] ${symbol.qualifiedName}\n\n` +
+        docLine +
+        `> \`${symbol.file}:${symbol.lineStart}–${symbol.lineEnd}\` · ${symbol.kind}\n\n` +
+        `---\n\n` +
+        (symbol.signature ? `${symbol.signature}\n` : ''));
 }
 /**
  * Format recall results as markdown for MEMORY.md

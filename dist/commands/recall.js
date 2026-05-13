@@ -38,6 +38,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.recallCommand = recallCommand;
+const fs = __importStar(require("fs"));
 const store_1 = require("../core/store");
 const config_1 = require("../config");
 const retriever_1 = require("../core/retriever");
@@ -65,6 +66,32 @@ async function recallCommand(query, options) {
         }
     }
     const repoRoot = (0, store_1.findRepoRoot)(process.cwd(), options.repo);
+    if (options.refs) {
+        try {
+            const { CodeIndex } = await Promise.resolve().then(() => __importStar(require('../engines/code-index')));
+            const dbPath = CodeIndex.getDbPath(repoRoot);
+            if (!fs.existsSync(dbPath)) {
+                console.error('No code index found. Run: memo index-code [path]');
+                return;
+            }
+            const idx = new CodeIndex(dbPath);
+            const refs = idx.getRefs(options.refs);
+            idx.close();
+            if (refs.length === 0) {
+                console.log(`No callers found for: ${options.refs}`);
+                return;
+            }
+            console.log(`\n## Callers of \`${options.refs}\` (${refs.length})\n`);
+            for (const r of refs) {
+                console.log(`- ${r.symbol.qualifiedName}  ${r.symbol.file}:${r.symbol.lineStart}`);
+            }
+            return;
+        }
+        catch {
+            console.error('Code index unavailable. Run: npm install memobank-cli --include=optional');
+            return;
+        }
+    }
     const config = (0, config_1.loadConfig)(repoRoot);
     if (options.top) {
         config.memory.top_k = options.top;
@@ -93,9 +120,9 @@ async function recallCommand(query, options) {
             engine = new text_engine_1.TextEngine();
         }
     }
-    const { results, markdown } = await (0, retriever_1.recall)(query, repoRoot, config, engine, scope, explain);
+    const { results, markdown, symbolResults } = await (0, retriever_1.recall)(query, repoRoot, config, engine, scope, explain, options.code ?? false);
     if (options.format === 'json') {
-        console.log(JSON.stringify(results, null, 2));
+        console.log(JSON.stringify({ results, symbolResults }, null, 2));
         return;
     }
     console.log(markdown);

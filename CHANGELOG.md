@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-05-13
+
+### Added
+
+- **Code Symbol Index** — `memo index-code [path]` parses your codebase with tree-sitter and stores symbols in `.memobank/meta/code-index.db` (SQLite FTS5, local only, not committed). Supports TypeScript, JavaScript, Python, Go, Rust, YAML, and C#.
+- **Dual-track recall** — `memo recall "query" --code` searches memories and code symbols in parallel. Results are score-normalized per stream and merged into a single ranked list.
+- **Call-graph lookup** — `memo recall --refs <symbol>` returns all callers of a function from the edge table.
+- **`--summarize` flag** — after indexing, writes a `project-architecture-snapshot` architecture memory with language counts and symbol stats.
+- **Incremental scan** — unchanged files are skipped via SHA256 hash cache; use `--force` to re-index all.
+- **`--langs` filter** — `memo index-code --langs typescript,python` limits the scan to specific languages.
+- **New types** — `CodeSymbol`, `CodeEdge`, `SymbolResult`, `CodeScanOptions`, `SymbolKind`, `EdgeKind`, `IndexedLanguage` exported from `src/types.ts`.
+
+### Dependencies
+
+- Added `optionalDependencies`: `better-sqlite3`, `tree-sitter`, and grammar packages for 7 languages. Core commands are unaffected when optional deps are absent.
+- Install with: `npm install memobank-cli --include=optional`
+
 ## [0.7.0] - 2026-03-26
 
 ### Added

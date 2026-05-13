@@ -8,6 +8,10 @@ import type { MemoryFile } from '../types';
  * Compute decay score for a memory (0-1)
  * Based on recency, access frequency, and confidence
  */
+/**
+ * Compute decay score for a memory (0-1) based on recency and confidence.
+ * Access frequency is applied separately in retriever.ts via post-search boost.
+ */
 export declare function computeDecayScore(memory: MemoryFile, now?: Date): number;
 /**
  * Check if a memory is due for review
