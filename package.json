@@ -69,7 +69,9 @@
     "prettier": "^3.8.1",
     "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "@lancedb/lancedb": "^0.27.1",
+    "openai": "^6.33.0"
   },
   "optionalDependencies": {
     "@lancedb/core": "^0.15.0",
