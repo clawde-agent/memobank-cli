@@ -4,7 +4,7 @@
  */
 
 import { findRepoRoot } from '../core/store';
-import type { LifecycleConfig } from '../core/lifecycle-manager';
+import type { TierConfig } from '../core/lifecycle-manager';
 import {
   analyzeLifecycle,
   generateLifecycleReport,
@@ -25,7 +25,7 @@ export interface LifecycleOptions {
   scan?: boolean;
 }
 
-const DEFAULT_CONFIG: LifecycleConfig = {
+const DEFAULT_CONFIG: TierConfig = {
   coreThreshold: 10,
   peripheralThreshold: 90,
   archiveAfterDays: 180,
