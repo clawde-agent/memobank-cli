@@ -1,6 +1,20 @@
 import * as path from 'path';
 import type { CodeSymbol, CodeEdge, SymbolResult } from '../types';
 
+interface SymbolRow {
+  name: string;
+  qualified_name: string;
+  kind: string;
+  file: string;
+  line_start: number;
+  line_end: number;
+  signature: string | null;
+  docstring: string | null;
+  is_exported: number;
+  memory_refs: string | null;
+  fts_rank?: number;
+}
+
 const SCHEMA = `
 PRAGMA foreign_keys = ON;
 PRAGMA journal_mode = WAL;
@@ -71,7 +85,7 @@ export class CodeIndex {
   private db: any;
 
   constructor(dbPath: string) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const Database = require('better-sqlite3');
     this.db = new Database(dbPath);
     this.db.exec(SCHEMA);
@@ -79,6 +93,7 @@ export class CodeIndex {
 
   static isAvailable(): boolean {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       require('better-sqlite3');
       return true;
     } catch {
@@ -98,7 +113,9 @@ export class CodeIndex {
     const row = this.db.prepare('SELECT hash FROM files WHERE path = ?').get(filePath) as
       | { hash: string }
       | undefined;
-    if (!row) return true;
+    if (!row) {
+      return true;
+    }
     return row.hash !== hash;
   }
 
@@ -120,9 +137,9 @@ export class CodeIndex {
     const file = this.db.prepare('SELECT id FROM files WHERE path = ?').get(filePath) as
       | { id: number }
       | undefined;
-    if (!file) return;
-
-    this.db.prepare('DELETE FROM symbols WHERE file_id = ?').run(file.id);
+    if (!file) {
+      return;
+    }
 
     const insertSymbol = this.db.prepare(
       `INSERT INTO symbols
@@ -135,6 +152,7 @@ export class CodeIndex {
     );
 
     const insertMany = this.db.transaction(() => {
+      this.db.prepare('DELETE FROM symbols WHERE file_id = ?').run(file.id);
       const idMap = new Map<string, number>();
 
       for (const sym of symbols) {
@@ -156,7 +174,9 @@ export class CodeIndex {
 
       for (const edge of edges) {
         const sourceId = idMap.get(edge.sourceName);
-        if (sourceId === undefined) continue;
+        if (sourceId === undefined) {
+          continue;
+        }
         insertEdge.run(sourceId, edge.targetName, edge.kind, edge.line);
       }
     });
@@ -177,29 +197,31 @@ export class CodeIndex {
          ORDER BY rank
          LIMIT ?`
       )
-      .all(query, topK) as any[];
+      .all(query, topK) as SymbolRow[];
 
-    if (rows.length === 0) return [];
+    if (rows.length === 0) {
+      return [];
+    }
 
-    const ranks = rows.map((r) => r.fts_rank as number);
+    const ranks = rows.map((r) => r.fts_rank ?? 0);
     const minRank = Math.min(...ranks);
     const maxRank = Math.max(...ranks);
     const range = maxRank - minRank || 1;
 
     return rows.map((r) => ({
       symbol: {
-        name: r.name as string,
-        qualifiedName: r.qualified_name as string,
+        name: r.name,
+        qualifiedName: r.qualified_name,
         kind: r.kind as CodeSymbol['kind'],
-        file: r.file as string,
-        lineStart: r.line_start as number,
-        lineEnd: r.line_end as number,
-        signature: r.signature as string | undefined,
-        docstring: r.docstring as string | undefined,
+        file: r.file,
+        lineStart: r.line_start,
+        lineEnd: r.line_end,
+        signature: r.signature ?? undefined,
+        docstring: r.docstring ?? undefined,
         isExported: Boolean(r.is_exported),
-        memoryRefs: r.memory_refs ? (r.memory_refs as string).split(',') : undefined,
+        memoryRefs: r.memory_refs ? r.memory_refs.split(',') : undefined,
       },
-      score: 1 - (r.fts_rank - minRank) / range,
+      score: 1 - ((r.fts_rank ?? 0) - minRank) / range,
     }));
   }
 
@@ -214,20 +236,20 @@ export class CodeIndex {
          WHERE e.target_name = ?
          LIMIT 50`
       )
-      .all(symbolName) as any[];
+      .all(symbolName) as SymbolRow[];
 
     return rows.map((r) => ({
       symbol: {
-        name: r.name as string,
-        qualifiedName: r.qualified_name as string,
+        name: r.name,
+        qualifiedName: r.qualified_name,
         kind: r.kind as CodeSymbol['kind'],
-        file: r.file as string,
-        lineStart: r.line_start as number,
-        lineEnd: r.line_end as number,
-        signature: r.signature as string | undefined,
-        docstring: r.docstring as string | undefined,
+        file: r.file,
+        lineStart: r.line_start,
+        lineEnd: r.line_end,
+        signature: r.signature ?? undefined,
+        docstring: r.docstring ?? undefined,
         isExported: Boolean(r.is_exported),
-        memoryRefs: r.memory_refs ? (r.memory_refs as string).split(',') : undefined,
+        memoryRefs: r.memory_refs ? r.memory_refs.split(',') : undefined,
       },
       score: 1.0,
     }));
