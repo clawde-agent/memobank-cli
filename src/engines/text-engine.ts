@@ -110,7 +110,8 @@ export class TextEngine implements EngineAdapter {
   /**
    * Index is a no-op for text engine - searches live files directly
    */
-  async index(_memories: MemoryFile[], _incremental: boolean): Promise<void> {
+
+  async index(_memories: MemoryFile[]): Promise<void> {
     // No-op - text engine doesn't need indexing
   }
 }

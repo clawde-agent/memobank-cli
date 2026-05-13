@@ -404,8 +404,8 @@ export function getFlaggedMemories(repoRoot: string): MemoryFile[] {
 
   const flaggedPaths = new Set(
     Object.entries(corrections)
-      .filter(([_, record]) => record.flaggedForReview)
-      .map(([path, _]) => path)
+      .filter(([, record]) => record.flaggedForReview)
+      .map(([path]) => path)
   );
 
   return memories.filter((m) => flaggedPaths.has(m.path));

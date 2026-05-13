@@ -1,7 +1,7 @@
 {
   "name": "memobank-cli",
-  "version": "0.8.0",
-  "description": "Persistent memory for AI coding sessions \u2014 Git-native, human-readable, safe to share",
+  "version": "0.6.0",
+  "description": "Persistent memory for AI coding sessions — Git-native, human-readable, safe to share",
   "main": "./dist/cli.js",
   "bin": {
     "memo": "dist/cli.js"
@@ -58,15 +58,14 @@
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
-    "@types/better-sqlite3": "^7.6.0",
     "@types/jest": "^30.0.0",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.5.0",
     "@types/react": "^19.2.14",
-    "@typescript-eslint/eslint-plugin": "^7.18.0",
-    "@typescript-eslint/parser": "^7.18.0",
+    "@typescript-eslint/eslint-plugin": "^8.57.2",
+    "@typescript-eslint/parser": "^8.57.2",
     "ajv": "^8.18.0",
-    "eslint": "^8.57.1",
+    "eslint": "^10.1.0",
     "husky": "^9.1.7",
     "jest": "^30.3.0",
     "lint-staged": "^16.4.0",
@@ -80,16 +79,7 @@
   "optionalDependencies": {
     "@lancedb/core": "^0.15.0",
     "@lancedb/lancedb": "^0.27.1",
-    "openai": "^6.33.0",
-    "better-sqlite3": "^9.4.0",
-    "tree-sitter": "^0.25.0",
-    "tree-sitter-typescript": "^0.23.2",
-    "tree-sitter-javascript": "^0.25.0",
-    "tree-sitter-python": "^0.25.0",
-    "tree-sitter-go": "^0.25.0",
-    "tree-sitter-rust": "^0.24.0",
-    "tree-sitter-yaml": "^0.5.0",
-    "tree-sitter-c-sharp": "^0.23.5"
+    "openai": "^6.33.0"
   },
   "engines": {
     "node": "22.x"
