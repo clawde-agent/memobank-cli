@@ -65,36 +65,86 @@ memo recall "query" --code
 
 ## 5. SQLite Schema
 
+4 tables. Inspired by roam-code's schema but scoped to KISS+SOTA principles.
+
 ```sql
--- Symbol full-text search
-CREATE VIRTUAL TABLE symbols USING fts5(
-  name,        -- "findRepoRoot"
-  kind,        -- fn | class | interface | type | const | method
-  file,        -- "src/core/store.ts"
-  start_line,  -- "42"
-  end_line,    -- "67"
-  signature,   -- "findRepoRoot(cwd: string, repoFlag?: string): string"
-  docstring,   -- up to 3 lines of leading comment/JSDoc
-  language     -- typescript | python | go | rust | yaml | csharp
+-- 1. Files — anchor for CASCADE deletes, incremental scan state
+CREATE TABLE files (
+  id       INTEGER PRIMARY KEY AUTOINCREMENT,
+  path     TEXT NOT NULL UNIQUE,  -- relative to scanned root
+  language TEXT,                  -- typescript | python | go | rust | yaml | csharp
+  hash     TEXT,                  -- SHA256 of file content (incremental skip)
+  mtime    REAL                   -- file mtime (fast pre-check before hashing)
+);
+CREATE INDEX idx_files_path ON files(path);
+
+-- 2. Symbols — structured data with FK cascade
+CREATE TABLE symbols (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  file_id        INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+  name           TEXT NOT NULL,
+  qualified_name TEXT,           -- "ClassName.methodName" (disambiguates overloads)
+  kind           TEXT NOT NULL,  -- fn | class | interface | type | const | method
+  signature      TEXT,           -- full signature line
+  docstring      TEXT,           -- up to 3 lines of leading comment/JSDoc
+  line_start     INTEGER,
+  line_end       INTEGER,
+  is_exported    INTEGER DEFAULT 1,
+  parent_id      INTEGER REFERENCES symbols(id) ON DELETE SET NULL,
+  memory_refs    TEXT            -- comma-separated memobank memory filenames (SOTA bridge)
+);
+CREATE INDEX idx_symbols_file   ON symbols(file_id);
+CREATE INDEX idx_symbols_name   ON symbols(name);
+CREATE INDEX idx_symbols_qname  ON symbols(qualified_name);
+CREATE INDEX idx_symbols_kind   ON symbols(kind);
+
+-- 3. FTS5 content table — full-text search over symbols (mirrors row 2)
+--    Uses content= so no data is duplicated; triggers keep it in sync.
+CREATE VIRTUAL TABLE symbols_fts USING fts5(
+  name, qualified_name, signature, docstring,
+  content='symbols',
+  content_rowid='id'
 );
 
--- Call graph edges (enables --refs / basic blast radius)
+-- Triggers to keep FTS5 mirror in sync with symbols table
+CREATE TRIGGER symbols_ai AFTER INSERT ON symbols BEGIN
+  INSERT INTO symbols_fts(rowid, name, qualified_name, signature, docstring)
+  VALUES (new.id, new.name, new.qualified_name, new.signature, new.docstring);
+END;
+CREATE TRIGGER symbols_ad AFTER DELETE ON symbols BEGIN
+  INSERT INTO symbols_fts(symbols_fts, rowid, name, qualified_name, signature, docstring)
+  VALUES ('delete', old.id, old.name, old.qualified_name, old.signature, old.docstring);
+END;
+CREATE TRIGGER symbols_au AFTER UPDATE ON symbols BEGIN
+  INSERT INTO symbols_fts(symbols_fts, rowid, name, qualified_name, signature, docstring)
+  VALUES ('delete', old.id, old.name, old.qualified_name, old.signature, old.docstring);
+  INSERT INTO symbols_fts(rowid, name, qualified_name, signature, docstring)
+  VALUES (new.id, new.name, new.qualified_name, new.signature, new.docstring);
+END;
+
+-- 4. Edges — call graph (enables --refs)
 CREATE TABLE edges (
-  caller_file TEXT NOT NULL,
-  caller_name TEXT NOT NULL,
-  callee_name TEXT NOT NULL,
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  source_id   INTEGER NOT NULL REFERENCES symbols(id) ON DELETE CASCADE,
+  target_id   INTEGER REFERENCES symbols(id) ON DELETE SET NULL,  -- null if unresolved
+  target_name TEXT NOT NULL,  -- preserved for unresolved cross-file calls
+  kind        TEXT NOT NULL DEFAULT 'calls',  -- calls | imports | inherits
   line        INTEGER
 );
-CREATE INDEX idx_edges_callee ON edges(callee_name);
-CREATE INDEX idx_edges_caller ON edges(caller_name);
-
--- Incremental scan state
-CREATE TABLE scan_meta (
-  file     TEXT PRIMARY KEY,
-  mtime    INTEGER,
-  checksum TEXT
-);
+CREATE INDEX idx_edges_source      ON edges(source_id);
+CREATE INDEX idx_edges_target      ON edges(target_id);
+CREATE INDEX idx_edges_target_name ON edges(target_name);
 ```
+
+**Design decisions (vs roam):**
+
+- `files` table is separate — enables `ON DELETE CASCADE` so rescanning a file atomically removes all its stale symbols/edges
+- FTS5 uses `content=` mode with triggers — no data duplication, stays in sync automatically
+- `symbols.memory_refs` bridges code symbols to memobank memory files — unique to memobank, roam has no equivalent
+- `symbols.qualified_name` resolves same-name symbols across files (`store.findRepoRoot` vs `utils.findRepoRoot`)
+- `edges.target_id` nullable — cross-file calls may not resolve at parse time; `target_name` is always set
+
+**Deferred to v2:** `file_edges` (file-level dependency graph), `graph_metrics` (PageRank), `symbol_metrics` (complexity scores)
 
 ---
 
