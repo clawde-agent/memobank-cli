@@ -28,6 +28,7 @@ import { initCommand } from './commands/init';
 import { migrate } from './commands/migrate';
 import { scanCommand } from './commands/scan';
 import { processQueueCommand } from './commands/process-queue';
+import { codeScanCommand } from './commands/code-scan';
 import { findRepoRoot } from './core/store';
 import { loadConfig } from './config';
 import type { MemoryType } from './types';
@@ -438,6 +439,30 @@ program
         staged: options.staged,
         failOnSecrets: options.failOnSecrets,
         fix: options.fix,
+        repo: options.repo,
+      });
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+// Code index command
+program
+  .command('index-code [path]')
+  .description('Index codebase symbols for use with memo recall --code')
+  .option('--summarize', 'Write project-architecture-snapshot memory after indexing')
+  .option('--force', 'Re-index all files (ignore hash cache)')
+  .option('--langs <list>', 'Comma-separated language filter, e.g. typescript,python')
+  .option('--repo <path>', 'Memobank repository path')
+  .action(async (scanPath: string | undefined, options) => {
+    try {
+      await codeScanCommand(scanPath, {
+        summarize: options.summarize,
+        force: options.force,
+        langs: options.langs
+          ? (options.langs.split(',').map((l: string) => l.trim()) as import('./types').IndexedLanguage[])
+          : undefined,
         repo: options.repo,
       });
     } catch (error) {
