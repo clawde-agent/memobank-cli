@@ -46,7 +46,7 @@
   "homepage": "https://github.com/clawde-agent/memobank-cli#readme",
   "dependencies": {
     "chalk": "^5.3.0",
-    "commander": "^12.0.0",
+    "commander": "^14.0.3",
     "glob": "^13.0.6",
     "gray-matter": "^4.0.3",
     "ink": "^6.8.0",
