@@ -80,7 +80,7 @@ export interface ExtractionResult {
   content: string;
 }
 
-export type SymbolKind = 'fn' | 'class' | 'interface' | 'type' | 'const' | 'method';
+export type SymbolKind = 'function' | 'class' | 'interface' | 'type' | 'const' | 'method';
 export type EdgeKind = 'calls' | 'imports' | 'inherits';
 export type IndexedLanguage =
   | 'typescript'
@@ -98,17 +98,18 @@ export interface CodeSymbol {
   file: string; // relative path from scan root
   lineStart: number;
   lineEnd: number;
-  signature: string;
-  docstring: string; // up to 3 lines
+  signature?: string;
+  docstring?: string; // up to 3 lines
   isExported: boolean;
   parentName?: string; // for methods: the class name
-  memoryRefs?: string; // comma-separated memory filenames
+  memoryRefs?: string[]; // memory filenames
 }
 
 export interface CodeEdge {
   sourceName: string; // qualified name of caller
   sourceFile: string;
   targetName: string; // name of callee (may be unresolved)
+  targetFile?: string;
   kind: EdgeKind;
   line: number;
 }
@@ -121,11 +122,11 @@ export interface SymbolResult {
 export interface CodeScanOptions {
   summarize?: boolean;
   force?: boolean;
-  langs?: string;
+  langs?: IndexedLanguage[];
   repo?: string;
 }
 
 export interface RefsOptions {
   repo?: string;
-  format?: string;
+  format?: 'text' | 'json';
 }
