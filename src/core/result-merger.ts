@@ -4,26 +4,33 @@ export type MergedItem =
   | { type: 'memory'; result: RecallResult; normalizedScore: number }
   | { type: 'symbol'; result: SymbolResult; normalizedScore: number };
 
+/**
+ * Normalizes scores within [0, 1] using min-max scaling.
+ * Returns empty array if input is empty.
+ * If all scores are identical, returns array of 1.0s.
+ */
+function normalize(scores: number[]): number[] {
+  if (scores.length === 0) return [];
+  const min = Math.min(...scores);
+  const max = Math.max(...scores);
+  const range = max - min;
+
+  if (range === 0) {
+    return scores.map(() => 1.0);
+  }
+
+  return scores.map((score) => (score - min) / range);
+}
+
 export function mergeResults(
   memories: RecallResult[],
   symbols: SymbolResult[],
   topK: number
 ): MergedItem[] {
-  // Combine all scores to find global min/max
-  const allScores = [...memories.map((r) => r.score), ...symbols.map((r) => r.score)];
-  const globalMin = allScores.length > 0 ? Math.min(...allScores) : 0;
-  const globalMax = allScores.length > 0 ? Math.max(...allScores) : 0;
-  const globalRange = globalMax - globalMin;
-
-  const normalizeGlobal = (score: number): number => {
-    if (globalRange === 0) {
-      return 1.0;
-    }
-    return (score - globalMin) / globalRange;
-  };
-
-  const memNorm = memories.map((r) => normalizeGlobal(r.score));
-  const symNorm = symbols.map((r) => normalizeGlobal(r.score));
+  // Per-stream normalization: memories normalized against their own range,
+  // symbols against their own range
+  const memNorm = normalize(memories.map((r) => r.score));
+  const symNorm = normalize(symbols.map((r) => r.score));
 
   const items: MergedItem[] = [
     ...memories.map((r, i) => ({
@@ -38,6 +45,15 @@ export function mergeResults(
     })),
   ];
 
-  items.sort((a, b) => b.normalizedScore - a.normalizedScore);
+  // Sort by normalized score (descending), with tiebreaker: symbols before memories
+  items.sort((a, b) => {
+    const scoreDiff = b.normalizedScore - a.normalizedScore;
+    if (scoreDiff !== 0) return scoreDiff;
+    // On tie, symbols sort before memories (code results are more precise)
+    if (a.type === 'symbol' && b.type !== 'symbol') return -1;
+    if (b.type === 'symbol' && a.type !== 'symbol') return 1;
+    return 0;
+  });
+
   return items.slice(0, topK);
 }
