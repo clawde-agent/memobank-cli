@@ -92,6 +92,8 @@ program
   .option('--repo <path>', 'Memobank repository path')
   .option('--scope <scope>', 'Limit search scope: personal|project|workspace|all (default: all)')
   .option('--explain', 'Show score breakdown for each result')
+  .option('--code', 'Enable dual-track recall: search memories + code symbols', false)
+  .option('--refs <symbol>', 'Show callers of a symbol from the code index')
   .action(async (query: string, options: RecallOptions) => {
     try {
       await recallCommand(query, options);
