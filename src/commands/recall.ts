@@ -3,6 +3,7 @@
  * Search memories and write to MEMORY.md
  */
 
+import * as fs from 'fs';
 import { findRepoRoot } from '../core/store';
 import { loadConfig } from '../config';
 import { recall, writeRecallResults } from '../core/retriever';
@@ -18,6 +19,8 @@ export interface RecallOptions {
   repo?: string;
   scope?: string;
   explain?: boolean;
+  code?: boolean;
+  refs?: string;
 }
 
 export async function recallCommand(query: string, options: RecallOptions): Promise<void> {
@@ -45,6 +48,33 @@ export async function recallCommand(query: string, options: RecallOptions): Prom
   }
 
   const repoRoot = findRepoRoot(process.cwd(), options.repo);
+
+  if (options.refs) {
+    try {
+      const { CodeIndex } = await import('../engines/code-index');
+      const dbPath = CodeIndex.getDbPath(repoRoot);
+      if (!fs.existsSync(dbPath)) {
+        console.error('No code index found. Run: memo index-code [path]');
+        return;
+      }
+      const idx = new CodeIndex(dbPath);
+      const refs = idx.getRefs(options.refs);
+      idx.close();
+      if (refs.length === 0) {
+        console.log(`No callers found for: ${options.refs}`);
+        return;
+      }
+      console.log(`\n## Callers of \`${options.refs}\` (${refs.length})\n`);
+      for (const r of refs) {
+        console.log(`- ${r.symbol.qualifiedName}  ${r.symbol.file}:${r.symbol.lineStart}`);
+      }
+      return;
+    } catch {
+      console.error('Code index unavailable. Run: npm install memobank-cli --include=optional');
+      return;
+    }
+  }
+
   const config = loadConfig(repoRoot);
 
   if (options.top) {
@@ -79,10 +109,18 @@ export async function recallCommand(query: string, options: RecallOptions): Prom
     }
   }
 
-  const { results, markdown } = await recall(query, repoRoot, config, engine, scope, explain);
+  const { results, markdown, symbolResults } = await recall(
+    query,
+    repoRoot,
+    config,
+    engine,
+    scope,
+    explain,
+    options.code ?? false
+  );
 
   if (options.format === 'json') {
-    console.log(JSON.stringify(results, null, 2));
+    console.log(JSON.stringify({ results, symbolResults }, null, 2));
     return;
   }
 

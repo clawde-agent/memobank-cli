@@ -110,7 +110,7 @@ export class TextEngine implements EngineAdapter {
   /**
    * Index is a no-op for text engine - searches live files directly
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
   async index(_memories: MemoryFile[]): Promise<void> {
     // No-op - text engine doesn't need indexing
   }

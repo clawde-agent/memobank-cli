@@ -1,0 +1,109 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { CodeIndex } from '../src/engines/code-index';
+import type { CodeSymbol, CodeEdge } from '../src/types';
+
+function makeTmpDir(): string {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'memo-codeindex-'));
+}
+
+function makeSymbol(overrides: Partial<CodeSymbol> = {}): CodeSymbol {
+  return {
+    name: 'findRepoRoot',
+    qualifiedName: 'findRepoRoot',
+    kind: 'function',
+    file: 'src/core/store.ts',
+    lineStart: 42,
+    lineEnd: 67,
+    signature: 'findRepoRoot(cwd: string, repoFlag?: string): string',
+    docstring: 'Resolve memobank repo root by walking up from cwd',
+    isExported: true,
+    ...overrides,
+  };
+}
+
+describe('CodeIndex', () => {
+  let tmpDir: string;
+  let index: CodeIndex;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    index = new CodeIndex(path.join(tmpDir, 'code-index.db'));
+  });
+
+  afterEach(() => {
+    index.close();
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  it('initializes schema without error', () => {
+    expect(() => new CodeIndex(path.join(tmpDir, 'code-index2.db'))).not.toThrow();
+  });
+
+  it('upserts a file and its symbols', () => {
+    const sym = makeSymbol();
+    index.upsertFile('src/core/store.ts', 'typescript', 'abc123', Date.now());
+    index.upsertSymbols('src/core/store.ts', [sym], []);
+    const results = index.search('findRepoRoot', 5);
+    expect(results).toHaveLength(1);
+    expect(results[0].symbol.name).toBe('findRepoRoot');
+    expect(results[0].symbol.signature).toContain('cwd: string');
+  });
+
+  it('returns score between 0 and 1', () => {
+    index.upsertFile('src/core/store.ts', 'typescript', 'abc123', Date.now());
+    index.upsertSymbols('src/core/store.ts', [makeSymbol()], []);
+    const results = index.search('findRepoRoot', 5);
+    expect(results[0].score).toBeGreaterThan(0);
+    expect(results[0].score).toBeLessThanOrEqual(1);
+  });
+
+  it('cascades delete symbols when file is removed', () => {
+    index.upsertFile('src/core/store.ts', 'typescript', 'abc123', Date.now());
+    index.upsertSymbols('src/core/store.ts', [makeSymbol()], []);
+    index.deleteFile('src/core/store.ts');
+    const results = index.search('findRepoRoot', 5);
+    expect(results).toHaveLength(0);
+  });
+
+  it('upserts edges and returns refs', () => {
+    index.upsertFile('src/core/store.ts', 'typescript', 'abc123', Date.now());
+    index.upsertFile('src/cli.ts', 'typescript', 'def456', Date.now());
+    const caller = makeSymbol({ name: 'main', qualifiedName: 'main', file: 'src/cli.ts' });
+    const callee = makeSymbol();
+    index.upsertSymbols('src/core/store.ts', [callee], []);
+    index.upsertSymbols(
+      'src/cli.ts',
+      [caller],
+      [
+        {
+          sourceName: 'main',
+          sourceFile: 'src/cli.ts',
+          targetName: 'findRepoRoot',
+          kind: 'calls',
+          line: 10,
+        },
+      ]
+    );
+    const refs = index.getRefs('findRepoRoot');
+    expect(refs.length).toBeGreaterThan(0);
+    expect(refs[0].symbol.name).toBe('main');
+  });
+
+  it('skips unchanged files (same hash)', () => {
+    index.upsertFile('src/core/store.ts', 'typescript', 'abc123', Date.now());
+    const changed = index.needsReindex('src/core/store.ts', 'abc123');
+    expect(changed).toBe(false);
+  });
+
+  it('flags changed files (different hash)', () => {
+    index.upsertFile('src/core/store.ts', 'typescript', 'abc123', Date.now());
+    const changed = index.needsReindex('src/core/store.ts', 'newHash');
+    expect(changed).toBe(true);
+  });
+
+  it('isAvailable returns true when better-sqlite3 is installed', () => {
+    expect(CodeIndex.isAvailable()).toBe(true);
+  });
+});

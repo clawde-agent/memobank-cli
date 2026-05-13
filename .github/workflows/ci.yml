@@ -31,7 +31,7 @@ jobs:
         with:
           node-version: '22.x'
           cache: 'npm'
-      - run: npm install --no-audit
+      - run: npm install --no-audit --legacy-peer-deps
       - run: npm run build
       - run: npm test -- --coverage
       - uses: codecov/codecov-action@v6

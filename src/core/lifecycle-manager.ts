@@ -29,23 +29,18 @@ export interface AccessLog {
 }
 
 /**
- * Lifecycle configuration
+ * Tier-based archival configuration (distinct from status-transition LifecycleConfig in types.ts)
  */
-export interface LifecycleConfig {
-  // Tier thresholds
+export interface TierConfig {
   coreThreshold: number; // Access count to become core
   peripheralThreshold: number; // Days without access to become peripheral
-
-  // Archival settings
   archiveAfterDays: number; // Days without access before archival suggestion
   deleteAfterDays: number; // Days archived before deletion suggestion
-
-  // Correction settings
   allowCorrections: boolean;
   correctionThreshold: number; // Number of corrections before flagging
 }
 
-const DEFAULT_CONFIG: LifecycleConfig = {
+const DEFAULT_CONFIG: TierConfig = {
   coreThreshold: 10,
   peripheralThreshold: 90,
   archiveAfterDays: 180,
@@ -238,7 +233,7 @@ export function recordAccess(repoRoot: string, memoryPath: string, query?: strin
 export function getMemoryTier(
   memory: MemoryFile,
   accessLog?: AccessLog,
-  config: LifecycleConfig = DEFAULT_CONFIG
+  config: TierConfig = DEFAULT_CONFIG
 ): MemoryTier {
   const accessCount = accessLog?.accessCount || 0;
 
@@ -276,7 +271,7 @@ export interface LifecycleAnalysis {
 
 export function analyzeLifecycle(
   repoRoot: string,
-  config: LifecycleConfig = DEFAULT_CONFIG
+  config: TierConfig = DEFAULT_CONFIG
 ): LifecycleAnalysis[] {
   const memories = loadAll(repoRoot);
   const accessLogs = loadAccessLogs(repoRoot);
@@ -477,7 +472,7 @@ export function updateMemory(
  */
 export function generateLifecycleReport(
   repoRoot: string,
-  config: LifecycleConfig = DEFAULT_CONFIG
+  config: TierConfig = DEFAULT_CONFIG
 ): string {
   const analysis = analyzeLifecycle(repoRoot, config);
 

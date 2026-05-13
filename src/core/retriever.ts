@@ -4,7 +4,8 @@
  */
 
 import * as path from 'path';
-import type { RecallResult, MemoConfig, MemoryScope } from '../types';
+import * as fs from 'fs';
+import type { RecallResult, MemoConfig, MemoryScope, SymbolResult } from '../types';
 import type { EngineAdapter } from '../engines/engine-adapter';
 import { loadAll, writeMemoryMd, getGlobalDir, getWorkspaceDir } from './store';
 import { TextEngine } from '../engines/text-engine';
@@ -24,8 +25,9 @@ export async function recall(
   config: MemoConfig,
   engine?: EngineAdapter,
   scope: MemoryScope | 'all' = 'all',
-  explain: boolean = false
-): Promise<{ results: RecallResult[]; markdown: string }> {
+  explain: boolean = false,
+  withCode: boolean = false
+): Promise<{ results: RecallResult[]; markdown: string; symbolResults?: SymbolResult[] }> {
   const globalDir = getGlobalDir(config.project.name);
   const workspaceDir = config.workspace?.enabled
     ? getWorkspaceDir(path.basename(config.workspace.remote ?? '', '.git'))
@@ -96,7 +98,32 @@ export async function recall(
     }
   }
 
-  return { results, markdown };
+  let symbolResults: SymbolResult[] | undefined;
+
+  if (withCode) {
+    try {
+      const { CodeIndex } = await import('../engines/code-index');
+      const dbPath = CodeIndex.getDbPath(repoRoot);
+      if (fs.existsSync(dbPath)) {
+        const idx = new CodeIndex(dbPath);
+        symbolResults = idx.search(query, config.memory.top_k ?? 10);
+        idx.close();
+      } else {
+        process.stderr.write('⚠  No code index found. Run: memo index-code [path]\n');
+      }
+    } catch {
+      // better-sqlite3 not installed — silently skip
+    }
+  }
+
+  if (symbolResults && symbolResults.length > 0) {
+    markdown += '\n\n## Code Symbols\n\n';
+    for (const sr of symbolResults) {
+      markdown += formatSymbolResult(sr);
+    }
+  }
+
+  return { results, markdown, symbolResults };
 }
 
 function scopeLabel(scope?: MemoryScope): string {
@@ -110,6 +137,18 @@ function scopeLabel(scope?: MemoryScope): string {
     return '👤 personal';
   }
   return '';
+}
+
+function formatSymbolResult(result: SymbolResult): string {
+  const { symbol, score } = result;
+  const docLine = symbol.docstring ? `> ${symbol.docstring}\n` : '';
+  return (
+    `### [score: ${score.toFixed(2)} | symbol] ${symbol.qualifiedName}\n\n` +
+    docLine +
+    `> \`${symbol.file}:${symbol.lineStart}–${symbol.lineEnd}\` · ${symbol.kind}\n\n` +
+    `---\n\n` +
+    (symbol.signature ? `${symbol.signature}\n` : '')
+  );
 }
 
 /**

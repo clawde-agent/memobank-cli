@@ -82,4 +82,42 @@ export interface ExtractionResult {
     confidence: Confidence;
     content: string;
 }
+export type SymbolKind = 'function' | 'class' | 'interface' | 'type' | 'const' | 'method';
+export type EdgeKind = 'calls' | 'imports' | 'inherits';
+export type IndexedLanguage = 'typescript' | 'javascript' | 'python' | 'go' | 'rust' | 'yaml' | 'csharp';
+export interface CodeSymbol {
+    name: string;
+    qualifiedName: string;
+    kind: SymbolKind;
+    file: string;
+    lineStart: number;
+    lineEnd: number;
+    signature?: string;
+    docstring?: string;
+    isExported: boolean;
+    parentName?: string;
+    memoryRefs?: string[];
+}
+export interface CodeEdge {
+    sourceName: string;
+    sourceFile: string;
+    targetName: string;
+    targetFile?: string;
+    kind: EdgeKind;
+    line: number;
+}
+export interface SymbolResult {
+    symbol: CodeSymbol;
+    score: number;
+}
+export interface CodeScanOptions {
+    summarize?: boolean;
+    force?: boolean;
+    langs?: IndexedLanguage[];
+    repo?: string;
+}
+export interface RefsOptions {
+    repo?: string;
+    format?: 'text' | 'json';
+}
 //# sourceMappingURL=types.d.ts.map

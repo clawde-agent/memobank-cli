@@ -104,6 +104,16 @@ Claude Code's auto-memory is personal and machine-local by default. memobank add
 
 - Default: keyword + tag + recency scoring, zero external dependencies
 - Optional: vector search via LanceDB (Ollama, OpenAI, Azure, Jina)
+- Optional: code symbol index via tree-sitter + SQLite FTS5 (`memo recall --code`)
+
+**Code Symbol Index** *(optional, requires `npm install memobank-cli --include=optional`)*
+
+- `memo index-code [path]` — parses your codebase with tree-sitter and stores symbols in `.memobank/meta/code-index.db`
+- `memo recall "query" --code` — dual-track recall: searches memories and code symbols in parallel, results score-normalized and merged
+- `memo recall --refs <symbol>` — show all callers of a function from the call-graph
+- Supports TypeScript, JavaScript, Python, Go, Rust, YAML, C# (more via the same extension pattern)
+- Incremental: unchanged files are skipped via SHA256 hash cache
+- `--summarize` writes a `project-architecture-snapshot` memory after indexing
 
 **Safety**
 
@@ -242,6 +252,8 @@ If the same filename exists in multiple tiers, the higher-priority tier's versio
 | Command                           | Description                                                          |
 | --------------------------------- | -------------------------------------------------------------------- |
 | `memo recall <query>`             | Search all tiers and write results to MEMORY.md                      |
+| `memo recall <query> --code`      | Dual-track: search memories + code symbols in parallel               |
+| `memo recall --refs <symbol>`     | Show all callers of a symbol from the code index                     |
 | `memo search <query>`             | Debug search without modifying MEMORY.md                             |
 | `memo write <type>`               | Create a new memory (interactive or non-interactive)                 |
 | `memo capture`                    | Extract learnings from session text via LLM, writes to pending queue |
@@ -263,6 +275,9 @@ If the same filename exists in multiple tiers, the higher-priority tier's versio
 | Command                        | Description                                                |
 | ------------------------------ | ---------------------------------------------------------- |
 | `memo index`                   | Build/update search index                                  |
+| `memo index-code [path]`       | Index codebase symbols (tree-sitter + SQLite FTS5)         |
+| `memo index-code --summarize`  | Also write architecture snapshot memory after indexing     |
+| `memo index-code --force`      | Re-index all files (ignore hash cache)                     |
 | `memo review`                  | List memories due for review                               |
 | `memo map`                     | Show memory statistics                                     |
 | `memo lifecycle`               | View memory lifecycle report                               |

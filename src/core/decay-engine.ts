@@ -10,18 +10,14 @@ import type { MemoryFile, Confidence } from '../types';
  * Compute decay score for a memory (0-1)
  * Based on recency, access frequency, and confidence
  */
+/**
+ * Compute decay score for a memory (0-1) based on recency and confidence.
+ * Access frequency is applied separately in retriever.ts via post-search boost.
+ */
 export function computeDecayScore(memory: MemoryFile, now: Date = new Date()): number {
-  // 1. Recency weight: Weibull stretched-exponential decay from created date
   const recencyWeight = computeRecencyWeight(memory.created, now);
-
-  // 2. Frequency weight: 1.0 for now (will be incremented by future access tracking)
-  const frequencyWeight = 1.0;
-
-  // 3. Importance weight: based on confidence
   const importanceWeight = computeImportanceWeight(memory.confidence);
-
-  // Final score
-  return recencyWeight * frequencyWeight * importanceWeight;
+  return recencyWeight * importanceWeight;
 }
 
 /**

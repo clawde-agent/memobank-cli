@@ -1,0 +1,117 @@
+"use strict";
+/**
+ * Lifecycle command
+ * Analyze and manage memory lifecycle (tiers, archival, corrections)
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.lifecycleCommand = lifecycleCommand;
+exports.correctCommand = correctCommand;
+const store_1 = require("../core/store");
+const lifecycle_manager_1 = require("../core/lifecycle-manager");
+const DEFAULT_CONFIG = {
+    coreThreshold: 10,
+    peripheralThreshold: 90,
+    archiveAfterDays: 180,
+    deleteAfterDays: 365,
+    allowCorrections: true,
+    correctionThreshold: 3,
+};
+function lifecycleCommand(options = {}) {
+    const cwd = process.cwd();
+    const repoRoot = (0, store_1.findRepoRoot)(cwd, options.repo);
+    if (options.resetEpoch) {
+        (0, lifecycle_manager_1.resetEpoch)(repoRoot);
+        console.log('✓ Epoch reset. epochAccessCount zeroed for all memories.');
+        return;
+    }
+    if (options.scan) {
+        (0, lifecycle_manager_1.runLifecycleScan)(repoRoot);
+        console.log('✓ Lifecycle scan complete. Status updated for all memories.');
+        return;
+    }
+    // Generate report
+    if (options.report ||
+        (!options.archive && !options.delete && !options.flagged && !options.tier)) {
+        const report = (0, lifecycle_manager_1.generateLifecycleReport)(repoRoot, DEFAULT_CONFIG);
+        console.log(report);
+        return;
+    }
+    // Show flagged memories
+    if (options.flagged) {
+        const flagged = (0, lifecycle_manager_1.getFlaggedMemories)(repoRoot);
+        if (flagged.length === 0) {
+            console.log('✓ No memories flagged for review');
+        }
+        else {
+            console.log(`\n🚩 Flagged Memories (${flagged.length})\n`);
+            console.log('These memories have been corrected multiple times:\n');
+            for (const memory of flagged) {
+                console.log(`- [${memory.type}] ${memory.name}`);
+                console.log(`  ${memory.description}`);
+                console.log(`  Path: ${memory.path}\n`);
+            }
+        }
+        return;
+    }
+    // Analyze and show by tier
+    if (options.tier) {
+        const analysis = (0, lifecycle_manager_1.analyzeLifecycle)(repoRoot, DEFAULT_CONFIG);
+        const filtered = analysis.filter((a) => a.tier === options.tier);
+        if (filtered.length === 0) {
+            console.log(`No memories in tier: ${options.tier}`);
+        }
+        else {
+            console.log(`\n📊 ${options.tier.toUpperCase()} Tier Memories (${filtered.length})\n`);
+            for (const item of filtered.slice(0, 20)) {
+                console.log(`- [${item.memory.type}] ${item.memory.name}`);
+                console.log(`  Access count: ${item.accessCount}`);
+                console.log(`  Days since access: ${item.daysSinceAccess?.toFixed(0) || 'N/A'}\n`);
+            }
+            if (filtered.length > 20) {
+                console.log(`... and ${filtered.length - 20} more\n`);
+            }
+        }
+        return;
+    }
+    // Archive inactive memories
+    if (options.archive) {
+        const analysis = (0, lifecycle_manager_1.analyzeLifecycle)(repoRoot, DEFAULT_CONFIG);
+        const archivalCandidates = analysis.filter((a) => a.isArchivalCandidate);
+        if (archivalCandidates.length === 0) {
+            console.log('✓ No memories need archival');
+            return;
+        }
+        console.log(`\n📦 Archival Candidates (${archivalCandidates.length})\n`);
+        for (const item of archivalCandidates) {
+            console.log(`- [${item.memory.type}] ${item.memory.name}`);
+            console.log(`  Days inactive: ${item.daysSinceAccess?.toFixed(0)}\n`);
+        }
+        console.log('\n⚠️  To archive a specific memory, use:');
+        console.log(`   memo lifecycle archive --path <memory-path>\n`);
+        return;
+    }
+    // Delete memories
+    if (options.delete) {
+        console.log('\n⚠️  Delete operation requires --path option\n');
+        console.log('Usage: memo lifecycle delete --path <memory-path>\n');
+        return;
+    }
+}
+/**
+ * Record a correction for a memory
+ */
+function correctCommand(memoryPath, options) {
+    const cwd = process.cwd();
+    const repoRoot = (0, store_1.findRepoRoot)(cwd, options.repo);
+    // For now, just record the correction request
+    // Full implementation would open editor for correction
+    const record = (0, lifecycle_manager_1.recordCorrection)(repoRoot, memoryPath, '[original content]', '[corrected content]', options.reason || 'User correction');
+    if (record.flaggedForReview) {
+        console.log('⚠️  This memory has been corrected multiple times and is flagged for review');
+    }
+    else {
+        console.log('✓ Correction recorded');
+    }
+    console.log(`Total corrections: ${record.corrections.length}`);
+}
+//# sourceMappingURL=lifecycle.js.map
