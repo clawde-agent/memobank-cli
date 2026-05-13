@@ -31,7 +31,7 @@ import { processQueueCommand } from './commands/process-queue';
 import { codeScanCommand } from './commands/code-scan';
 import { findRepoRoot } from './core/store';
 import { loadConfig } from './config';
-import type { MemoryType } from './types';
+import type { MemoryType, IndexedLanguage } from './types';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -463,7 +463,7 @@ program
         summarize: options.summarize,
         force: options.force,
         langs: options.langs
-          ? (options.langs.split(',').map((l: string) => l.trim()) as import('./types').IndexedLanguage[])
+          ? (options.langs.split(',').map((l: string) => l.trim()) as IndexedLanguage[])
           : undefined,
         repo: options.repo,
       });

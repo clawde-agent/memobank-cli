@@ -25,25 +25,25 @@ function loadGrammar(language: IndexedLanguage): unknown {
   try {
     switch (language) {
       case 'typescript':
-        // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         return (require('tree-sitter-typescript') as { typescript: unknown }).typescript;
       case 'javascript':
-        // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         return require('tree-sitter-javascript') as unknown;
       case 'python':
-        // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         return require('tree-sitter-python') as unknown;
       case 'go':
-        // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         return require('tree-sitter-go') as unknown;
       case 'rust':
-        // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         return require('tree-sitter-rust') as unknown;
       case 'yaml':
-        // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         return require('tree-sitter-yaml') as unknown;
       case 'csharp':
-        // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         return require('tree-sitter-c-sharp') as unknown;
       default:
         return null;
@@ -97,8 +97,7 @@ function buildSignature(node: TreeNode, source: string): string {
   const text = getNodeText(node, source);
   const bodyStart = text.indexOf('{');
   const arrowStart = text.indexOf('=>');
-  const cutoff =
-    bodyStart !== -1 ? bodyStart : arrowStart !== -1 ? arrowStart : text.length;
+  const cutoff = bodyStart !== -1 ? bodyStart : arrowStart !== -1 ? arrowStart : text.length;
   return text.slice(0, cutoff).replace(/\s+/g, ' ').trim();
 }
 
@@ -111,7 +110,7 @@ export interface ScanFileResult {
 function walkTypeScript(
   tree: { rootNode: TreeNode },
   source: string,
-  relPath: string,
+  relPath: string
 ): { symbols: CodeSymbol[]; edges: CodeEdge[] } {
   const symbols: CodeSymbol[] = [];
   const edges: CodeEdge[] = [];
@@ -303,12 +302,9 @@ export function scanFile(filePath: string, scanRoot: string): ScanFileResult {
   let ParserCtor: new () => any;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
     const mod = require('tree-sitter') as { default?: unknown } | unknown;
     // tree-sitter may export as default or as the constructor directly
-    ParserCtor =
-      (mod as { default?: new () => unknown }).default ??
-      (mod as new () => unknown);
+    ParserCtor = (mod as { default?: new () => unknown }).default ?? (mod as new () => unknown);
   } catch {
     return { symbols: [], edges: [], hash };
   }

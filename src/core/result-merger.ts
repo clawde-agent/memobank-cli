@@ -10,7 +10,9 @@ export type MergedItem =
  * If all scores are identical, returns array of 1.0s.
  */
 function normalize(scores: number[]): number[] {
-  if (scores.length === 0) {return [];}
+  if (scores.length === 0) {
+    return [];
+  }
   const min = Math.min(...scores);
   const max = Math.max(...scores);
   const range = max - min;
@@ -48,10 +50,16 @@ export function mergeResults(
   // Sort by normalized score (descending), with tiebreaker: symbols before memories
   items.sort((a, b) => {
     const scoreDiff = b.normalizedScore - a.normalizedScore;
-    if (scoreDiff !== 0) {return scoreDiff;}
+    if (scoreDiff !== 0) {
+      return scoreDiff;
+    }
     // On tie, symbols sort before memories (code results are more precise)
-    if (a.type === 'symbol' && b.type !== 'symbol') {return -1;}
-    if (b.type === 'symbol' && a.type !== 'symbol') {return 1;}
+    if (a.type === 'symbol' && b.type !== 'symbol') {
+      return -1;
+    }
+    if (b.type === 'symbol' && a.type !== 'symbol') {
+      return 1;
+    }
     return 0;
   });
 
