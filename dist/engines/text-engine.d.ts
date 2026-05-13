@@ -3,8 +3,8 @@
  * Uses keyword matching, tag filtering, and decay scoring
  * Zero external dependencies
  */
-import { MemoryFile, RecallResult } from '../types';
-import { EngineAdapter } from './engine-adapter';
+import type { MemoryFile, RecallResult } from '../types';
+import type { EngineAdapter } from './engine-adapter';
 export declare class TextEngine implements EngineAdapter {
     /**
      * Search for memories using keyword matching + decay scoring
@@ -25,6 +25,6 @@ export declare class TextEngine implements EngineAdapter {
     /**
      * Index is a no-op for text engine - searches live files directly
      */
-    index(memories: MemoryFile[], incremental: boolean): Promise<void>;
+    index(_memories: MemoryFile[], _incremental: boolean): Promise<void>;
 }
 //# sourceMappingURL=text-engine.d.ts.map

@@ -1,15 +1,52 @@
 /**
  * Claude Code platform install helper
  * Sets autoMemoryDirectory in ~/.claude/settings.json
+ * Schema: https://www.schemastore.org/claude-code-settings.json
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 
+/**
+ * Hook command types per Claude Code schema
+ */
+interface HookCommand {
+  type: 'command' | 'prompt' | 'agent' | 'http';
+  command?: string; // for type: 'command'
+  prompt?: string; // for type: 'prompt' | 'agent'
+  url?: string; // for type: 'http'
+  timeout?: number;
+  async?: boolean;
+  statusMessage?: string;
+  model?: string;
+  headers?: Record<string, string>;
+  allowedEnvVars?: string[];
+}
+
+/**
+ * Hook matcher entry per Claude Code schema
+ * Each hook entry must have: { matcher?: string, hooks: HookCommand[] }
+ */
+interface HookMatcher {
+  matcher?: string;
+  hooks: HookCommand[];
+}
+
+/**
+ * Claude Code settings interface per schema
+ */
 export interface ClaudeCodeSettings {
   autoMemoryEnabled?: boolean;
   autoMemoryDirectory?: string;
-  hooks?: Record<string, unknown>;
+  hooks?: {
+    Stop?: HookMatcher[];
+    PreToolUse?: HookMatcher[];
+    PostToolUse?: HookMatcher[];
+    PermissionRequest?: HookMatcher[];
+    UserPromptSubmit?: HookMatcher[];
+    Notification?: HookMatcher[];
+    [key: string]: HookMatcher[] | undefined;
+  };
   [key: string]: unknown;
 }
 
@@ -43,8 +80,7 @@ export function installClaudeCode(
   if (fs.existsSync(settingsPath)) {
     try {
       const content = fs.readFileSync(settingsPath, 'utf-8');
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      settings = JSON.parse(content);
+      settings = JSON.parse(content) as typeof settings;
     } catch (error) {
       console.warn(`Could not read Claude settings: ${(error as Error).message}`);
       return Promise.resolve(false);
@@ -65,24 +101,18 @@ export function installClaudeCode(
   // native auto-memory writes directly to autoMemoryDirectory).
   const hooks = settings.hooks;
   if (hooks?.Stop) {
-    const stopHooks = hooks.Stop as unknown[];
-    const filtered = stopHooks.filter((h: unknown) => {
-      const hookObj = h as Record<string, unknown>;
-      // Legacy format: { hooks: [{ command: '...' }] }
-      const hooksArray = hookObj.hooks as unknown[] | undefined;
-      if (hooksArray && hooksArray.length > 0) {
-        const firstHook = hooksArray[0] as Record<string, unknown> | undefined;
-        const command = firstHook?.command as string | undefined;
-        return !command?.includes('memo capture');
+    const stopHooks = hooks.Stop;
+    const filtered = stopHooks.filter((h: HookMatcher) => {
+      // Check for legacy memo capture hooks
+      if (h.hooks && h.hooks.length > 0) {
+        return !h.hooks.some(
+          (cmd: HookCommand) => cmd.type === 'command' && cmd.command?.includes('memo capture')
+        );
       }
-      // Flat format: { command: '...' } — keep unless it is a memo capture hook
-      const command = hookObj.command as string | undefined;
-      return !command?.includes('memo capture');
+      return true;
     });
-    const filteredUnknown = filtered as unknown;
-    hooks.Stop = filteredUnknown;
-    const stopLength = (hooks.Stop as unknown[])?.length ?? 0;
-    if (stopLength === 0) {
+    hooks.Stop = filtered;
+    if (hooks.Stop.length === 0) {
       delete hooks.Stop;
     }
     if (Object.keys(hooks).length === 0) {
@@ -96,9 +126,15 @@ export function installClaudeCode(
     settings.hooks = {};
   }
   const hookMap = settings.hooks;
-  const currentStop = (hookMap.Stop as Array<{ command: string }> | undefined) ?? [];
-  if (!currentStop.some((h) => h.command === STOP_HOOK)) {
-    hookMap.Stop = [...currentStop, { command: STOP_HOOK }];
+  const currentStop: HookMatcher[] = hookMap.Stop ?? [];
+  const hasStopHook = currentStop.some((h: HookMatcher) =>
+    h.hooks?.some((cmd: HookCommand) => cmd.type === 'command' && cmd.command === STOP_HOOK)
+  );
+  if (!hasStopHook) {
+    hookMap.Stop = [
+      ...currentStop,
+      { matcher: '', hooks: [{ type: 'command', command: STOP_HOOK }] },
+    ];
   }
 
   // Write settings

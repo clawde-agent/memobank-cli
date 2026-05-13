@@ -7,7 +7,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.reviewCommand = reviewCommand;
 const store_1 = require("../core/store");
 const decay_engine_1 = require("../core/decay-engine");
-async function reviewCommand(options = {}) {
+function reviewCommand(options = {}) {
     const cwd = process.cwd();
     const repoRoot = (0, store_1.findRepoRoot)(cwd, options.repo);
     const memories = (0, store_1.loadAll)(repoRoot);

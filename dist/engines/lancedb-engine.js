@@ -101,6 +101,7 @@ class LanceDbEngine {
             description: memory.description,
             tags: memory.tags.join(', '),
             content: memory.content,
+            contentHash: this.contentHash(memory),
             vector: embeddings[i] ?? [],
             created: memory.created,
             updated: memory.updated || memory.created,
@@ -117,27 +118,35 @@ class LanceDbEngine {
             console.log(`Created table with ${dataToInsert.length} records`);
             return;
         }
-        // Get existing indexed paths for incremental update
-        let existingPaths = new Set();
+        // Get existing indexed records for incremental update (path → contentHash)
+        const existingHashMap = new Map();
         if (incremental) {
             try {
                 const allData = await this.table.query().limit(10000).toArray();
-                existingPaths = new Set(allData.map((row) => row.path));
+                for (const row of allData) {
+                    existingHashMap.set(row.path, row.contentHash ?? '');
+                }
             }
             catch {
                 // Table empty or error
             }
         }
-        // Filter memories that need indexing
-        const memoriesToIndex = memories.filter((m) => !incremental || !existingPaths.has(m.path) || this.isMemoryUpdated(m));
+        // Filter memories that need indexing: new or content changed
+        const memoriesToIndex = memories.filter((m) => {
+            if (!incremental) {
+                return true;
+            }
+            const storedHash = existingHashMap.get(m.path);
+            return storedHash === undefined || storedHash !== this.contentHash(m);
+        });
         if (memoriesToIndex.length === 0) {
-            console.log('No new memories to index');
+            console.log('No new or updated memories to index');
             return;
         }
         // Generate embeddings for new/updated memories
         const newTexts = memoriesToIndex.map((m) => this.getEmbeddingText(m));
         const newEmbeddings = await this.embeddingGenerator.generateEmbeddings(newTexts);
-        // Prepare data for insertion (filter out undefined embeddings)
+        // Prepare data for insertion
         const newDataToInsert = memoriesToIndex
             .map((memory, i) => ({
             id: this.memoryId(memory),
@@ -146,24 +155,23 @@ class LanceDbEngine {
             description: memory.description,
             tags: memory.tags.join(', '),
             content: memory.content,
+            contentHash: this.contentHash(memory),
             vector: newEmbeddings[i] ?? [],
             created: memory.created,
             updated: memory.updated || memory.created,
             confidence: memory.confidence || 'medium',
         }))
             .filter((item) => item.vector.length > 0);
-        // Delete old entries for updated memories
-        if (incremental) {
-            const updatedPaths = memoriesToIndex
-                .filter((m) => this.isMemoryUpdated(m))
-                .map((m) => m.path);
-            for (const p of updatedPaths) {
-                try {
-                    await this.table.delete(`path = '${p.replace(/'/g, "''")}'`);
-                }
-                catch {
-                    // Ignore delete errors
-                }
+        // Delete stale entries (updated or re-indexed paths)
+        const pathsToDelete = memoriesToIndex
+            .filter((m) => existingHashMap.has(m.path))
+            .map((m) => m.path);
+        for (const p of pathsToDelete) {
+            try {
+                await this.table.delete(`path = "${p.replace(/"/g, '""')}"`);
+            }
+            catch {
+                // Ignore delete errors
             }
         }
         // Insert new data
@@ -174,7 +182,7 @@ class LanceDbEngine {
             await this.table.createIndex('vector', {
                 config: lancedb.Index.ivfPq({
                     numPartitions: Math.max(1, Math.floor(memories.length / 100)),
-                    numSubVectors: Math.floor(this.embeddingGenerator['config'].dimensions / 8),
+                    numSubVectors: Math.floor(this.embeddingGenerator.getDimensions() / 8),
                 }),
             });
         }
@@ -207,7 +215,8 @@ class LanceDbEngine {
             // Convert to RecallResult with hybrid scoring
             const results = queryResult.map((row) => {
                 const memory = this.rowToMemory(row);
-                const vectorScore = 1 - (row._distance || 0); // Convert distance to similarity
+                const distance = row._distance;
+                const vectorScore = 1 - (distance ?? 0); // Convert distance to similarity
                 // Combine with decay score
                 const decayScore = (0, decay_engine_1.computeDecayScore)(memory);
                 const finalScore = vectorScore * 0.7 + decayScore * 0.3;
@@ -238,26 +247,27 @@ class LanceDbEngine {
         return hash.slice(0, 16);
     }
     /**
-     * Check if memory has been updated since last indexing
+     * Hash memory content for change detection
      */
-    isMemoryUpdated(memory) {
-        // Simple check based on updated timestamp
-        return memory.updated !== undefined && memory.updated !== memory.created;
+    contentHash(memory) {
+        return (0, crypto_1.createHash)('md5')
+            .update(memory.content + memory.description + memory.tags.join(','))
+            .digest('hex');
     }
     /**
-     * Convert LanceDB row to MemoryFile
+     * Convert LanceDB row to MemoryFile with defensive null checks
      */
     rowToMemory(row) {
         return {
-            path: row.path,
-            name: row.name,
-            type: this.inferType(row.name),
-            description: row.description,
-            tags: row.tags.split(', ').filter((t) => t.length > 0),
-            created: row.created,
+            path: row.path || '',
+            name: row.name || '',
+            type: this.inferType(row.name || ''),
+            description: row.description || '',
+            tags: (row.tags || '').split(', ').filter((t) => t.length > 0),
+            created: row.created || new Date().toISOString(),
             updated: row.updated,
-            confidence: row.confidence,
-            content: row.content,
+            confidence: row.confidence || 'medium',
+            content: row.content || '',
         };
     }
     /**
@@ -265,14 +275,18 @@ class LanceDbEngine {
      */
     inferType(name) {
         const lower = name.toLowerCase();
-        if (lower.includes('lesson'))
+        if (lower.includes('lesson')) {
             return 'lesson';
-        if (lower.includes('decision'))
+        }
+        if (lower.includes('decision')) {
             return 'decision';
-        if (lower.includes('workflow'))
+        }
+        if (lower.includes('workflow')) {
             return 'workflow';
-        if (lower.includes('architecture'))
+        }
+        if (lower.includes('architecture')) {
             return 'architecture';
+        }
         return 'lesson'; // default
     }
 }
