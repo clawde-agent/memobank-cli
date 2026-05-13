@@ -36,7 +36,7 @@ async function detectGitRepoName(cwd: string): Promise<string> {
     const { stdout } = await execAsync('git rev-parse --show-toplevel', { cwd });
     const gitRoot = stdout.trim();
     return path.basename(gitRoot);
-  } catch (error) {
+  } catch {
     // Not a git repo, use directory name
     return path.basename(cwd);
   }

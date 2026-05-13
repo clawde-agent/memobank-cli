@@ -88,7 +88,7 @@ export function findRepoRoot(cwd: string, repoFlag?: string): string {
       const repoName = path.basename(cwd);
       return path.join(osHomeDir(), '.memobank', repoName);
     }
-  } catch (e) {
+  } catch {
     /* ignore */
   }
 

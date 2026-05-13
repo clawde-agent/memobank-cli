@@ -80,8 +80,7 @@ export function installClaudeCode(
   if (fs.existsSync(settingsPath)) {
     try {
       const content = fs.readFileSync(settingsPath, 'utf-8');
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      settings = JSON.parse(content);
+      settings = JSON.parse(content) as typeof settings;
     } catch (error) {
       console.warn(`Could not read Claude settings: ${(error as Error).message}`);
       return Promise.resolve(false);
