@@ -28,6 +28,7 @@ export interface WriteOptions {
   content?: string;
   repo?: string;
   symbol?: string;
+  silent?: boolean;
 }
 
 /**
@@ -144,7 +145,9 @@ export async function writeMemoryCommand(
     fs.writeFileSync(tmpFile, template, 'utf-8');
 
     const editor = process.env.EDITOR || 'vi';
-    console.log(`Opening ${editor}...`);
+    if (!options.silent) {
+      console.log(`Opening ${editor}...`);
+    }
 
     try {
       await execAsync(`${editor} "${tmpFile}"`);
@@ -170,11 +173,15 @@ export async function writeMemoryCommand(
         idx.close();
         if (syms.length > 0 && syms[0].symbol.hash) {
           memoryData.codeRefs = [syms[0].symbol.hash];
-          console.log(
-            `✓ Anchored to symbol: ${syms[0].symbol.qualifiedName} (${syms[0].symbol.hash.slice(0, 8)})`
-          );
+          if (!options.silent) {
+            console.log(
+              `✓ Anchored to symbol: ${syms[0].symbol.qualifiedName} (${syms[0].symbol.hash.slice(0, 8)})`
+            );
+          }
         } else {
-          console.warn(`⚠️  Symbol "${options.symbol}" not found in index. Link skipped.`);
+          if (!options.silent) {
+            console.warn(`⚠️  Symbol "${options.symbol}" not found in index. Link skipped.`);
+          }
         }
       }
     } catch {
@@ -197,17 +204,23 @@ export async function writeMemoryCommand(
   }
 
   // Security validation
-  console.log('\n🔒 Security check...');
+  if (!options.silent) {
+    console.log('\n🔒 Security check...');
+  }
   const { sanitized, redacted } = sanitizeContent(memoryData.content);
 
   if (redacted.length > 0) {
-    console.log('⚠️  Found sensitive information that will be redacted:');
-    redacted.forEach((item) => console.log(`   • ${item}`));
-    console.log('');
+    if (!options.silent) {
+      console.log('⚠️  Found sensitive information that will be redacted:');
+      redacted.forEach((item) => console.log(`   • ${item}`));
+      console.log('');
+    }
 
     // Auto-sanitize
     memoryData.content = sanitized;
-    console.log('✓ Content has been automatically sanitized\n');
+    if (!options.silent) {
+      console.log('✓ Content has been automatically sanitized\n');
+    }
   }
 
   // Validate content
@@ -221,9 +234,11 @@ export async function writeMemoryCommand(
   }
 
   if (validation.warnings.length > 0) {
-    console.log('⚠️  Warnings:');
-    validation.warnings.forEach((warn) => console.log(`   • ${warn}`));
-    console.log('');
+    if (!options.silent) {
+      console.log('⚠️  Warnings:');
+      validation.warnings.forEach((warn) => console.log(`   • ${warn}`));
+      console.log('');
+    }
   }
 
   // Check abstraction level
@@ -238,7 +253,9 @@ export async function writeMemoryCommand(
     return;
   }
 
-  console.log(`✓ Abstraction level: ${abstractionLevel}\n`);
+  if (!options.silent) {
+    console.log(`✓ Abstraction level: ${abstractionLevel}\n`);
+  }
 
   // Write memory
   try {
@@ -259,7 +276,9 @@ export async function writeMemoryCommand(
       memoryData.status = 'experimental';
     }
     const filePath = writeMemory(repoRoot, memoryData);
-    console.log(`✅ Created: ${filePath}`);
+    if (!options.silent) {
+      console.log(`✅ Created: ${filePath}`);
+    }
   } catch (error) {
     console.error(`Error writing memory: ${(error as Error).message}`);
   }
