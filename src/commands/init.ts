@@ -8,7 +8,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { initConfig } from '../config';
-import { findRepoRoot } from '../core/store';
+import { findRepoRoot, findGitRoot } from '../core/store';
 import { detectProjectName, detectPlatforms } from '../core/platform-detector';
 import { installClaudeCode } from '../platforms/claude-code';
 import { installCursor } from '../platforms/cursor';
@@ -110,7 +110,7 @@ export function initCommand(options: { global?: boolean; name?: string }): void 
     }
     createTierDirs(projectDir);
     initConfig(projectDir, projectName);
-    ensureGitignoreFull(cwd);
+    ensureGitignoreFull(findGitRoot(cwd));
     console.log(`✓ Project memory initialized at: ${projectDir}`);
     console.log('  Commit .memobank/ with your code — it IS the team memory.');
   }
