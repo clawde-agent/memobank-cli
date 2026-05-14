@@ -112,3 +112,6 @@ test-memobank/
 # Memobank pending queue
 # ======================
 .memobank/.pending/
+
+.memobank/
+.claude/
