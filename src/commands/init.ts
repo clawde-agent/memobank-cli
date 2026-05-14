@@ -21,20 +21,19 @@ export interface QuickInitOptions {
   repoRoot?: string; // for testing
 }
 
-const GITIGNORE_ENTRIES: Array<{ entry: string }> = [
-  { entry: '.memobank/meta/access-log.json' },
-  { entry: '.memobank/meta/code-index.db' },
-  { entry: '.memobank/.lancedb/' },
-  { entry: '.memobank/pending/' },
+const GITIGNORE_ENTRIES = [
+  '.memobank/meta/access-log.json',
+  '.memobank/meta/code-index.db',
+  '.memobank/.lancedb/',
+  '.memobank/pending/',
 ];
 
-function ensureGitignoreFull(repoRoot: string): void {
-  const gitignorePath = path.join(repoRoot, '.gitignore');
+function ensureGitignoreFull(gitRoot: string): void {
+  const gitignorePath = path.join(gitRoot, '.gitignore');
   const content = fs.existsSync(gitignorePath) ? fs.readFileSync(gitignorePath, 'utf-8') : '';
-  const toAdd = GITIGNORE_ENTRIES.filter(({ entry }) => !content.includes(entry));
+  const toAdd = GITIGNORE_ENTRIES.filter((entry) => !content.includes(entry));
   if (!toAdd.length) return;
-
-  const block = '\n# memobank\n' + toAdd.map(({ entry }) => entry).join('\n') + '\n';
+  const block = '\n# memobank\n' + toAdd.join('\n') + '\n';
   if (!content) {
     fs.writeFileSync(gitignorePath, block.trimStart());
   } else {
@@ -111,7 +110,7 @@ export function initCommand(options: { global?: boolean; name?: string }): void 
     }
     createTierDirs(projectDir);
     initConfig(projectDir, projectName);
-    ensureGitignore(cwd);
+    ensureGitignoreFull(cwd);
     console.log(`✓ Project memory initialized at: ${projectDir}`);
     console.log('  Commit .memobank/ with your code — it IS the team memory.');
   }
@@ -121,21 +120,5 @@ function createTierDirs(root: string): void {
   fs.mkdirSync(path.join(root, 'meta'), { recursive: true });
   for (const type of MEMORY_TYPES) {
     fs.mkdirSync(path.join(root, type), { recursive: true });
-  }
-}
-
-function ensureGitignore(repoRoot: string): void {
-  const gitignorePath = path.join(repoRoot, '.gitignore');
-  const entry = '.memobank/meta/access-log.json';
-  if (!fs.existsSync(gitignorePath)) {
-    fs.writeFileSync(gitignorePath, `${entry}\n`);
-    return;
-  }
-  const content = fs.readFileSync(gitignorePath, 'utf-8');
-  if (!content.includes(entry)) {
-    fs.appendFileSync(
-      gitignorePath,
-      `\n# memobank — access log is local, not team state\n${entry}\n`
-    );
   }
 }
