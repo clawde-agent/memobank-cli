@@ -2,7 +2,7 @@
 
 > **Status:** Draft
 > **Date:** 2026-05-14
-> **Scope:** 9 fixes — hook config, CLI silent mode, write template cleanup, memo init quick mode, slash commands, SessionStart hook, CLAUDE.md rules, memobank config, skill docs
+> **Scope:** 8 fixes — hook config, CLI silent mode, write template cleanup, memo init quick mode, slash commands, CLAUDE.md rules, memobank config, skill docs
 
 ---
 
@@ -212,44 +212,7 @@ Run: `memo write $ARGUMENTS`
 
 ---
 
-## 6. `SessionStart` Hook — Auto Recall
-
-**Problem:** The memobank skill spec says recall runs at session start, but no hook enforces this. Users must manually run `memo recall`.
-
-**Fix location:** `src/platforms/claude-code.ts`
-
-Add a `SessionStart` hook alongside the existing `Stop` hook:
-
-```json
-"SessionStart": [
-  {
-    "matcher": "",
-    "hooks": [
-      {
-        "type": "command",
-        "command": "memo recall --silent --top 5",
-        "timeout": 10000,
-        "async": true,
-        "statusMessage": "Loading memories...",
-        "once": true
-      }
-    ]
-  }
-]
-```
-
-**Notes:**
-
-- `once: true` — fires once per session, not on every resume
-- `--silent` — no stdout pollution; MEMORY.md is written as the side-effect
-- `--top 5` — bounded token cost (5 memories max at session start)
-- Query defaults to empty string → retriever returns top-scored memories by recency/frequency
-
-Requires `recall` to support being called without a query (returns top-k by score). Add this to `recall.ts`: if query is empty, use `""` and let the engine return top results.
-
----
-
-## 7. CLAUDE.md — Add Workflow Rules
+## 6. CLAUDE.md — Add Workflow Rules
 
 **Problem:** Current CLAUDE.md is purely structural documentation. No behaviour constraints for Claude working in this repo.
 
@@ -267,7 +230,7 @@ Requires `recall` to support being called without a query (returns top-k by scor
 
 ---
 
-## 8. Fix Project `.memobank/config.yaml`
+## 7. Fix Project `.memobank/config.yaml`
 
 **Problem:** The project's own `.memobank/config.yaml` does not exist. The last recall used `lancedb` engine (which requires optional deps) and returned 0 results. The project isn't using its own tool effectively.
 
@@ -289,7 +252,7 @@ embedding:
 
 ---
 
-## 9. Update memobank Skill Docs
+## 8. Update memobank Skill Docs
 
 **Problem:** The memobank skill (`~/.claude/skills/memobank/SKILL.md`) describes `memo init` as a "4-step interactive TUI". After Fix 4, the default is non-interactive.
 
