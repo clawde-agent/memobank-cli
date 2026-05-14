@@ -93,10 +93,6 @@ export function installClaudeCode(
     settings.autoMemoryEnabled = true;
   }
 
-  // Set autoMemoryDirectory to the project tier root so Claude Code's
-  // native auto-memory and memobank project memories share the same directory.
-  settings.autoMemoryDirectory = repoRoot;
-
   // Remove any legacy memobank Stop hook (no longer needed — Claude Code's
   // native auto-memory writes directly to autoMemoryDirectory).
   const hooks = settings.hooks;
@@ -133,14 +129,25 @@ export function installClaudeCode(
   if (!hasStopHook) {
     hookMap.Stop = [
       ...currentStop,
-      { matcher: '', hooks: [{ type: 'command', command: STOP_HOOK }] },
+      {
+        matcher: '',
+        hooks: [
+          {
+            type: 'command',
+            command: STOP_HOOK,
+            timeout: 5000,
+            async: true,
+            statusMessage: 'Saving memories...',
+          },
+        ],
+      },
     ];
   }
 
   // Write settings
   try {
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
-    console.log(`✓ Claude Code: autoMemoryDirectory configured`);
+    console.log(`✓ Claude Code: memobank hooks installed`);
     return Promise.resolve(true);
   } catch (error) {
     console.error(`Could not write Claude settings: ${(error as Error).message}`);
