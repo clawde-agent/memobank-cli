@@ -60,9 +60,12 @@ export async function recall(
       const dbPath = CodeIndex.getDbPath(repoRoot);
       if (fs.existsSync(dbPath)) {
         const idx = new CodeIndex(dbPath);
-        symbolResults = idx.search(query, config.memory.top_k ?? 10);
-        linkedMemories = idx.getLinkedMemories(query);
-        idx.close();
+        try {
+          symbolResults = idx.search(query, config.memory.top_k ?? 10);
+          linkedMemories = idx.getLinkedMemories(query);
+        } finally {
+          idx.close();
+        }
       }
     } catch {
       // better-sqlite3 not installed — silently skip
