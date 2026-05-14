@@ -28,7 +28,7 @@ const GITIGNORE_ENTRIES = [
   '.memobank/pending/',
 ];
 
-function ensureGitignoreFull(gitRoot: string): void {
+export function ensureGitignoreFull(gitRoot: string): void {
   const gitignorePath = path.join(gitRoot, '.gitignore');
   const content = fs.existsSync(gitignorePath) ? fs.readFileSync(gitignorePath, 'utf-8') : '';
   const toAdd = GITIGNORE_ENTRIES.filter((entry) => !content.includes(entry));
