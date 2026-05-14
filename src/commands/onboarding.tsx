@@ -124,7 +124,9 @@ async function runSetup(state: OnboardingState, gitRoot: string): Promise<{ line
     const config = loadConfig(repoRoot);
     config.embedding.engine = 'lancedb';
     if (state.embeddingProvider === 'ollama') {
-      const ollamaUrl = state.embeddingUrl || 'http://localhost:11434';
+      const rawUrl = state.embeddingUrl || 'http://localhost:11434';
+      // Normalize: ensure /v1 suffix so OpenAI-compatible SDK routes correctly.
+      const ollamaUrl = rawUrl.endsWith('/v1') ? rawUrl : rawUrl.replace(/\/$/, '') + '/v1';
       const ollamaModel = state.embeddingModel || 'mxbai-embed-large';
       config.embedding.provider = 'ollama';
       config.embedding.base_url = ollamaUrl;
