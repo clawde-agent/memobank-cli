@@ -212,20 +212,41 @@ Run: `memo write $ARGUMENTS`
 
 ---
 
-## 6. CLAUDE.md — Add Workflow Rules
+## 6. CLAUDE.md — Add Conditional Workflow Rules
 
-**Problem:** Current CLAUDE.md is purely structural documentation. No behaviour constraints for Claude working in this repo.
+**Problem:** Current CLAUDE.md is purely structural documentation with no behaviour constraints. Additionally, Claude treats longer CLAUDE.md files as increasingly optional — wrapping them in `<system_reminder>` and selectively ignoring sections. Flat `## Rules` blocks are especially prone to being skipped.
 
-**Additions** (append to existing CLAUDE.md, ~15 lines):
+**Solution:** Use `<important if="condition">` blocks (per [hlyr.dev/blog](https://www.hlyr.dev/blog/stop-claude-from-ignoring-your-claude-md)) to scope rules to specific scenarios. Claude activates each block only when the condition matches — improving adherence without bloating unconditional context.
+
+**Structure:**
+
+- **Unconditional** (keep as-is): project identity, commands, source layout, key design decisions
+- **Conditional blocks** (new): task-specific rules that only apply in certain contexts
+
+**Additions** (append to existing CLAUDE.md):
 
 ```markdown
-## Workflow Rules
-
-- After fixing a non-obvious bug, run `memo write lesson` to capture it
-- Run `npm run typecheck && npm run lint` before claiming a task complete
+<important if="you are about to claim a task is complete">
+- Run `npm run typecheck && npm run lint` first — do not skip
+- Run the relevant test: `NODE_OPTIONS=--experimental-vm-modules npx jest tests/<file>.test.ts`
 - Do not modify `dist/` directly — always build via `npm run build`
-- When adding a new CLI command, register it in `src/cli.ts` and add a test file in `tests/`
-- Do not add `console.log` debugging statements to production code paths
+</important>
+
+<important if="you are adding a new CLI command">
+- Register it in `src/cli.ts`
+- Create a corresponding test file in `tests/`
+- Do not add `console.log` to production code paths
+</important>
+
+<important if="you fixed a non-obvious bug or made an architectural decision">
+- Run: `memo write lesson --name="<slug>" --description="<one line>" --content="<markdown>"`
+- If this was a recurring mistake, add a rule to this CLAUDE.md in the relevant `<important>` block
+</important>
+
+<important if="you are starting work on an unfamiliar area of the codebase">
+- Run: `memo recall "<topic>" --code` before writing any code
+- Read MEMORY.md after recall to pick up past decisions
+</important>
 ```
 
 ---
@@ -289,16 +310,7 @@ The self-improvement loop (capture → recall → avoid repeat) is currently bro
 
 ### P4 — CLAUDE.md Capture Triggers (Self-Improvement Loop)
 
-Already covered in Fix 6 (CLAUDE.md workflow rules). Ensure the capture triggers are explicit:
-
-```markdown
-## Self-Improvement
-
-- After fixing a non-obvious bug: `memo write lesson --name="..." --description="..." --content="..."`
-- After discovering a reusable workflow: `memo write workflow --name="..." ...`
-- After a correction from the user: run `memo write lesson` AND update this CLAUDE.md with the rule
-- Before starting work in an unfamiliar area: `memo recall "<topic>"`
-```
+Covered by Fix 6. The capture triggers are implemented as `<important if="...">` conditional blocks, not a flat section — ensuring Claude activates them only when the condition is matched, not as background noise on every turn.
 
 ---
 
