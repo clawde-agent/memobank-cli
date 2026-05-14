@@ -162,3 +162,38 @@ describe('scanFile — go', () => {
     expect(symbols.some((s) => s.name === 'Dog' && s.kind === 'class')).toBe(true);
   });
 });
+
+describe('scanFile — rust', () => {
+  function tmpRs(code: string): string {
+    const f = path.join(os.tmpdir(), `memo_test_${Date.now()}.rs`);
+    fs.writeFileSync(f, code);
+    return f;
+  }
+
+  test('rust: extracts function', () => {
+    const f = tmpRs('pub fn greet(name: &str) -> String { name.to_string() }\n');
+    const { symbols } = scanFile(f, os.tmpdir());
+    expect(symbols.some((s) => s.name === 'greet' && s.kind === 'function')).toBe(true);
+  });
+
+  test('rust: extracts struct and impl method', () => {
+    const f = tmpRs('pub struct Dog;\nimpl Dog {\n    pub fn bark(&self) {}\n}\n');
+    const { symbols } = scanFile(f, os.tmpdir());
+    expect(symbols.some((s) => s.name === 'Dog' && s.kind === 'class')).toBe(true);
+    expect(symbols.some((s) => s.name === 'bark' && s.kind === 'method')).toBe(true);
+  });
+
+  test('rust: pub function is exported', () => {
+    const f = tmpRs('pub fn public_fn() {}\nfn private_fn() {}\n');
+    const { symbols } = scanFile(f, os.tmpdir());
+    expect(symbols.find((s) => s.name === 'public_fn')?.isExported).toBe(true);
+    expect(symbols.find((s) => s.name === 'private_fn')?.isExported).toBe(false);
+  });
+
+  test('rust: extracts enum and trait', () => {
+    const f = tmpRs('pub enum Color { Red, Green }\npub trait Speak { fn speak(&self); }\n');
+    const { symbols } = scanFile(f, os.tmpdir());
+    expect(symbols.some((s) => s.name === 'Color' && s.kind === 'class')).toBe(true);
+    expect(symbols.some((s) => s.name === 'Speak' && s.kind === 'interface')).toBe(true);
+  });
+});

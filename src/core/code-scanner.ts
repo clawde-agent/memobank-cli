@@ -472,6 +472,95 @@ function walkGo(
   return { symbols, edges };
 }
 
+function hasVisibilityModifier(node: TreeNode): boolean {
+  for (let i = 0; i < node.childCount; i++) {
+    if (node.child(i).type === 'visibility_modifier') return true;
+  }
+  return false;
+}
+
+function walkRust(
+  tree: { rootNode: TreeNode },
+  source: string,
+  relPath: string
+): { symbols: CodeSymbol[]; edges: CodeEdge[] } {
+  const symbols: CodeSymbol[] = [];
+  const edges: CodeEdge[] = [];
+  let currentImpl: string | null = null;
+
+  function visit(node: TreeNode): void {
+    switch (node.type) {
+      case 'function_item': {
+        const nameNode = node.childForFieldName('name');
+        if (!nameNode) break;
+        const name = getNodeText(nameNode, source);
+        symbols.push({
+          name,
+          qualifiedName: currentImpl ? `${currentImpl}::${name}` : name,
+          kind: currentImpl ? 'method' : 'function',
+          file: relPath,
+          lineStart: node.startPosition.row + 1,
+          lineEnd: node.endPosition.row + 1,
+          signature: buildSignature(node, source),
+          isExported: hasVisibilityModifier(node),
+          parentName: currentImpl ?? undefined,
+          hash: getLogicalHash(node, source),
+        });
+        break;
+      }
+      case 'struct_item':
+      case 'enum_item': {
+        const nameNode = node.childForFieldName('name');
+        if (!nameNode) break;
+        const name = getNodeText(nameNode, source);
+        symbols.push({
+          name,
+          qualifiedName: name,
+          kind: 'class',
+          file: relPath,
+          lineStart: node.startPosition.row + 1,
+          lineEnd: node.endPosition.row + 1,
+          signature: node.type === 'struct_item' ? `struct ${name}` : `enum ${name}`,
+          isExported: hasVisibilityModifier(node),
+          hash: getLogicalHash(node, source),
+        });
+        break;
+      }
+      case 'trait_item': {
+        const nameNode = node.childForFieldName('name');
+        if (!nameNode) break;
+        const name = getNodeText(nameNode, source);
+        symbols.push({
+          name,
+          qualifiedName: name,
+          kind: 'interface',
+          file: relPath,
+          lineStart: node.startPosition.row + 1,
+          lineEnd: node.endPosition.row + 1,
+          signature: `trait ${name}`,
+          isExported: hasVisibilityModifier(node),
+          hash: getLogicalHash(node, source),
+        });
+        break;
+      }
+      case 'impl_item': {
+        const typeNode = node.childForFieldName('type');
+        const prev = currentImpl;
+        currentImpl = typeNode ? getNodeText(typeNode, source) : null;
+        for (let i = 0; i < node.childCount; i++) visit(node.child(i));
+        currentImpl = prev;
+        return;
+      }
+      default:
+        break;
+    }
+    for (let i = 0; i < node.childCount; i++) visit(node.child(i));
+  }
+
+  visit(tree.rootNode);
+  return { symbols, edges };
+}
+
 export function scanFile(filePath: string, scanRoot: string): ScanFileResult {
   const language = detectLanguage(filePath);
   if (!language) {
@@ -519,6 +608,10 @@ export function scanFile(filePath: string, scanRoot: string): ScanFileResult {
     }
     if (language === 'go') {
       const result = walkGo(tree, source, relPath);
+      return { ...result, hash };
+    }
+    if (language === 'rust') {
+      const result = walkRust(tree, source, relPath);
       return { ...result, hash };
     }
     return { symbols: [], edges: [], hash };
