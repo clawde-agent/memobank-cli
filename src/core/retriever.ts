@@ -6,6 +6,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import type { RecallResult, MemoConfig, MemoryScope, SymbolResult } from '../types';
+import type { CodeIndex as CodeIndexType } from '../engines/code-index';
 import type { EngineAdapter } from '../engines/engine-adapter';
 import { loadAll, writeMemoryMd, getGlobalDir, getWorkspaceDir } from './store';
 import { TextEngine } from '../engines/text-engine';
@@ -26,8 +27,22 @@ export async function recall(
   engine?: EngineAdapter,
   scope: MemoryScope | 'all' = 'all',
   explain: boolean = false,
-  withCode: boolean = false
+  withCode: boolean | 'auto' = 'auto'
 ): Promise<{ results: RecallResult[]; markdown: string; symbolResults?: SymbolResult[] }> {
+  const autoCode: boolean =
+    withCode === 'auto'
+      ? (() => {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { CodeIndex } = require('../engines/code-index') as {
+              CodeIndex: typeof CodeIndexType;
+            };
+            return fs.existsSync(CodeIndex.getDbPath(repoRoot));
+          } catch {
+            return false;
+          }
+        })()
+      : withCode;
   const globalDir = getGlobalDir(config.project.name);
   const workspaceDir = config.workspace?.enabled
     ? getWorkspaceDir(path.basename(config.workspace.remote ?? '', '.git'))
@@ -37,16 +52,20 @@ export async function recall(
   const accessLogs = loadAccessLogs(repoRoot);
   let symbolResults: SymbolResult[] | undefined;
 
-  if (withCode) {
+  let linkedMemories: { memoryPath: string; minDepth: number }[] = [];
+  if (autoCode) {
     try {
-      const { CodeIndex } = await import('../engines/code-index');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { CodeIndex } = require('../engines/code-index') as { CodeIndex: typeof CodeIndexType };
       const dbPath = CodeIndex.getDbPath(repoRoot);
       if (fs.existsSync(dbPath)) {
         const idx = new CodeIndex(dbPath);
-        symbolResults = idx.search(query, config.memory.top_k ?? 10);
-        idx.close();
-      } else {
-        process.stderr.write('⚠  No code index found. Run: memo index-code [path]\n');
+        try {
+          symbolResults = idx.search(query, config.memory.top_k ?? 10);
+          linkedMemories = idx.getLinkedMemories(query);
+        } finally {
+          idx.close();
+        }
       }
     } catch {
       // better-sqlite3 not installed — silently skip
@@ -55,16 +74,13 @@ export async function recall(
 
   let results = await searchEngine.search(query, memories, config.memory.top_k);
 
-  // Dual-track priority: Boost memories that reference found code symbol hashes
-  if (symbolResults && symbolResults.length > 0) {
-    const symbolHashes = new Set(symbolResults.map((sr) => sr.symbol.hash).filter(Boolean));
+  // Graph boost: memories linked to symbols reachable from query via call graph
+  if (linkedMemories.length > 0) {
+    const depthMap = new Map(linkedMemories.map((l) => [l.memoryPath, l.minDepth]));
     results = results.map((r) => {
-      const hasCodeMatch = r.memory.codeRefs?.some((hash) => symbolHashes.has(hash));
-      if (hasCodeMatch) {
-        // High boost for deterministic code-anchored memories
-        return { ...r, score: Math.min(1.0, r.score + 0.5) };
-      }
-      return r;
+      const depth = depthMap.get(r.memory.path);
+      if (depth === undefined) return r;
+      return { ...r, score: Math.min(1.0, r.score + 0.5 / (depth + 1)) };
     });
   }
 

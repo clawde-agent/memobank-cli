@@ -317,6 +317,30 @@ export function writeMemory(repoRoot: string, memory: Omit<MemoryFile, 'path' | 
 
   const fileContent = matter.stringify(memory.content, frontmatter);
   fs.writeFileSync(filePath, fileContent, 'utf-8');
+
+  // Auto-link to code symbols (optional dep — silent failure if not installed)
+  try {
+    interface CodeIndexModule {
+      CodeIndex: {
+        new (dbPath: string): { linkMemory(memPath: string, text: string): void; close(): void };
+        getDbPath(repoRoot: string): string;
+      };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { CodeIndex } = require('../engines/code-index') as CodeIndexModule;
+    const dbPath = CodeIndex.getDbPath(repoRoot);
+    if (fs.existsSync(dbPath)) {
+      const idx = new CodeIndex(dbPath);
+      try {
+        idx.linkMemory(path.relative(repoRoot, filePath), memory.description);
+      } finally {
+        idx.close();
+      }
+    }
+  } catch {
+    // better-sqlite3 not installed or db locked — non-fatal
+  }
+
   return filePath;
 }
 

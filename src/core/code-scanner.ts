@@ -42,9 +42,16 @@ function loadGrammar(language: IndexedLanguage): unknown {
       case 'yaml':
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         return require('tree-sitter-yaml') as unknown;
-      case 'csharp':
+      case 'csharp': {
+        // tree-sitter-c-sharp uses ESM with top-level await and cannot be require()'d directly.
+        // Load the native binding via node-gyp-build instead.
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        return require('tree-sitter-c-sharp') as unknown;
+        const ngb = require('node-gyp-build') as (root: string) => unknown;
+        const csharpRoot = require
+          .resolve('tree-sitter-c-sharp/package.json')
+          .replace(/\/package\.json$/, '');
+        return ngb(csharpRoot);
+      }
       default:
         return null;
     }
@@ -288,12 +295,366 @@ function walkTypeScript(
         }
         break;
       }
+      case 'import_statement': {
+        const sourceNode = node.childForFieldName('source');
+        if (sourceNode) {
+          const raw = getNodeText(sourceNode, source);
+          const moduleName = raw.replace(/^['"]|['"]$/g, '');
+          edges.push({
+            sourceName: relPath,
+            sourceFile: relPath,
+            targetName: moduleName,
+            kind: 'imports',
+            line: node.startPosition.row + 1,
+          });
+        }
+        break;
+      }
       default:
         break;
     }
     for (let i = 0; i < node.childCount; i++) {
       visit(node.child(i));
     }
+  }
+
+  visit(tree.rootNode);
+  return { symbols, edges };
+}
+
+function walkPython(
+  tree: { rootNode: TreeNode },
+  source: string,
+  relPath: string
+): { symbols: CodeSymbol[]; edges: CodeEdge[] } {
+  const symbols: CodeSymbol[] = [];
+  const edges: CodeEdge[] = [];
+  let currentClass: string | null = null;
+
+  function findEnclosingPyFn(node: TreeNode): string | null {
+    let cur = node.parent;
+    while (cur) {
+      if (cur.type === 'function_definition') {
+        const nameNode = cur.childForFieldName('name');
+        if (nameNode) return getNodeText(nameNode, source);
+      }
+      cur = cur.parent;
+    }
+    return null;
+  }
+
+  function visit(node: TreeNode): void {
+    switch (node.type) {
+      case 'function_definition': {
+        const nameNode = node.childForFieldName('name');
+        if (!nameNode) break;
+        const name = getNodeText(nameNode, source);
+        const qualifiedName = currentClass ? `${currentClass}.${name}` : name;
+        symbols.push({
+          name,
+          qualifiedName,
+          kind: currentClass ? 'method' : 'function',
+          file: relPath,
+          lineStart: node.startPosition.row + 1,
+          lineEnd: node.endPosition.row + 1,
+          signature: buildSignature(node, source),
+          docstring: extractDocstring(node, source),
+          isExported: !name.startsWith('_'),
+          parentName: currentClass ?? undefined,
+          hash: getLogicalHash(node, source),
+        });
+        break;
+      }
+      case 'class_definition': {
+        const nameNode = node.childForFieldName('name');
+        if (!nameNode) break;
+        const name = getNodeText(nameNode, source);
+        currentClass = name;
+        symbols.push({
+          name,
+          qualifiedName: name,
+          kind: 'class',
+          file: relPath,
+          lineStart: node.startPosition.row + 1,
+          lineEnd: node.endPosition.row + 1,
+          signature: `class ${name}`,
+          docstring: extractDocstring(node, source),
+          isExported: !name.startsWith('_'),
+          hash: getLogicalHash(node, source),
+        });
+        for (let i = 0; i < node.childCount; i++) visit(node.child(i));
+        currentClass = null;
+        return;
+      }
+      case 'call': {
+        const fnNode = node.childForFieldName('function');
+        if (!fnNode) break;
+        let targetName: string | null = null;
+        if (fnNode.type === 'identifier') {
+          targetName = getNodeText(fnNode, source);
+        } else if (fnNode.type === 'attribute') {
+          const attr = fnNode.childForFieldName('attribute');
+          if (attr) targetName = getNodeText(attr, source);
+        }
+        if (targetName) {
+          edges.push({
+            sourceName: findEnclosingPyFn(node) ?? currentClass ?? relPath,
+            sourceFile: relPath,
+            targetName,
+            kind: 'calls',
+            line: node.startPosition.row + 1,
+          });
+        }
+        break;
+      }
+      default:
+        break;
+    }
+    for (let i = 0; i < node.childCount; i++) visit(node.child(i));
+  }
+
+  visit(tree.rootNode);
+  return { symbols, edges };
+}
+
+function walkGo(
+  tree: { rootNode: TreeNode },
+  source: string,
+  relPath: string
+): { symbols: CodeSymbol[]; edges: CodeEdge[] } {
+  const symbols: CodeSymbol[] = [];
+  const edges: CodeEdge[] = [];
+
+  function visit(node: TreeNode): void {
+    switch (node.type) {
+      case 'function_declaration': {
+        const nameNode = node.childForFieldName('name');
+        if (!nameNode) break;
+        const name = getNodeText(nameNode, source);
+        symbols.push({
+          name,
+          qualifiedName: name,
+          kind: 'function',
+          file: relPath,
+          lineStart: node.startPosition.row + 1,
+          lineEnd: node.endPosition.row + 1,
+          signature: buildSignature(node, source),
+          isExported: /^[A-Z]/.test(name),
+          hash: getLogicalHash(node, source),
+        });
+        break;
+      }
+      case 'method_declaration': {
+        const nameNode = node.childForFieldName('name');
+        if (!nameNode) break;
+        const name = getNodeText(nameNode, source);
+        symbols.push({
+          name,
+          qualifiedName: name,
+          kind: 'method',
+          file: relPath,
+          lineStart: node.startPosition.row + 1,
+          lineEnd: node.endPosition.row + 1,
+          signature: buildSignature(node, source),
+          isExported: /^[A-Z]/.test(name),
+          hash: getLogicalHash(node, source),
+        });
+        break;
+      }
+      case 'type_declaration': {
+        for (let i = 0; i < node.childCount; i++) {
+          const spec = node.child(i);
+          if (spec.type !== 'type_spec') continue;
+          const nameNode = spec.childForFieldName('name');
+          if (!nameNode) continue;
+          const name = getNodeText(nameNode, source);
+          const typeNode = spec.childForFieldName('type');
+          const kind = typeNode?.type === 'interface_type' ? 'interface' : 'class';
+          symbols.push({
+            name,
+            qualifiedName: name,
+            kind,
+            file: relPath,
+            lineStart: spec.startPosition.row + 1,
+            lineEnd: spec.endPosition.row + 1,
+            signature: `type ${name}`,
+            isExported: /^[A-Z]/.test(name),
+            hash: getLogicalHash(spec, source),
+          });
+        }
+        break;
+      }
+      default:
+        break;
+    }
+    for (let i = 0; i < node.childCount; i++) visit(node.child(i));
+  }
+
+  visit(tree.rootNode);
+  // Call edges for Go are not extracted — Go's method receiver syntax makes source attribution non-trivial.
+  return { symbols, edges };
+}
+
+function hasVisibilityModifier(node: TreeNode): boolean {
+  for (let i = 0; i < node.childCount; i++) {
+    if (node.child(i).type === 'visibility_modifier') return true;
+  }
+  return false;
+}
+
+function walkRust(
+  tree: { rootNode: TreeNode },
+  source: string,
+  relPath: string
+): { symbols: CodeSymbol[]; edges: CodeEdge[] } {
+  const symbols: CodeSymbol[] = [];
+  const edges: CodeEdge[] = [];
+  let currentImpl: string | null = null;
+
+  function visit(node: TreeNode): void {
+    switch (node.type) {
+      case 'function_item': {
+        const nameNode = node.childForFieldName('name');
+        if (!nameNode) break;
+        const name = getNodeText(nameNode, source);
+        symbols.push({
+          name,
+          qualifiedName: currentImpl ? `${currentImpl}::${name}` : name,
+          kind: currentImpl ? 'method' : 'function',
+          file: relPath,
+          lineStart: node.startPosition.row + 1,
+          lineEnd: node.endPosition.row + 1,
+          signature: buildSignature(node, source),
+          isExported: hasVisibilityModifier(node),
+          parentName: currentImpl ?? undefined,
+          hash: getLogicalHash(node, source),
+        });
+        break;
+      }
+      case 'struct_item':
+      case 'enum_item': {
+        const nameNode = node.childForFieldName('name');
+        if (!nameNode) break;
+        const name = getNodeText(nameNode, source);
+        symbols.push({
+          name,
+          qualifiedName: name,
+          kind: 'class',
+          file: relPath,
+          lineStart: node.startPosition.row + 1,
+          lineEnd: node.endPosition.row + 1,
+          signature: node.type === 'struct_item' ? `struct ${name}` : `enum ${name}`,
+          isExported: hasVisibilityModifier(node),
+          hash: getLogicalHash(node, source),
+        });
+        break;
+      }
+      case 'trait_item': {
+        const nameNode = node.childForFieldName('name');
+        if (!nameNode) break;
+        const name = getNodeText(nameNode, source);
+        symbols.push({
+          name,
+          qualifiedName: name,
+          kind: 'interface',
+          file: relPath,
+          lineStart: node.startPosition.row + 1,
+          lineEnd: node.endPosition.row + 1,
+          signature: `trait ${name}`,
+          isExported: hasVisibilityModifier(node),
+          hash: getLogicalHash(node, source),
+        });
+        break;
+      }
+      case 'impl_item': {
+        const typeNode = node.childForFieldName('type');
+        const prev = currentImpl;
+        currentImpl = typeNode ? getNodeText(typeNode, source) : null;
+        for (let i = 0; i < node.childCount; i++) visit(node.child(i));
+        currentImpl = prev;
+        return;
+      }
+      default:
+        break;
+    }
+    for (let i = 0; i < node.childCount; i++) visit(node.child(i));
+  }
+
+  visit(tree.rootNode);
+  return { symbols, edges };
+}
+
+function walkCSharp(
+  tree: { rootNode: TreeNode },
+  source: string,
+  relPath: string
+): { symbols: CodeSymbol[]; edges: CodeEdge[] } {
+  const symbols: CodeSymbol[] = [];
+  const edges: CodeEdge[] = [];
+  let currentClass: string | null = null;
+
+  function visit(node: TreeNode): void {
+    switch (node.type) {
+      case 'class_declaration': {
+        const nameNode = node.childForFieldName('name');
+        if (!nameNode) break;
+        const name = getNodeText(nameNode, source);
+        const prev = currentClass;
+        currentClass = name;
+        symbols.push({
+          name,
+          qualifiedName: name,
+          kind: 'class',
+          file: relPath,
+          lineStart: node.startPosition.row + 1,
+          lineEnd: node.endPosition.row + 1,
+          signature: `class ${name}`,
+          isExported: true, // C# access modifiers require modifier-node inspection; true is a safe approximation
+          hash: getLogicalHash(node, source),
+        });
+        for (let i = 0; i < node.childCount; i++) visit(node.child(i));
+        currentClass = prev;
+        return;
+      }
+      case 'interface_declaration': {
+        const nameNode = node.childForFieldName('name');
+        if (!nameNode) break;
+        const name = getNodeText(nameNode, source);
+        symbols.push({
+          name,
+          qualifiedName: name,
+          kind: 'interface',
+          file: relPath,
+          lineStart: node.startPosition.row + 1,
+          lineEnd: node.endPosition.row + 1,
+          signature: `interface ${name}`,
+          isExported: true,
+          hash: getLogicalHash(node, source),
+        });
+        break;
+      }
+      case 'method_declaration': {
+        const nameNode = node.childForFieldName('name');
+        if (!nameNode) break;
+        const name = getNodeText(nameNode, source);
+        symbols.push({
+          name,
+          qualifiedName: currentClass ? `${currentClass}.${name}` : name,
+          kind: 'method',
+          file: relPath,
+          lineStart: node.startPosition.row + 1,
+          lineEnd: node.endPosition.row + 1,
+          signature: buildSignature(node, source),
+          isExported: true,
+          parentName: currentClass ?? undefined,
+          hash: getLogicalHash(node, source),
+        });
+        break;
+      }
+      default:
+        break;
+    }
+    for (let i = 0; i < node.childCount; i++) visit(node.child(i));
   }
 
   visit(tree.rootNode);
@@ -341,7 +702,22 @@ export function scanFile(filePath: string, scanRoot: string): ScanFileResult {
       const result = walkTypeScript(tree, source, relPath);
       return { ...result, hash };
     }
-
+    if (language === 'python') {
+      const result = walkPython(tree, source, relPath);
+      return { ...result, hash };
+    }
+    if (language === 'go') {
+      const result = walkGo(tree, source, relPath);
+      return { ...result, hash };
+    }
+    if (language === 'rust') {
+      const result = walkRust(tree, source, relPath);
+      return { ...result, hash };
+    }
+    if (language === 'csharp') {
+      const result = walkCSharp(tree, source, relPath);
+      return { ...result, hash };
+    }
     return { symbols: [], edges: [], hash };
   } catch {
     return { symbols: [], edges: [], hash };
