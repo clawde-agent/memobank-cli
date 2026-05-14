@@ -94,6 +94,7 @@ program
   .option('--explain', 'Show score breakdown for each result')
   .option('--code', 'Enable dual-track recall: search memories + code symbols', false)
   .option('--refs <symbol>', 'Show callers of a symbol from the code index')
+  .option('--silent', 'Suppress stdout output')
   .action(async (query: string, options: RecallOptions) => {
     try {
       await recallCommand(query, options);
@@ -133,7 +134,9 @@ program
   .option('--description <description>', 'One-sentence summary')
   .option('--tags <tags>', 'Comma-separated tags')
   .option('--content <content>', 'Markdown content')
+  .option('--symbol <symbol>', 'Anchor this memory to a specific code symbol')
   .option('--repo <path>', 'Memobank repository path')
+  .option('--silent', 'Suppress stdout output')
   .action(async (type, options) => {
     // Validate type
     const validTypes: MemoryType[] = ['lesson', 'decision', 'workflow', 'architecture'];
@@ -148,7 +151,9 @@ program
         description: options.description,
         tags: options.tags,
         content: options.content,
+        symbol: options.symbol,
         repo: options.repo,
+        silent: options.silent,
       });
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`);
