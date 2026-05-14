@@ -395,6 +395,83 @@ function walkPython(
   return { symbols, edges };
 }
 
+function walkGo(
+  tree: { rootNode: TreeNode },
+  source: string,
+  relPath: string
+): { symbols: CodeSymbol[]; edges: CodeEdge[] } {
+  const symbols: CodeSymbol[] = [];
+  const edges: CodeEdge[] = [];
+
+  function visit(node: TreeNode): void {
+    switch (node.type) {
+      case 'function_declaration': {
+        const nameNode = node.childForFieldName('name');
+        if (!nameNode) break;
+        const name = getNodeText(nameNode, source);
+        symbols.push({
+          name,
+          qualifiedName: name,
+          kind: 'function',
+          file: relPath,
+          lineStart: node.startPosition.row + 1,
+          lineEnd: node.endPosition.row + 1,
+          signature: buildSignature(node, source),
+          isExported: /^[A-Z]/.test(name),
+          hash: getLogicalHash(node, source),
+        });
+        break;
+      }
+      case 'method_declaration': {
+        const nameNode = node.childForFieldName('name');
+        if (!nameNode) break;
+        const name = getNodeText(nameNode, source);
+        symbols.push({
+          name,
+          qualifiedName: name,
+          kind: 'method',
+          file: relPath,
+          lineStart: node.startPosition.row + 1,
+          lineEnd: node.endPosition.row + 1,
+          signature: buildSignature(node, source),
+          isExported: /^[A-Z]/.test(name),
+          hash: getLogicalHash(node, source),
+        });
+        break;
+      }
+      case 'type_declaration': {
+        for (let i = 0; i < node.childCount; i++) {
+          const spec = node.child(i);
+          if (spec.type !== 'type_spec') continue;
+          const nameNode = spec.childForFieldName('name');
+          if (!nameNode) continue;
+          const name = getNodeText(nameNode, source);
+          const typeNode = spec.childForFieldName('type');
+          const kind = typeNode?.type === 'interface_type' ? 'interface' : 'class';
+          symbols.push({
+            name,
+            qualifiedName: name,
+            kind,
+            file: relPath,
+            lineStart: spec.startPosition.row + 1,
+            lineEnd: spec.endPosition.row + 1,
+            signature: `type ${name}`,
+            isExported: /^[A-Z]/.test(name),
+            hash: getLogicalHash(spec, source),
+          });
+        }
+        break;
+      }
+      default:
+        break;
+    }
+    for (let i = 0; i < node.childCount; i++) visit(node.child(i));
+  }
+
+  visit(tree.rootNode);
+  return { symbols, edges };
+}
+
 export function scanFile(filePath: string, scanRoot: string): ScanFileResult {
   const language = detectLanguage(filePath);
   if (!language) {
@@ -438,6 +515,10 @@ export function scanFile(filePath: string, scanRoot: string): ScanFileResult {
     }
     if (language === 'python') {
       const result = walkPython(tree, source, relPath);
+      return { ...result, hash };
+    }
+    if (language === 'go') {
+      const result = walkGo(tree, source, relPath);
       return { ...result, hash };
     }
     return { symbols: [], edges: [], hash };

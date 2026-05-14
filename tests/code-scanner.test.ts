@@ -129,3 +129,36 @@ describe('scanFile — python', () => {
     expect(symbols.find((s) => s.name === '_helper')?.isExported).toBe(false);
   });
 });
+
+describe('scanFile — go', () => {
+  function tmpGo(code: string): string {
+    const f = path.join(os.tmpdir(), `memo_test_${Date.now()}.go`);
+    fs.writeFileSync(f, code);
+    return f;
+  }
+
+  test('go: extracts function', () => {
+    const f = tmpGo('package main\nfunc Hello() string { return "hi" }\n');
+    const { symbols } = scanFile(f, os.tmpdir());
+    expect(symbols.some((s) => s.name === 'Hello' && s.kind === 'function')).toBe(true);
+  });
+
+  test('go: extracts method on struct', () => {
+    const f = tmpGo('package main\ntype Dog struct{}\nfunc (d Dog) Bark() {}\n');
+    const { symbols } = scanFile(f, os.tmpdir());
+    expect(symbols.some((s) => s.name === 'Bark' && s.kind === 'method')).toBe(true);
+  });
+
+  test('go: exported function has isExported=true', () => {
+    const f = tmpGo('package main\nfunc PublicFn() {}\nfunc privateFn() {}\n');
+    const { symbols } = scanFile(f, os.tmpdir());
+    expect(symbols.find((s) => s.name === 'PublicFn')?.isExported).toBe(true);
+    expect(symbols.find((s) => s.name === 'privateFn')?.isExported).toBe(false);
+  });
+
+  test('go: extracts struct type', () => {
+    const f = tmpGo('package main\ntype Dog struct { Name string }\n');
+    const { symbols } = scanFile(f, os.tmpdir());
+    expect(symbols.some((s) => s.name === 'Dog' && s.kind === 'class')).toBe(true);
+  });
+});
