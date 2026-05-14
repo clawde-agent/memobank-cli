@@ -88,6 +88,15 @@ export function writeConfig(repoRoot: string, config: MemoConfig): void {
 }
 
 export function initConfig(repoRoot: string, projectName: string): void {
+  const configPath = getConfigPath(repoRoot);
+  if (fs.existsSync(configPath)) {
+    // Preserve existing user config — only ensure project.name is set.
+    const existing = loadConfig(repoRoot);
+    if (!existing.project?.name) {
+      writeConfig(repoRoot, { ...existing, project: { ...existing.project, name: projectName } });
+    }
+    return;
+  }
   writeConfig(repoRoot, { ...DEFAULT_CONFIG, project: { name: projectName } });
 }
 
