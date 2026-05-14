@@ -11,6 +11,7 @@ interface SymbolRow {
   signature: string | null;
   docstring: string | null;
   is_exported: number;
+  hash: string | null;
   memory_refs: string | null;
   fts_rank?: number;
 }
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS symbols (
   line_start     INTEGER,
   line_end       INTEGER,
   is_exported    INTEGER DEFAULT 1,
+  hash           TEXT,
   parent_id      INTEGER REFERENCES symbols(id) ON DELETE SET NULL,
   memory_refs    TEXT
 );
@@ -85,7 +87,6 @@ export class CodeIndex {
   private db: any;
 
   constructor(dbPath: string) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const Database = require('better-sqlite3');
     this.db = new Database(dbPath);
     this.db.exec(SCHEMA);
@@ -93,7 +94,6 @@ export class CodeIndex {
 
   static isAvailable(): boolean {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
       require('better-sqlite3');
       return true;
     } catch {
@@ -143,8 +143,8 @@ export class CodeIndex {
 
     const insertSymbol = this.db.prepare(
       `INSERT INTO symbols
-         (file_id, name, qualified_name, kind, signature, docstring, line_start, line_end, is_exported, memory_refs)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         (file_id, name, qualified_name, kind, signature, docstring, line_start, line_end, is_exported, hash, memory_refs)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
 
     const insertEdge = this.db.prepare(
@@ -167,6 +167,7 @@ export class CodeIndex {
           sym.lineStart,
           sym.lineEnd,
           sym.isExported ? 1 : 0,
+          sym.hash ?? null,
           memRefs
         );
         idMap.set(sym.qualifiedName, result.lastInsertRowid as number);
@@ -188,7 +189,7 @@ export class CodeIndex {
     const rows = this.db
       .prepare(
         `SELECT s.name, s.qualified_name, s.kind, f.path AS file, s.line_start, s.line_end,
-                s.signature, s.docstring, s.is_exported, s.memory_refs,
+                s.signature, s.docstring, s.is_exported, s.hash, s.memory_refs,
                 rank AS fts_rank
          FROM symbols_fts
          JOIN symbols s ON symbols_fts.rowid = s.id
@@ -219,6 +220,7 @@ export class CodeIndex {
         signature: r.signature ?? undefined,
         docstring: r.docstring ?? undefined,
         isExported: Boolean(r.is_exported),
+        hash: r.hash ?? undefined,
         memoryRefs: r.memory_refs ? r.memory_refs.split(',') : undefined,
       },
       score: 1 - ((r.fts_rank ?? 0) - minRank) / range,
@@ -229,7 +231,7 @@ export class CodeIndex {
     const rows = this.db
       .prepare(
         `SELECT s.name, s.qualified_name, s.kind, f.path AS file,
-                s.line_start, s.line_end, s.signature, s.docstring, s.is_exported, s.memory_refs
+                s.line_start, s.line_end, s.signature, s.docstring, s.is_exported, s.hash, s.memory_refs
          FROM edges e
          JOIN symbols s ON e.source_id = s.id
          JOIN files   f ON s.file_id = f.id
@@ -249,6 +251,7 @@ export class CodeIndex {
         signature: r.signature ?? undefined,
         docstring: r.docstring ?? undefined,
         isExported: Boolean(r.is_exported),
+        hash: r.hash ?? undefined,
         memoryRefs: r.memory_refs ? r.memory_refs.split(',') : undefined,
       },
       score: 1.0,

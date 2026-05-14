@@ -272,6 +272,7 @@ export function loadFile(filePath: string): MemoryFile {
     status: (data.status as Status) || 'experimental',
     content: parsed.content,
     project: data.project as string | undefined,
+    codeRefs: Array.isArray(data.codeRefs) ? (data.codeRefs as string[]) : undefined,
   };
 }
 
@@ -309,6 +310,9 @@ export function writeMemory(repoRoot: string, memory: Omit<MemoryFile, 'path' | 
   }
   if (memory.project) {
     frontmatter.project = memory.project;
+  }
+  if (memory.codeRefs) {
+    frontmatter.codeRefs = memory.codeRefs;
   }
 
   const fileContent = matter.stringify(memory.content, frontmatter);

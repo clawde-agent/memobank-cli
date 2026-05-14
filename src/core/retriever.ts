@@ -35,7 +35,38 @@ export async function recall(
   const memories = loadAll(repoRoot, scope, globalDir, workspaceDir);
   const searchEngine = engine || new TextEngine();
   const accessLogs = loadAccessLogs(repoRoot);
+  let symbolResults: SymbolResult[] | undefined;
+
+  if (withCode) {
+    try {
+      const { CodeIndex } = await import('../engines/code-index');
+      const dbPath = CodeIndex.getDbPath(repoRoot);
+      if (fs.existsSync(dbPath)) {
+        const idx = new CodeIndex(dbPath);
+        symbolResults = idx.search(query, config.memory.top_k ?? 10);
+        idx.close();
+      } else {
+        process.stderr.write('⚠  No code index found. Run: memo index-code [path]\n');
+      }
+    } catch {
+      // better-sqlite3 not installed — silently skip
+    }
+  }
+
   let results = await searchEngine.search(query, memories, config.memory.top_k);
+
+  // Dual-track priority: Boost memories that reference found code symbol hashes
+  if (symbolResults && symbolResults.length > 0) {
+    const symbolHashes = new Set(symbolResults.map((sr) => sr.symbol.hash).filter(Boolean));
+    results = results.map((r) => {
+      const hasCodeMatch = r.memory.codeRefs?.some((hash) => symbolHashes.has(hash));
+      if (hasCodeMatch) {
+        // High boost for deterministic code-anchored memories
+        return { ...r, score: Math.min(1.0, r.score + 0.5) };
+      }
+      return r;
+    });
+  }
 
   // Apply access frequency boost
   results = results.map((result) => {
@@ -95,24 +126,6 @@ export async function recall(
         explain
       );
       tokenCount = estimateTokenCount(markdown);
-    }
-  }
-
-  let symbolResults: SymbolResult[] | undefined;
-
-  if (withCode) {
-    try {
-      const { CodeIndex } = await import('../engines/code-index');
-      const dbPath = CodeIndex.getDbPath(repoRoot);
-      if (fs.existsSync(dbPath)) {
-        const idx = new CodeIndex(dbPath);
-        symbolResults = idx.search(query, config.memory.top_k ?? 10);
-        idx.close();
-      } else {
-        process.stderr.write('⚠  No code index found. Run: memo index-code [path]\n');
-      }
-    } catch {
-      // better-sqlite3 not installed — silently skip
     }
   }
 
