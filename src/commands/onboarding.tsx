@@ -125,16 +125,16 @@ async function runSetup(state: OnboardingState, gitRoot: string): Promise<{ line
     const config = loadConfig(repoRoot);
     config.embedding.engine = 'lancedb';
     if (state.embeddingProvider === 'ollama') {
-      const rawUrl = state.embeddingUrl || 'http://localhost:11434';
-      // Normalize: ensure /v1 suffix so OpenAI-compatible SDK routes correctly.
-      const ollamaUrl = rawUrl.endsWith('/v1') ? rawUrl : rawUrl.replace(/\/$/, '') + '/v1';
+      const rawUrl = (state.embeddingUrl || 'http://localhost:11434').replace(/\/v1\/?$/, '').replace(/\/$/, '');
+      // Normalize for OpenAI-compatible SDK: always store with /v1 suffix.
+      const ollamaUrl = rawUrl + '/v1';
       const ollamaModel = state.embeddingModel || 'mxbai-embed-large';
       config.embedding.provider = 'ollama';
       config.embedding.base_url = ollamaUrl;
       config.embedding.model = ollamaModel;
       config.embedding.dimensions = 1024;
-      // Test connectivity
-      const ollamaErr = await testOllamaConnection(ollamaUrl, ollamaModel);
+      // Test connectivity using the base URL (without /v1) via Ollama's native API.
+      const ollamaErr = await testOllamaConnection(rawUrl, ollamaModel);
       if (ollamaErr) {
         summaryLines.push(`⚠  Ollama: ${ollamaErr}`);
       } else {
