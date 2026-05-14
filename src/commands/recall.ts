@@ -56,15 +56,18 @@ export async function recallCommand(query: string, options: RecallOptions): Prom
         return;
       }
       const idx = new CodeIndex(dbPath);
-      const refs = idx.getRefs(options.refs);
-      idx.close();
-      if (refs.length === 0) {
-        console.log(`No callers found for: ${options.refs}`);
-        return;
-      }
-      console.log(`\n## Callers of \`${options.refs}\` (${refs.length})\n`);
-      for (const r of refs) {
-        console.log(`- ${r.symbol.qualifiedName}  ${r.symbol.file}:${r.symbol.lineStart}`);
+      try {
+        const refs = idx.getRefs(options.refs);
+        if (refs.length === 0) {
+          console.log(`No callers found for: ${options.refs}`);
+          return;
+        }
+        console.log(`\n## Callers of \`${options.refs}\` (${refs.length})\n`);
+        for (const r of refs) {
+          console.log(`- ${r.symbol.qualifiedName}  ${r.symbol.file}:${r.symbol.lineStart}`);
+        }
+      } finally {
+        idx.close();
       }
       return;
     } catch {
