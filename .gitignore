@@ -116,3 +116,5 @@ test-memobank/
 .memobank/
 .claude/
 docs/
+.roam/
+.github/workflows/roam.yml

@@ -104,14 +104,12 @@ CREATE INDEX IF NOT EXISTS idx_edges_target_name ON edges(target_name);
 class CodeIndex {
     db;
     constructor(dbPath) {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
         const Database = require('better-sqlite3');
         this.db = new Database(dbPath);
         this.db.exec(SCHEMA);
     }
     static isAvailable() {
         try {
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
             require('better-sqlite3');
             return true;
         }
