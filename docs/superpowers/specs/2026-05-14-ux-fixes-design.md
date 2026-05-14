@@ -2,7 +2,7 @@
 
 > **Status:** Draft
 > **Date:** 2026-05-14
-> **Scope:** 10 fixes — hook config, CLI silent mode, write template cleanup, memo init quick mode, slash commands, CLAUDE.md rules, memobank config, skill docs, self-improvement flywheel (autoMemoryDirectory per-project, token_budget, noise-filter)
+> **Scope:** 11 items — hook config, CLI silent mode, write template cleanup, memo init quick mode, slash commands, CLAUDE.md rules, memo study command, memobank config, skill docs, self-improvement flywheel (autoMemoryDirectory per-project, token_budget, noise-filter)
 
 ---
 
@@ -251,7 +251,55 @@ Run: `memo write $ARGUMENTS`
 
 ---
 
-## 7. Fix Project `.memobank/config.yaml`
+## 7. New Command: `memo study`
+
+**Purpose:** Manually promote a lesson from `.memobank/` into CLAUDE.md as an `<important if="...">` conditional block. User-controlled — lessons stay in `.memobank/lesson/` by default; only explicitly studied lessons become always-active CLAUDE.md rules.
+
+**Why `memo study` and not auto-promotion:** Automatically writing every lesson to CLAUDE.md would bloat it. The user decides which learnings are high-confidence enough to become permanent behaviour constraints.
+
+### Usage
+
+```bash
+memo study <lesson-name>
+# Interactive: prompts for condition and preview, then appends to CLAUDE.md
+
+memo study <lesson-name> --if="you are installing dependencies"
+# Non-interactive: uses provided condition directly
+
+memo study --list
+# Show all lessons available to study
+```
+
+### Behaviour
+
+1. Resolve lesson file from `.memobank/lesson/` by name slug (fuzzy match)
+2. If `--if` not provided: show lesson content + prompt user for a condition string
+3. Format as conditional block:
+   ```markdown
+   <important if="<condition>">
+   <!-- source: .memobank/lesson/<name>.md -->
+   <summary of lesson content — 2-4 lines max>
+   </important>
+   ```
+4. Locate CLAUDE.md (git root → cwd fallback)
+5. Append the block, preserving existing content
+6. Print: `✓ Lesson "<name>" studied → CLAUDE.md updated`
+
+### Key constraints
+
+- Content written to CLAUDE.md is a **summary** (2–4 lines), not the full lesson body — full detail stays in `.memobank/lesson/`
+- A `<!-- source: ... -->` comment links back to the original lesson for traceability
+- If the lesson is already in CLAUDE.md (detected by source comment), warn and skip: `⚠ Already studied: <name>`
+- No auto-generation of the condition — user must provide it (via prompt or `--if`), preserving user control
+
+### New files
+
+- `src/commands/study.ts` (~80 lines)
+- Register in `src/cli.ts` as `memo study <lesson-name>`
+
+---
+
+## 8. Fix Project `.memobank/config.yaml`
 
 **Problem:** The project's own `.memobank/config.yaml` does not exist. The last recall used `lancedb` engine (which requires optional deps) and returned 0 results. The project isn't using its own tool effectively.
 
