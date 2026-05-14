@@ -491,6 +491,7 @@ function walkGo(
   }
 
   visit(tree.rootNode);
+  // Call edges for Go are not extracted — Go's method receiver syntax makes source attribution non-trivial.
   return { symbols, edges };
 }
 
@@ -608,7 +609,7 @@ function walkCSharp(
           lineStart: node.startPosition.row + 1,
           lineEnd: node.endPosition.row + 1,
           signature: `class ${name}`,
-          isExported: true,
+          isExported: true, // C# access modifiers require modifier-node inspection; true is a safe approximation
           hash: getLogicalHash(node, source),
         });
         for (let i = 0; i < node.childCount; i++) visit(node.child(i));
