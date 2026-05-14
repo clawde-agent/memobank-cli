@@ -331,8 +331,11 @@ export function writeMemory(repoRoot: string, memory: Omit<MemoryFile, 'path' | 
     const dbPath = CodeIndex.getDbPath(repoRoot);
     if (fs.existsSync(dbPath)) {
       const idx = new CodeIndex(dbPath);
-      idx.linkMemory(path.relative(repoRoot, filePath), memory.description);
-      idx.close();
+      try {
+        idx.linkMemory(path.relative(repoRoot, filePath), memory.description);
+      } finally {
+        idx.close();
+      }
     }
   } catch {
     // better-sqlite3 not installed or db locked — non-fatal
