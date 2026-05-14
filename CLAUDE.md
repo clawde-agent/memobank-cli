@@ -98,3 +98,27 @@ docs/                 # Extended guides (lifecycle, onboarding, memory value)
 - **React/Ink** powers interactive prompts (onboarding wizard, selection menus).
 - **ESLint enforces**: no `any`, explicit return types, `import type` for type-only imports.
 - The `workspace` tier uses a separate Git remote; `memo workspace sync` pulls/pushes it. Secret scan (`memo scan`) must pass before `memo workspace publish`.
+
+---
+
+<important if="you are about to claim a task is complete">
+- Run `npm run typecheck && npm run lint` first — do not skip
+- Run the relevant test: `NODE_OPTIONS=--experimental-vm-modules npx jest tests/<file>.test.ts`
+- Do not modify `dist/` directly — always build via `npm run build`
+</important>
+
+<important if="you are adding a new CLI command">
+- Register it in `src/cli.ts`
+- Create a corresponding test file in `tests/`
+- Do not add `console.log` to production code paths
+</important>
+
+<important if="you fixed a non-obvious bug or made an architectural decision">
+- Run: `memo write lesson --name="<slug>" --description="<one line>" --content="<markdown>"`
+- If this was a recurring mistake, run `memo study <lesson-name>` to promote it to this CLAUDE.md
+</important>
+
+<important if="you are starting work on an unfamiliar area of the codebase">
+- Run: `memo recall "<topic>" --code` before writing any code
+- Read MEMORY.md after recall to pick up past decisions
+</important>
