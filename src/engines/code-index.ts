@@ -272,7 +272,8 @@ export class CodeIndex {
       .split(/\s+/)
       .map((w) => w.replace(/[^a-zA-Z0-9_]/g, ''))
       .filter((w) => w.length > 2);
-    const ftsQuery = words.length > 0 ? words.join(' OR ') : description;
+    if (words.length === 0) return;
+    const ftsQuery = words.join(' OR ');
     const results = this.search(ftsQuery, 5).filter((r) => r.score > 0.3);
     const tx = this.db.transaction(() => {
       this.db.prepare('DELETE FROM memory_symbol_refs WHERE memory_path = ?').run(memoryPath);
