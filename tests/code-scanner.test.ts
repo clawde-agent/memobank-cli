@@ -100,3 +100,32 @@ export function main(): void {
     fs.rmSync(path.dirname(file), { recursive: true });
   });
 });
+
+function tmpPy(code: string): string {
+  const f = path.join(os.tmpdir(), `memo_test_${Date.now()}.py`);
+  fs.writeFileSync(f, code);
+  return f;
+}
+
+describe('scanFile — python', () => {
+  test('python: extracts top-level function', () => {
+    const f = tmpPy('def greet(name):\n    return name\n');
+    const { symbols } = scanFile(f, os.tmpdir());
+    expect(symbols.some((s) => s.name === 'greet' && s.kind === 'function')).toBe(true);
+    expect(symbols.find((s) => s.name === 'greet')?.isExported).toBe(true);
+  });
+
+  test('python: extracts class and method', () => {
+    const f = tmpPy('class Dog:\n    def bark(self):\n        pass\n');
+    const { symbols } = scanFile(f, os.tmpdir());
+    expect(symbols.some((s) => s.name === 'Dog' && s.kind === 'class')).toBe(true);
+    expect(symbols.some((s) => s.name === 'bark' && s.kind === 'method')).toBe(true);
+    expect(symbols.find((s) => s.name === 'bark')?.parentName).toBe('Dog');
+  });
+
+  test('python: _private functions are not exported', () => {
+    const f = tmpPy('def _helper():\n    pass\n');
+    const { symbols } = scanFile(f, os.tmpdir());
+    expect(symbols.find((s) => s.name === '_helper')?.isExported).toBe(false);
+  });
+});

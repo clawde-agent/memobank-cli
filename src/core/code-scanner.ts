@@ -300,6 +300,101 @@ function walkTypeScript(
   return { symbols, edges };
 }
 
+function walkPython(
+  tree: { rootNode: TreeNode },
+  source: string,
+  relPath: string
+): { symbols: CodeSymbol[]; edges: CodeEdge[] } {
+  const symbols: CodeSymbol[] = [];
+  const edges: CodeEdge[] = [];
+  let currentClass: string | null = null;
+
+  function findEnclosingPyFn(node: TreeNode): string | null {
+    let cur = node.parent;
+    while (cur) {
+      if (cur.type === 'function_definition') {
+        const nameNode = cur.childForFieldName('name');
+        if (nameNode) return getNodeText(nameNode, source);
+      }
+      cur = cur.parent;
+    }
+    return null;
+  }
+
+  function visit(node: TreeNode): void {
+    switch (node.type) {
+      case 'function_definition': {
+        const nameNode = node.childForFieldName('name');
+        if (!nameNode) break;
+        const name = getNodeText(nameNode, source);
+        const qualifiedName = currentClass ? `${currentClass}.${name}` : name;
+        symbols.push({
+          name,
+          qualifiedName,
+          kind: currentClass ? 'method' : 'function',
+          file: relPath,
+          lineStart: node.startPosition.row + 1,
+          lineEnd: node.endPosition.row + 1,
+          signature: buildSignature(node, source),
+          docstring: extractDocstring(node, source),
+          isExported: !name.startsWith('_'),
+          parentName: currentClass ?? undefined,
+          hash: getLogicalHash(node, source),
+        });
+        break;
+      }
+      case 'class_definition': {
+        const nameNode = node.childForFieldName('name');
+        if (!nameNode) break;
+        const name = getNodeText(nameNode, source);
+        currentClass = name;
+        symbols.push({
+          name,
+          qualifiedName: name,
+          kind: 'class',
+          file: relPath,
+          lineStart: node.startPosition.row + 1,
+          lineEnd: node.endPosition.row + 1,
+          signature: `class ${name}`,
+          docstring: extractDocstring(node, source),
+          isExported: !name.startsWith('_'),
+          hash: getLogicalHash(node, source),
+        });
+        for (let i = 0; i < node.childCount; i++) visit(node.child(i));
+        currentClass = null;
+        return;
+      }
+      case 'call': {
+        const fnNode = node.childForFieldName('function');
+        if (!fnNode) break;
+        let targetName: string | null = null;
+        if (fnNode.type === 'identifier') {
+          targetName = getNodeText(fnNode, source);
+        } else if (fnNode.type === 'attribute') {
+          const attr = fnNode.childForFieldName('attribute');
+          if (attr) targetName = getNodeText(attr, source);
+        }
+        if (targetName) {
+          edges.push({
+            sourceName: findEnclosingPyFn(node) ?? currentClass ?? relPath,
+            sourceFile: relPath,
+            targetName,
+            kind: 'calls',
+            line: node.startPosition.row + 1,
+          });
+        }
+        break;
+      }
+      default:
+        break;
+    }
+    for (let i = 0; i < node.childCount; i++) visit(node.child(i));
+  }
+
+  visit(tree.rootNode);
+  return { symbols, edges };
+}
+
 export function scanFile(filePath: string, scanRoot: string): ScanFileResult {
   const language = detectLanguage(filePath);
   if (!language) {
@@ -341,7 +436,10 @@ export function scanFile(filePath: string, scanRoot: string): ScanFileResult {
       const result = walkTypeScript(tree, source, relPath);
       return { ...result, hash };
     }
-
+    if (language === 'python') {
+      const result = walkPython(tree, source, relPath);
+      return { ...result, hash };
+    }
     return { symbols: [], edges: [], hash };
   } catch {
     return { symbols: [], edges: [], hash };
