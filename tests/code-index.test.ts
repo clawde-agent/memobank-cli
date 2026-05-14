@@ -106,4 +106,56 @@ describe('CodeIndex', () => {
   it('isAvailable returns true when better-sqlite3 is installed', () => {
     expect(CodeIndex.isAvailable()).toBe(true);
   });
+
+  describe('linkMemory', () => {
+    it('stores links for matching symbols', () => {
+      index.upsertFile('src/auth.ts', 'typescript', 'h1', Date.now());
+      index.upsertSymbols(
+        'src/auth.ts',
+        [makeSymbol({ name: 'verifyToken', qualifiedName: 'verifyToken', hash: 'hash-vt' })],
+        []
+      );
+      index.linkMemory('lesson/2026-01-01-jwt.md', 'verifyToken raises on expired JWT');
+      const rows = (index as any).db
+        .prepare('SELECT * FROM memory_symbol_refs WHERE memory_path = ?')
+        .all('lesson/2026-01-01-jwt.md');
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows[0].symbol_hash).toBe('hash-vt');
+    });
+
+    it('replaces links on re-call', () => {
+      index.upsertFile('src/auth.ts', 'typescript', 'h1', Date.now());
+      index.upsertSymbols(
+        'src/auth.ts',
+        [makeSymbol({ name: 'verifyToken', qualifiedName: 'verifyToken', hash: 'hash-vt' })],
+        []
+      );
+      index.linkMemory('lesson/2026-01-01-jwt.md', 'verifyToken raises on expired JWT');
+      index.linkMemory('lesson/2026-01-01-jwt.md', 'verifyToken raises on expired JWT');
+      const rows = (index as any).db
+        .prepare('SELECT * FROM memory_symbol_refs WHERE memory_path = ?')
+        .all('lesson/2026-01-01-jwt.md');
+      expect(rows.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('stores nothing when FTS finds no match', () => {
+      index.linkMemory('lesson/2026-01-01-empty.md', 'completely unrelated xyz123');
+      const rows = (index as any).db
+        .prepare('SELECT * FROM memory_symbol_refs WHERE memory_path = ?')
+        .all('lesson/2026-01-01-empty.md');
+      expect(rows).toHaveLength(0);
+    });
+
+    it('skips symbols with null hash', () => {
+      index.upsertFile('src/auth.ts', 'typescript', 'h1', Date.now());
+      index.upsertSymbols(
+        'src/auth.ts',
+        [makeSymbol({ name: 'verifyToken', qualifiedName: 'verifyToken', hash: undefined })],
+        []
+      );
+      index.linkMemory('lesson/x.md', 'verifyToken');
+      const rows = (index as any).db.prepare('SELECT * FROM memory_symbol_refs').all();
+      expect(rows).toHaveLength(0);
+    });
+  });
 });

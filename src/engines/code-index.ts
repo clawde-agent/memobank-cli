@@ -81,6 +81,14 @@ CREATE TABLE IF NOT EXISTS edges (
 CREATE INDEX IF NOT EXISTS idx_edges_source      ON edges(source_id);
 CREATE INDEX IF NOT EXISTS idx_edges_target      ON edges(target_id);
 CREATE INDEX IF NOT EXISTS idx_edges_target_name ON edges(target_name);
+
+CREATE TABLE IF NOT EXISTS memory_symbol_refs (
+  memory_path TEXT NOT NULL,
+  symbol_hash TEXT NOT NULL,
+  PRIMARY KEY (memory_path, symbol_hash)
+);
+CREATE INDEX IF NOT EXISTS idx_msr_memory ON memory_symbol_refs(memory_path);
+CREATE INDEX IF NOT EXISTS idx_msr_symbol ON memory_symbol_refs(symbol_hash);
 `;
 
 export class CodeIndex {
@@ -256,6 +264,26 @@ export class CodeIndex {
       },
       score: 1.0,
     }));
+  }
+
+  linkMemory(memoryPath: string, description: string): void {
+    // Build an OR query so FTS matches any word from the description
+    const words = description
+      .split(/\s+/)
+      .map((w) => w.replace(/[^a-zA-Z0-9_]/g, ''))
+      .filter((w) => w.length > 2);
+    const ftsQuery = words.length > 0 ? words.join(' OR ') : description;
+    const results = this.search(ftsQuery, 5).filter((r) => r.score > 0.3);
+    const tx = this.db.transaction(() => {
+      this.db.prepare('DELETE FROM memory_symbol_refs WHERE memory_path = ?').run(memoryPath);
+      const ins = this.db.prepare(
+        'INSERT OR IGNORE INTO memory_symbol_refs (memory_path, symbol_hash) VALUES (?, ?)'
+      );
+      for (const r of results) {
+        if (r.symbol.hash) ins.run(memoryPath, r.symbol.hash);
+      }
+    });
+    tx();
   }
 
   getStats(): { files: number; symbols: number; edges: number } {
