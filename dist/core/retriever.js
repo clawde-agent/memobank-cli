@@ -59,7 +59,37 @@ async function recall(query, repoRoot, config, engine, scope = 'all', explain = 
     const memories = (0, store_1.loadAll)(repoRoot, scope, globalDir, workspaceDir);
     const searchEngine = engine || new text_engine_1.TextEngine();
     const accessLogs = (0, lifecycle_manager_1.loadAccessLogs)(repoRoot);
+    let symbolResults;
+    if (withCode) {
+        try {
+            const { CodeIndex } = await Promise.resolve().then(() => __importStar(require('../engines/code-index')));
+            const dbPath = CodeIndex.getDbPath(repoRoot);
+            if (fs.existsSync(dbPath)) {
+                const idx = new CodeIndex(dbPath);
+                symbolResults = idx.search(query, config.memory.top_k ?? 10);
+                idx.close();
+            }
+            else {
+                process.stderr.write('⚠  No code index found. Run: memo index-code [path]\n');
+            }
+        }
+        catch {
+            // better-sqlite3 not installed — silently skip
+        }
+    }
     let results = await searchEngine.search(query, memories, config.memory.top_k);
+    // Dual-track priority: Boost memories that reference found code symbol hashes
+    if (symbolResults && symbolResults.length > 0) {
+        const symbolHashes = new Set(symbolResults.map((sr) => sr.symbol.hash).filter(Boolean));
+        results = results.map((r) => {
+            const hasCodeMatch = r.memory.codeRefs?.some((hash) => symbolHashes.has(hash));
+            if (hasCodeMatch) {
+                // High boost for deterministic code-anchored memories
+                return { ...r, score: Math.min(1.0, r.score + 0.5) };
+            }
+            return r;
+        });
+    }
     // Apply access frequency boost
     results = results.map((result) => {
         const log = accessLogs[result.memory.path];
@@ -99,24 +129,6 @@ async function recall(query, repoRoot, config, engine, scope = 'all', explain = 
             results.pop();
             markdown = formatResultsAsMarkdown(results, query, config.embedding.engine, memories.length, scope, explain);
             tokenCount = estimateTokenCount(markdown);
-        }
-    }
-    let symbolResults;
-    if (withCode) {
-        try {
-            const { CodeIndex } = await Promise.resolve().then(() => __importStar(require('../engines/code-index')));
-            const dbPath = CodeIndex.getDbPath(repoRoot);
-            if (fs.existsSync(dbPath)) {
-                const idx = new CodeIndex(dbPath);
-                symbolResults = idx.search(query, config.memory.top_k ?? 10);
-                idx.close();
-            }
-            else {
-                process.stderr.write('⚠  No code index found. Run: memo index-code [path]\n');
-            }
-        }
-        catch {
-            // better-sqlite3 not installed — silently skip
         }
     }
     if (symbolResults && symbolResults.length > 0) {

@@ -17,6 +17,7 @@ export interface MemoryFile {
     content: string;
     scope?: MemoryScope;
     project?: string;
+    codeRefs?: string[];
 }
 export interface ScoreBreakdown {
     keyword: number;
@@ -97,6 +98,7 @@ export interface CodeSymbol {
     isExported: boolean;
     parentName?: string;
     memoryRefs?: string[];
+    hash?: string;
 }
 export interface CodeEdge {
     sourceName: string;

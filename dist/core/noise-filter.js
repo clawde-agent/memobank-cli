@@ -22,8 +22,6 @@ const LOW_VALUE_PATTERNS = [
     /^(are you|can you|do you|will you)/i,
     // File operations without context
     /^(opened|closed|saved|created|deleted) file/i,
-    // Simple commands
-    /^(run|execute|test|build|lint)/i,
     // Trivial changes
     /^(fixed typo|updated comment|reformatted)/i,
 ];

@@ -9,6 +9,8 @@ export interface WriteOptions {
     tags?: string;
     content?: string;
     repo?: string;
+    symbol?: string;
+    silent?: boolean;
 }
 export declare function writeMemoryCommand(type: MemoryType, options?: WriteOptions): Promise<void>;
 //# sourceMappingURL=write.d.ts.map

@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS symbols (
   line_start     INTEGER,
   line_end       INTEGER,
   is_exported    INTEGER DEFAULT 1,
+  hash           TEXT,
   parent_id      INTEGER REFERENCES symbols(id) ON DELETE SET NULL,
   memory_refs    TEXT
 );
@@ -147,15 +148,15 @@ class CodeIndex {
             return;
         }
         const insertSymbol = this.db.prepare(`INSERT INTO symbols
-         (file_id, name, qualified_name, kind, signature, docstring, line_start, line_end, is_exported, memory_refs)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+         (file_id, name, qualified_name, kind, signature, docstring, line_start, line_end, is_exported, hash, memory_refs)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         const insertEdge = this.db.prepare(`INSERT INTO edges (source_id, target_name, kind, line) VALUES (?, ?, ?, ?)`);
         const insertMany = this.db.transaction(() => {
             this.db.prepare('DELETE FROM symbols WHERE file_id = ?').run(file.id);
             const idMap = new Map();
             for (const sym of symbols) {
                 const memRefs = Array.isArray(sym.memoryRefs) ? sym.memoryRefs.join(',') : null;
-                const result = insertSymbol.run(file.id, sym.name, sym.qualifiedName, sym.kind, sym.signature ?? null, sym.docstring ?? null, sym.lineStart, sym.lineEnd, sym.isExported ? 1 : 0, memRefs);
+                const result = insertSymbol.run(file.id, sym.name, sym.qualifiedName, sym.kind, sym.signature ?? null, sym.docstring ?? null, sym.lineStart, sym.lineEnd, sym.isExported ? 1 : 0, sym.hash ?? null, memRefs);
                 idMap.set(sym.qualifiedName, result.lastInsertRowid);
             }
             for (const edge of edges) {
@@ -171,7 +172,7 @@ class CodeIndex {
     search(query, topK) {
         const rows = this.db
             .prepare(`SELECT s.name, s.qualified_name, s.kind, f.path AS file, s.line_start, s.line_end,
-                s.signature, s.docstring, s.is_exported, s.memory_refs,
+                s.signature, s.docstring, s.is_exported, s.hash, s.memory_refs,
                 rank AS fts_rank
          FROM symbols_fts
          JOIN symbols s ON symbols_fts.rowid = s.id
@@ -198,6 +199,7 @@ class CodeIndex {
                 signature: r.signature ?? undefined,
                 docstring: r.docstring ?? undefined,
                 isExported: Boolean(r.is_exported),
+                hash: r.hash ?? undefined,
                 memoryRefs: r.memory_refs ? r.memory_refs.split(',') : undefined,
             },
             score: 1 - ((r.fts_rank ?? 0) - minRank) / range,
@@ -206,7 +208,7 @@ class CodeIndex {
     getRefs(symbolName) {
         const rows = this.db
             .prepare(`SELECT s.name, s.qualified_name, s.kind, f.path AS file,
-                s.line_start, s.line_end, s.signature, s.docstring, s.is_exported, s.memory_refs
+                s.line_start, s.line_end, s.signature, s.docstring, s.is_exported, s.hash, s.memory_refs
          FROM edges e
          JOIN symbols s ON e.source_id = s.id
          JOIN files   f ON s.file_id = f.id
@@ -224,6 +226,7 @@ class CodeIndex {
                 signature: r.signature ?? undefined,
                 docstring: r.docstring ?? undefined,
                 isExported: Boolean(r.is_exported),
+                hash: r.hash ?? undefined,
                 memoryRefs: r.memory_refs ? r.memory_refs.split(',') : undefined,
             },
             score: 1.0,

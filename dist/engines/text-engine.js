@@ -92,7 +92,7 @@ class TextEngine {
     /**
      * Index is a no-op for text engine - searches live files directly
      */
-    async index(_memories, _incremental) {
+    async index(_memories) {
         // No-op - text engine doesn't need indexing
     }
 }

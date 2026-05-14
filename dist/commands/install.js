@@ -60,7 +60,7 @@ async function detectGitRepoName(cwd) {
         const gitRoot = stdout.trim();
         return path.basename(gitRoot);
     }
-    catch (error) {
+    catch {
         // Not a git repo, use directory name
         return path.basename(cwd);
     }

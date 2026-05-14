@@ -60,25 +60,25 @@ function loadGrammar(language) {
     try {
         switch (language) {
             case 'typescript':
-                // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
                 return require('tree-sitter-typescript').typescript;
             case 'javascript':
-                // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
                 return require('tree-sitter-javascript');
             case 'python':
-                // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
                 return require('tree-sitter-python');
             case 'go':
-                // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
                 return require('tree-sitter-go');
             case 'rust':
-                // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
                 return require('tree-sitter-rust');
             case 'yaml':
-                // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
                 return require('tree-sitter-yaml');
             case 'csharp':
-                // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
                 return require('tree-sitter-c-sharp');
             default:
                 return null;
@@ -118,6 +118,20 @@ function buildSignature(node, source) {
     const arrowStart = text.indexOf('=>');
     const cutoff = bodyStart !== -1 ? bodyStart : arrowStart !== -1 ? arrowStart : text.length;
     return text.slice(0, cutoff).replace(/\s+/g, ' ').trim();
+}
+/**
+ * Generates a stable hash of a symbol's implementation.
+ * Normalizes by removing comments and whitespace.
+ */
+function getLogicalHash(node, source) {
+    const text = source.slice(node.startIndex, node.endIndex);
+    // Remove block comments /* ... */
+    // Remove line comments // ...
+    // Remove all whitespace
+    const normalized = text
+        .replace(/\/\*[\s\S]*?\*\/|([^:]|^)\/\/.*$/gm, '$1')
+        .replace(/\s+/g, '');
+    return crypto.createHash('sha256').update(normalized).digest('hex');
 }
 function walkTypeScript(tree, source, relPath) {
     const symbols = [];
@@ -159,6 +173,7 @@ function walkTypeScript(tree, source, relPath) {
                     docstring: extractDocstring(isExported ? (node.parent ?? node) : node, source),
                     isExported,
                     parentName: currentClass ?? undefined,
+                    hash: getLogicalHash(node, source),
                 });
                 break;
             }
@@ -181,6 +196,7 @@ function walkTypeScript(tree, source, relPath) {
                     docstring: extractDocstring(node, source),
                     isExported: false,
                     parentName: currentClass ?? undefined,
+                    hash: getLogicalHash(node, source),
                 });
                 break;
             }
@@ -202,6 +218,7 @@ function walkTypeScript(tree, source, relPath) {
                     signature: `class ${name}`,
                     docstring: extractDocstring(isExported ? (node.parent ?? node) : node, source),
                     isExported,
+                    hash: getLogicalHash(node, source),
                 });
                 for (let i = 0; i < node.childCount; i++) {
                     visit(node.child(i));
@@ -226,6 +243,7 @@ function walkTypeScript(tree, source, relPath) {
                     signature: `interface ${name}`,
                     docstring: extractDocstring(isExported ? (node.parent ?? node) : node, source),
                     isExported,
+                    hash: getLogicalHash(node, source),
                 });
                 break;
             }
@@ -245,6 +263,7 @@ function walkTypeScript(tree, source, relPath) {
                     lineEnd: node.endPosition.row + 1,
                     signature: `type ${name}`,
                     isExported,
+                    hash: getLogicalHash(node, source),
                 });
                 break;
             }
@@ -303,12 +322,9 @@ function scanFile(filePath, scanRoot) {
     let ParserCtor;
     try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
         const mod = require('tree-sitter');
         // tree-sitter may export as default or as the constructor directly
-        ParserCtor =
-            mod.default ??
-                mod;
+        ParserCtor = mod.default ?? mod;
     }
     catch {
         return { symbols: [], edges: [], hash };

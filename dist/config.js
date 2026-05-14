@@ -50,7 +50,7 @@ const DEFAULT_LIFECYCLE = {
 exports.DEFAULT_LIFECYCLE = DEFAULT_LIFECYCLE;
 const DEFAULT_CONFIG = {
     project: { name: 'default', description: '' },
-    memory: { token_budget: 500, top_k: 5 },
+    memory: { token_budget: 2000, top_k: 5 },
     embedding: {
         engine: 'text',
         provider: 'openai',

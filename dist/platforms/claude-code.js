@@ -64,7 +64,6 @@ function installClaudeCode(repoRoot, enableAutoMemory = true) {
     if (fs.existsSync(settingsPath)) {
         try {
             const content = fs.readFileSync(settingsPath, 'utf-8');
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             settings = JSON.parse(content);
         }
         catch (error) {
@@ -77,9 +76,6 @@ function installClaudeCode(repoRoot, enableAutoMemory = true) {
     if (enableAutoMemory) {
         settings.autoMemoryEnabled = true;
     }
-    // Set autoMemoryDirectory to the project tier root so Claude Code's
-    // native auto-memory and memobank project memories share the same directory.
-    settings.autoMemoryDirectory = repoRoot;
     // Remove any legacy memobank Stop hook (no longer needed — Claude Code's
     // native auto-memory writes directly to autoMemoryDirectory).
     const hooks = settings.hooks;
@@ -109,12 +105,26 @@ function installClaudeCode(repoRoot, enableAutoMemory = true) {
     const currentStop = hookMap.Stop ?? [];
     const hasStopHook = currentStop.some((h) => h.hooks?.some((cmd) => cmd.type === 'command' && cmd.command === STOP_HOOK));
     if (!hasStopHook) {
-        hookMap.Stop = [...currentStop, { matcher: '', hooks: [{ type: 'command', command: STOP_HOOK }] }];
+        hookMap.Stop = [
+            ...currentStop,
+            {
+                matcher: '',
+                hooks: [
+                    {
+                        type: 'command',
+                        command: STOP_HOOK,
+                        timeout: 5000,
+                        async: true,
+                        statusMessage: 'Saving memories...',
+                    },
+                ],
+            },
+        ];
     }
     // Write settings
     try {
         fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
-        console.log(`✓ Claude Code: autoMemoryDirectory configured`);
+        console.log(`✓ Claude Code: memobank hooks installed`);
         return Promise.resolve(true);
     }
     catch (error) {

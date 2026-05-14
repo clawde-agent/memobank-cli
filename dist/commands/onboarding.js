@@ -45,7 +45,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.onboardingCommand = onboardingCommand;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
-const child_process_1 = require("child_process");
 const store_1 = require("../core/store");
 const config_1 = require("../config");
 const claude_code_1 = require("../platforms/claude-code");
@@ -54,6 +53,7 @@ const gemini_1 = require("../platforms/gemini");
 const qwen_1 = require("../platforms/qwen");
 const cursor_1 = require("../platforms/cursor");
 const workspace_1 = require("./workspace");
+const platform_detector_1 = require("../core/platform-detector");
 /** Test Ollama connectivity and model availability */
 async function testOllamaConnection(baseUrl, model) {
     try {
@@ -73,18 +73,6 @@ async function testOllamaConnection(baseUrl, model) {
         return `Cannot reach Ollama at ${baseUrl} — run: ollama serve`;
     }
 }
-/** Detect git repo name from cwd */
-function detectProjectName() {
-    try {
-        const result = (0, child_process_1.execSync)('git rev-parse --show-toplevel', {
-            encoding: 'utf-8', stdio: 'pipe',
-        }).trim();
-        return path.basename(result);
-    }
-    catch {
-        return path.basename(process.cwd());
-    }
-}
 /** Check if Claude Code has auto-memory explicitly disabled */
 function isAutoMemoryDisabled() {
     const settingsPath = path.join(process.env.HOME || process.env.USERPROFILE || '', '.claude', 'settings.json');
@@ -98,47 +86,6 @@ function isAutoMemoryDisabled() {
     catch {
         return false;
     }
-}
-/** Detect which platforms are installed */
-function detectPlatforms() {
-    const home = process.env.HOME || process.env.USERPROFILE || '';
-    const isInPath = (cmd) => {
-        try {
-            (0, child_process_1.execSync)(`which ${cmd}`, { stdio: 'pipe' });
-            return true;
-        }
-        catch {
-            return false;
-        }
-    };
-    return [
-        {
-            label: 'Claude Code',
-            value: 'claude-code',
-            hint: fs.existsSync(path.join(home, '.claude', 'settings.json')) ? '✓ detected' : 'not found',
-            disabled: false,
-        },
-        {
-            label: 'Codex',
-            value: 'codex',
-            hint: isInPath('codex') ? '✓ detected' : 'not found',
-        },
-        {
-            label: 'Gemini CLI',
-            value: 'gemini',
-            hint: (0, gemini_1.detectGemini)() ? '✓ detected' : 'not found',
-        },
-        {
-            label: 'Qwen Code',
-            value: 'qwen',
-            hint: (0, qwen_1.detectQwen)() ? '✓ detected' : 'not found',
-        },
-        {
-            label: 'Cursor',
-            value: 'cursor',
-            hint: fs.existsSync(path.join(process.cwd(), '.cursor')) ? '✓ detected' : 'not found',
-        },
-    ];
 }
 /** Get default-selected platform values (detected ones) */
 function getDetectedPlatforms(items) {
@@ -271,8 +218,8 @@ async function onboardingCommand() {
     const TextInput = inkTextInputMod.default;
     const inkSelectInputMod = await esmImport('ink-select-input');
     const SelectInput = inkSelectInputMod.default;
-    const defaultName = detectProjectName();
-    const platformItems = detectPlatforms();
+    const defaultName = (0, platform_detector_1.detectProjectName)();
+    const platformItems = (0, platform_detector_1.detectPlatforms)();
     const detectedPlatforms = getDetectedPlatforms(platformItems);
     const searchEngineItems = [
         { label: 'Text (recommended, zero setup)', value: 'text' },

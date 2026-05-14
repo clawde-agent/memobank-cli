@@ -25,6 +25,6 @@ export declare class TextEngine implements EngineAdapter {
     /**
      * Index is a no-op for text engine - searches live files directly
      */
-    index(_memories: MemoryFile[], _incremental: boolean): Promise<void>;
+    index(_memories: MemoryFile[]): Promise<void>;
 }
 //# sourceMappingURL=text-engine.d.ts.map
