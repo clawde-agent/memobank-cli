@@ -18,6 +18,7 @@ import { mapCommand } from './commands/map';
 import { importMemories } from './commands/import';
 import { onboardingCommand } from './commands/onboarding';
 import { lifecycleCommand, correctCommand } from './commands/lifecycle';
+import { studyCommand } from './commands/study';
 import {
   workspaceInit,
   workspaceSync,
@@ -178,6 +179,22 @@ program
         repo: options.repo,
         silent: options.silent,
       });
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+// Study command
+program
+  .command('study [lesson-name]')
+  .description('Promote a lesson to CLAUDE.md as an <important if="..."> conditional block')
+  .option('--if <condition>', 'Condition string (skips interactive prompt)')
+  .option('--list', 'List available lessons to study')
+  .option('--repo <path>', 'Memobank repository path')
+  .action(async (lessonName, options) => {
+    try {
+      await studyCommand(lessonName, options);
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`);
       process.exit(1);
