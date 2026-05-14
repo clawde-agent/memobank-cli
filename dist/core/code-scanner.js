@@ -128,9 +128,7 @@ function getLogicalHash(node, source) {
     // Remove block comments /* ... */
     // Remove line comments // ...
     // Remove all whitespace
-    const normalized = text
-        .replace(/\/\*[\s\S]*?\*\/|([^:]|^)\/\/.*$/gm, '$1')
-        .replace(/\s+/g, '');
+    const normalized = text.replace(/\/\*[\s\S]*?\*\/|([^:]|^)\/\/.*$/gm, '$1').replace(/\s+/g, '');
     return crypto.createHash('sha256').update(normalized).digest('hex');
 }
 function walkTypeScript(tree, source, relPath) {
