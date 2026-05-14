@@ -18,6 +18,7 @@ export interface MemoryFile {
   content: string;
   scope?: MemoryScope;
   project?: string; // source project ID (e.g. "org/repo"), written to frontmatter
+  codeRefs?: string[]; // NEW: Logical hashes of code symbols this memory anchors to
 }
 
 export interface ScoreBreakdown {
@@ -103,6 +104,7 @@ export interface CodeSymbol {
   isExported: boolean;
   parentName?: string; // for methods: the class name
   memoryRefs?: string[]; // memory filenames
+  hash?: string; // NEW: Logical hash of the symbol's implementation
 }
 
 export interface CodeEdge {

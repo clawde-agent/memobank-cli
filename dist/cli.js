@@ -50,11 +50,13 @@ const map_1 = require("./commands/map");
 const import_1 = require("./commands/import");
 const onboarding_1 = require("./commands/onboarding");
 const lifecycle_1 = require("./commands/lifecycle");
+const study_1 = require("./commands/study");
 const workspace_1 = require("./commands/workspace");
 const init_1 = require("./commands/init");
 const migrate_1 = require("./commands/migrate");
 const scan_1 = require("./commands/scan");
 const process_queue_1 = require("./commands/process-queue");
+const code_scan_1 = require("./commands/code-scan");
 const store_1 = require("./core/store");
 const config_1 = require("./config");
 const fs = __importStar(require("fs"));
@@ -84,10 +86,31 @@ program
         process.exit(1);
     }
 });
-// Onboarding command - new interactive setup
+// Init command - quick mode by default, --interactive for full TUI
+program
+    .command('init')
+    .description('Initialize memobank for this project')
+    .option('--interactive', 'Run interactive setup wizard (13-step TUI)')
+    .option('--platform <platforms>', 'Comma-separated platforms to install (e.g. claude-code,cursor)')
+    .action(async (options) => {
+    try {
+        if (options.interactive) {
+            const { onboardingCommand } = await Promise.resolve().then(() => __importStar(require('./commands/onboarding')));
+            await onboardingCommand();
+        }
+        else {
+            const { quickInit } = await Promise.resolve().then(() => __importStar(require('./commands/init')));
+            await quickInit({ platform: options.platform });
+        }
+    }
+    catch (error) {
+        console.error(`Error: ${error.message}`);
+        process.exit(1);
+    }
+});
+// Onboarding command - interactive setup wizard
 program
     .command('onboarding')
-    .alias('init')
     .alias('setup')
     .description('Interactive setup wizard (recommended for first-time setup)')
     .action(async () => {
@@ -110,6 +133,9 @@ program
     .option('--repo <path>', 'Memobank repository path')
     .option('--scope <scope>', 'Limit search scope: personal|project|workspace|all (default: all)')
     .option('--explain', 'Show score breakdown for each result')
+    .option('--code', 'Enable dual-track recall: search memories + code symbols', false)
+    .option('--refs <symbol>', 'Show callers of a symbol from the code index')
+    .option('--silent', 'Suppress stdout output')
     .action(async (query, options) => {
     try {
         await (0, recall_1.recallCommand)(query, options);
@@ -149,7 +175,9 @@ program
     .option('--description <description>', 'One-sentence summary')
     .option('--tags <tags>', 'Comma-separated tags')
     .option('--content <content>', 'Markdown content')
+    .option('--symbol <symbol>', 'Anchor this memory to a specific code symbol')
     .option('--repo <path>', 'Memobank repository path')
+    .option('--silent', 'Suppress stdout output')
     .action(async (type, options) => {
     // Validate type
     const validTypes = ['lesson', 'decision', 'workflow', 'architecture'];
@@ -163,8 +191,26 @@ program
             description: options.description,
             tags: options.tags,
             content: options.content,
+            symbol: options.symbol,
             repo: options.repo,
+            silent: options.silent,
         });
+    }
+    catch (error) {
+        console.error(`Error: ${error.message}`);
+        process.exit(1);
+    }
+});
+// Study command
+program
+    .command('study [lesson-name]')
+    .description('Promote a lesson to CLAUDE.md as an <important if="..."> conditional block')
+    .option('--if <condition>', 'Condition string (skips interactive prompt)')
+    .option('--list', 'List available lessons to study')
+    .option('--repo <path>', 'Memobank repository path')
+    .action(async (lessonName, options) => {
+    try {
+        await (0, study_1.studyCommand)(lessonName, options);
     }
     catch (error) {
         console.error(`Error: ${error.message}`);
@@ -455,6 +501,30 @@ program
             staged: options.staged,
             failOnSecrets: options.failOnSecrets,
             fix: options.fix,
+            repo: options.repo,
+        });
+    }
+    catch (error) {
+        console.error(`Error: ${error.message}`);
+        process.exit(1);
+    }
+});
+// Code index command
+program
+    .command('index-code [path]')
+    .description('Index codebase symbols for use with memo recall --code')
+    .option('--summarize', 'Write project-architecture-snapshot memory after indexing')
+    .option('--force', 'Re-index all files (ignore hash cache)')
+    .option('--langs <list>', 'Comma-separated language filter, e.g. typescript,python')
+    .option('--repo <path>', 'Memobank repository path')
+    .action(async (scanPath, options) => {
+    try {
+        await (0, code_scan_1.codeScanCommand)(scanPath, {
+            summarize: options.summarize,
+            force: options.force,
+            langs: options.langs
+                ? options.langs.split(',').map((l) => l.trim())
+                : undefined,
             repo: options.repo,
         });
     }

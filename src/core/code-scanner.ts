@@ -101,6 +101,19 @@ function buildSignature(node: TreeNode, source: string): string {
   return text.slice(0, cutoff).replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * Generates a stable hash of a symbol's implementation.
+ * Normalizes by removing comments and whitespace.
+ */
+function getLogicalHash(node: TreeNode, source: string): string {
+  const text = source.slice(node.startIndex, node.endIndex);
+  // Remove block comments /* ... */
+  // Remove line comments // ...
+  // Remove all whitespace
+  const normalized = text.replace(/\/\*[\s\S]*?\*\/|([^:]|^)\/\/.*$/gm, '$1').replace(/\s+/g, '');
+  return crypto.createHash('sha256').update(normalized).digest('hex');
+}
+
 export interface ScanFileResult {
   symbols: CodeSymbol[];
   edges: CodeEdge[];
@@ -155,6 +168,7 @@ function walkTypeScript(
           docstring: extractDocstring(isExported ? (node.parent ?? node) : node, source),
           isExported,
           parentName: currentClass ?? undefined,
+          hash: getLogicalHash(node, source),
         });
         break;
       }
@@ -177,6 +191,7 @@ function walkTypeScript(
           docstring: extractDocstring(node, source),
           isExported: false,
           parentName: currentClass ?? undefined,
+          hash: getLogicalHash(node, source),
         });
         break;
       }
@@ -198,6 +213,7 @@ function walkTypeScript(
           signature: `class ${name}`,
           docstring: extractDocstring(isExported ? (node.parent ?? node) : node, source),
           isExported,
+          hash: getLogicalHash(node, source),
         });
         for (let i = 0; i < node.childCount; i++) {
           visit(node.child(i));
@@ -222,6 +238,7 @@ function walkTypeScript(
           signature: `interface ${name}`,
           docstring: extractDocstring(isExported ? (node.parent ?? node) : node, source),
           isExported,
+          hash: getLogicalHash(node, source),
         });
         break;
       }
@@ -241,6 +258,7 @@ function walkTypeScript(
           lineEnd: node.endPosition.row + 1,
           signature: `type ${name}`,
           isExported,
+          hash: getLogicalHash(node, source),
         });
         break;
       }

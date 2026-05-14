@@ -129,7 +129,7 @@ function findRepoRoot(cwd, repoFlag) {
             return path.join(osHomeDir(), '.memobank', repoName);
         }
     }
-    catch (e) {
+    catch {
         /* ignore */
     }
     return path.join(osHomeDir(), '.memobank', 'default');
@@ -273,6 +273,7 @@ function loadFile(filePath) {
         status: data.status || 'experimental',
         content: parsed.content,
         project: data.project,
+        codeRefs: Array.isArray(data.codeRefs) ? data.codeRefs : undefined,
     };
 }
 function writeMemory(repoRoot, memory) {
@@ -307,6 +308,9 @@ function writeMemory(repoRoot, memory) {
     }
     if (memory.project) {
         frontmatter.project = memory.project;
+    }
+    if (memory.codeRefs) {
+        frontmatter.codeRefs = memory.codeRefs;
     }
     const fileContent = gray_matter_1.default.stringify(memory.content, frontmatter);
     fs.writeFileSync(filePath, fileContent, 'utf-8');

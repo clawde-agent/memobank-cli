@@ -21,29 +21,27 @@ export interface RecallOptions {
   explain?: boolean;
   code?: boolean;
   refs?: string;
+  silent?: boolean;
 }
 
 export async function recallCommand(query: string, options: RecallOptions): Promise<void> {
   // Validate query
   if (!query || !query.trim()) {
-    console.error('Error: Query cannot be empty');
-    process.exit(1);
+    throw new Error('Query cannot be empty');
   }
 
   if (query.length > 1000) {
-    console.error('Error: Query too long (max 1000 characters)');
-    process.exit(1);
+    throw new Error('Query too long (max 1000 characters)');
   }
 
   // Validate top
   if (options.top !== undefined) {
-    if (!Number.isInteger(options.top) || options.top < 1) {
-      console.error('Error: --top must be a positive integer');
-      process.exit(1);
+    const topVal = typeof options.top === 'string' ? parseInt(options.top, 10) : options.top;
+    if (isNaN(topVal) || topVal < 1) {
+      throw new Error('--top must be a positive integer');
     }
-    if (options.top > 100) {
-      console.error('Error: --top cannot exceed 100');
-      process.exit(1);
+    if (topVal > 100) {
+      throw new Error('--top cannot exceed 100');
     }
   }
 
@@ -78,7 +76,7 @@ export async function recallCommand(query: string, options: RecallOptions): Prom
   const config = loadConfig(repoRoot);
 
   if (options.top) {
-    config.memory.top_k = options.top;
+    config.memory.top_k = typeof options.top === 'string' ? parseInt(options.top, 10) : options.top;
   }
 
   const scope = (options.scope as MemoryScope) || 'all';
@@ -124,7 +122,9 @@ export async function recallCommand(query: string, options: RecallOptions): Prom
     return;
   }
 
-  console.log(markdown);
+  if (!options.silent) {
+    console.log(markdown);
+  }
 
   if (!options.dryRun) {
     writeRecallResults(repoRoot, results, query, config.embedding.engine);

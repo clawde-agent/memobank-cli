@@ -18,6 +18,7 @@ import { mapCommand } from './commands/map';
 import { importMemories } from './commands/import';
 import { onboardingCommand } from './commands/onboarding';
 import { lifecycleCommand, correctCommand } from './commands/lifecycle';
+import { studyCommand } from './commands/study';
 import {
   workspaceInit,
   workspaceSync,
@@ -66,10 +67,33 @@ program
     }
   });
 
-// Onboarding command - new interactive setup
+// Init command - quick mode by default, --interactive for full TUI
+program
+  .command('init')
+  .description('Initialize memobank for this project')
+  .option('--interactive', 'Run interactive setup wizard (13-step TUI)')
+  .option(
+    '--platform <platforms>',
+    'Comma-separated platforms to install (e.g. claude-code,cursor)'
+  )
+  .action(async (options) => {
+    try {
+      if (options.interactive) {
+        const { onboardingCommand } = await import('./commands/onboarding');
+        await onboardingCommand();
+      } else {
+        const { quickInit } = await import('./commands/init');
+        await quickInit({ platform: options.platform });
+      }
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+// Onboarding command - interactive setup wizard
 program
   .command('onboarding')
-  .alias('init')
   .alias('setup')
   .description('Interactive setup wizard (recommended for first-time setup)')
   .action(async () => {
@@ -94,6 +118,7 @@ program
   .option('--explain', 'Show score breakdown for each result')
   .option('--code', 'Enable dual-track recall: search memories + code symbols', false)
   .option('--refs <symbol>', 'Show callers of a symbol from the code index')
+  .option('--silent', 'Suppress stdout output')
   .action(async (query: string, options: RecallOptions) => {
     try {
       await recallCommand(query, options);
@@ -133,7 +158,9 @@ program
   .option('--description <description>', 'One-sentence summary')
   .option('--tags <tags>', 'Comma-separated tags')
   .option('--content <content>', 'Markdown content')
+  .option('--symbol <symbol>', 'Anchor this memory to a specific code symbol')
   .option('--repo <path>', 'Memobank repository path')
+  .option('--silent', 'Suppress stdout output')
   .action(async (type, options) => {
     // Validate type
     const validTypes: MemoryType[] = ['lesson', 'decision', 'workflow', 'architecture'];
@@ -148,8 +175,26 @@ program
         description: options.description,
         tags: options.tags,
         content: options.content,
+        symbol: options.symbol,
         repo: options.repo,
+        silent: options.silent,
       });
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+// Study command
+program
+  .command('study [lesson-name]')
+  .description('Promote a lesson to CLAUDE.md as an <important if="..."> conditional block')
+  .option('--if <condition>', 'Condition string (skips interactive prompt)')
+  .option('--list', 'List available lessons to study')
+  .option('--repo <path>', 'Memobank repository path')
+  .action(async (lessonName, options) => {
+    try {
+      await studyCommand(lessonName, options);
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`);
       process.exit(1);

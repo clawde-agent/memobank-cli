@@ -12,6 +12,7 @@ export interface RecallOptions {
     explain?: boolean;
     code?: boolean;
     refs?: string;
+    silent?: boolean;
 }
 export declare function recallCommand(query: string, options: RecallOptions): Promise<void>;
 //# sourceMappingURL=recall.d.ts.map

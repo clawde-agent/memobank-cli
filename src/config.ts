@@ -13,7 +13,7 @@ const DEFAULT_LIFECYCLE: LifecycleConfig = {
 
 const DEFAULT_CONFIG: MemoConfig = {
   project: { name: 'default', description: '' },
-  memory: { token_budget: 500, top_k: 5 },
+  memory: { token_budget: 2000, top_k: 5 },
   embedding: {
     engine: 'text' as Engine,
     provider: 'openai',

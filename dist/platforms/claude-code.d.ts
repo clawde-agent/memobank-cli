@@ -1,6 +1,6 @@
 /**
  * Claude Code platform install helper
- * Sets autoMemoryDirectory in ~/.claude/settings.json
+ * Installs memobank hooks in ~/.claude/settings.json
  * Schema: https://www.schemastore.org/claude-code-settings.json
  */
 /**

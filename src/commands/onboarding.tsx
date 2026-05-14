@@ -10,21 +10,17 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
 import { findGitRoot } from '../core/store';
 import { loadConfig, writeConfig, initConfig } from '../config';
 import { installClaudeCode } from '../platforms/claude-code';
 import { installCodex } from '../platforms/codex';
-import { installGemini, detectGemini } from '../platforms/gemini';
-import { installQwen, detectQwen } from '../platforms/qwen';
+import { installGemini } from '../platforms/gemini';
+import { installQwen } from '../platforms/qwen';
 import { installCursor } from '../platforms/cursor';
 import { workspaceInit } from './workspace';
-interface MultiSelectItem {
-  label: string;
-  value: string;
-  hint?: string;
-  disabled?: boolean;
-}
+import { detectProjectName, detectPlatforms, type PlatformItem } from '../core/platform-detector';
+
+type MultiSelectItem = PlatformItem;
 
 /** Test Ollama connectivity and model availability */
 async function testOllamaConnection(baseUrl: string, model: string): Promise<string | null> {
@@ -44,18 +40,6 @@ async function testOllamaConnection(baseUrl: string, model: string): Promise<str
   }
 }
 
-/** Detect git repo name from cwd */
-function detectProjectName(): string {
-  try {
-    const result = execSync('git rev-parse --show-toplevel', {
-      encoding: 'utf-8', stdio: 'pipe',
-    }).trim();
-    return path.basename(result);
-  } catch {
-    return path.basename(process.cwd());
-  }
-}
-
 /** Check if Claude Code has auto-memory explicitly disabled */
 function isAutoMemoryDisabled(): boolean {
   const settingsPath = path.join(process.env.HOME || process.env.USERPROFILE || '', '.claude', 'settings.json');
@@ -66,43 +50,6 @@ function isAutoMemoryDisabled(): boolean {
   } catch {
     return false;
   }
-}
-
-/** Detect which platforms are installed */
-function detectPlatforms(): MultiSelectItem[] {
-  const home = process.env.HOME || process.env.USERPROFILE || '';
-  const isInPath = (cmd: string): boolean => {
-    try { execSync(`which ${cmd}`, { stdio: 'pipe' }); return true; } catch { return false; }
-  };
-
-  return [
-    {
-      label: 'Claude Code',
-      value: 'claude-code',
-      hint: fs.existsSync(path.join(home, '.claude', 'settings.json')) ? '✓ detected' : 'not found',
-      disabled: false,
-    },
-    {
-      label: 'Codex',
-      value: 'codex',
-      hint: isInPath('codex') ? '✓ detected' : 'not found',
-    },
-    {
-      label: 'Gemini CLI',
-      value: 'gemini',
-      hint: detectGemini() ? '✓ detected' : 'not found',
-    },
-    {
-      label: 'Qwen Code',
-      value: 'qwen',
-      hint: detectQwen() ? '✓ detected' : 'not found',
-    },
-    {
-      label: 'Cursor',
-      value: 'cursor',
-      hint: fs.existsSync(path.join(process.cwd(), '.cursor')) ? '✓ detected' : 'not found',
-    },
-  ];
 }
 
 /** Get default-selected platform values (detected ones) */

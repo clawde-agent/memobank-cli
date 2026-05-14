@@ -27,6 +27,8 @@ export interface WriteOptions {
   tags?: string;
   content?: string;
   repo?: string;
+  symbol?: string;
+  silent?: boolean;
 }
 
 /**
@@ -45,15 +47,6 @@ created: ${new Date().toISOString()}
 ---
 
 ${baseTemplate}
-
----
-# SECURITY CHECKLIST (remove this section before saving)
-# - [ ] No API keys, passwords, or tokens
-# - [ ] No IP addresses or hostnames
-# - [ ] No email addresses or phone numbers
-# - [ ] No database connection strings
-# - [ ] No private keys or certificates
-# - [ ] Content is at appropriate abstraction level (high/medium)
 `;
 }
 
@@ -81,7 +74,7 @@ function parseTemplate(content: string, type: MemoryType): any {
 
     if (inFrontmatter) {
       frontmatter += line + '\n';
-    } else if (!line.startsWith('# SECURITY CHECKLIST')) {
+    } else {
       body += line + '\n';
     }
   }
@@ -152,12 +145,9 @@ export async function writeMemoryCommand(
     fs.writeFileSync(tmpFile, template, 'utf-8');
 
     const editor = process.env.EDITOR || 'vi';
-    console.log(`Opening ${editor}...`);
-    console.log('\n📝 Security Guidelines:');
-    console.log('   • Do NOT include API keys, passwords, or tokens');
-    console.log('   • Do NOT include IP addresses or hostnames');
-    console.log('   • Do NOT include email addresses or phone numbers');
-    console.log('   • Keep content at high/medium abstraction level\n');
+    if (!options.silent) {
+      console.log(`Opening ${editor}...`);
+    }
 
     try {
       await execAsync(`${editor} "${tmpFile}"`);
@@ -169,6 +159,33 @@ export async function writeMemoryCommand(
       return;
     } finally {
       fs.unlinkSync(tmpFile);
+    }
+  }
+
+  // Symbol anchoring (v0.8.1+)
+  if (options.symbol) {
+    try {
+      const { CodeIndex } = await import('../engines/code-index');
+      const dbPath = CodeIndex.getDbPath(repoRoot);
+      if (fs.existsSync(dbPath)) {
+        const idx = new CodeIndex(dbPath);
+        const syms = idx.search(options.symbol, 1);
+        idx.close();
+        if (syms.length > 0 && syms[0].symbol.hash) {
+          memoryData.codeRefs = [syms[0].symbol.hash];
+          if (!options.silent) {
+            console.log(
+              `✓ Anchored to symbol: ${syms[0].symbol.qualifiedName} (${syms[0].symbol.hash.slice(0, 8)})`
+            );
+          }
+        } else {
+          if (!options.silent) {
+            console.warn(`⚠️  Symbol "${options.symbol}" not found in index. Link skipped.`);
+          }
+        }
+      }
+    } catch {
+      // ignore
     }
   }
 
@@ -187,17 +204,23 @@ export async function writeMemoryCommand(
   }
 
   // Security validation
-  console.log('\n🔒 Security check...');
+  if (!options.silent) {
+    console.log('\n🔒 Security check...');
+  }
   const { sanitized, redacted } = sanitizeContent(memoryData.content);
 
   if (redacted.length > 0) {
-    console.log('⚠️  Found sensitive information that will be redacted:');
-    redacted.forEach((item) => console.log(`   • ${item}`));
-    console.log('');
+    if (!options.silent) {
+      console.log('⚠️  Found sensitive information that will be redacted:');
+      redacted.forEach((item) => console.log(`   • ${item}`));
+      console.log('');
+    }
 
     // Auto-sanitize
     memoryData.content = sanitized;
-    console.log('✓ Content has been automatically sanitized\n');
+    if (!options.silent) {
+      console.log('✓ Content has been automatically sanitized\n');
+    }
   }
 
   // Validate content
@@ -211,9 +234,11 @@ export async function writeMemoryCommand(
   }
 
   if (validation.warnings.length > 0) {
-    console.log('⚠️  Warnings:');
-    validation.warnings.forEach((warn) => console.log(`   • ${warn}`));
-    console.log('');
+    if (!options.silent) {
+      console.log('⚠️  Warnings:');
+      validation.warnings.forEach((warn) => console.log(`   • ${warn}`));
+      console.log('');
+    }
   }
 
   // Check abstraction level
@@ -228,7 +253,9 @@ export async function writeMemoryCommand(
     return;
   }
 
-  console.log(`✓ Abstraction level: ${abstractionLevel}\n`);
+  if (!options.silent) {
+    console.log(`✓ Abstraction level: ${abstractionLevel}\n`);
+  }
 
   // Write memory
   try {
@@ -249,7 +276,9 @@ export async function writeMemoryCommand(
       memoryData.status = 'experimental';
     }
     const filePath = writeMemory(repoRoot, memoryData);
-    console.log(`✅ Created: ${filePath}`);
+    if (!options.silent) {
+      console.log(`✅ Created: ${filePath}`);
+    }
   } catch (error) {
     console.error(`Error writing memory: ${(error as Error).message}`);
   }

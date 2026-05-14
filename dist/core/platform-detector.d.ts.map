@@ -1,0 +1,1 @@
+{"version":3,"file":"platform-detector.d.ts","sourceRoot":"","sources":["../../src/core/platform-detector.ts"],"names":[],"mappings":"AAMA,MAAM,WAAW,YAAY;IAC3B,KAAK,EAAE,MAAM,CAAC;IACd,KAAK,EAAE,MAAM,CAAC;IACd,IAAI,CAAC,EAAE,MAAM,CAAC;IACd,QAAQ,CAAC,EAAE,OAAO,CAAC;CACpB;AAED,oCAAoC;AACpC,wBAAgB,iBAAiB,IAAI,MAAM,CAU1C;AAED,2CAA2C;AAC3C,wBAAgB,eAAe,IAAI,YAAY,EAAE,CAuChD"}
