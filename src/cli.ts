@@ -66,10 +66,33 @@ program
     }
   });
 
-// Onboarding command - new interactive setup
+// Init command - quick mode by default, --interactive for full TUI
+program
+  .command('init')
+  .description('Initialize memobank for this project')
+  .option('--interactive', 'Run interactive setup wizard (13-step TUI)')
+  .option(
+    '--platform <platforms>',
+    'Comma-separated platforms to install (e.g. claude-code,cursor)'
+  )
+  .action(async (options) => {
+    try {
+      if (options.interactive) {
+        const { onboardingCommand } = await import('./commands/onboarding');
+        await onboardingCommand();
+      } else {
+        const { quickInit } = await import('./commands/init');
+        await quickInit({ platform: options.platform });
+      }
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+// Onboarding command - interactive setup wizard
 program
   .command('onboarding')
-  .alias('init')
   .alias('setup')
   .description('Interactive setup wizard (recommended for first-time setup)')
   .action(async () => {
