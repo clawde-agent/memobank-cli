@@ -2,7 +2,7 @@
 
 > **Status:** Draft
 > **Date:** 2026-05-14
-> **Scope:** 8 fixes — hook config, CLI silent mode, write template cleanup, memo init quick mode, slash commands, CLAUDE.md rules, memobank config, skill docs
+> **Scope:** 10 fixes — hook config, CLI silent mode, write template cleanup, memo init quick mode, slash commands, CLAUDE.md rules, memobank config, skill docs, self-improvement flywheel (autoMemoryDirectory per-project, token_budget, noise-filter)
 
 ---
 
@@ -252,7 +252,57 @@ embedding:
 
 ---
 
-## 8. Update memobank Skill Docs
+## 9. Self-Improvement Flywheel Fixes
+
+The self-improvement loop (capture → recall → avoid repeat) is currently broken at multiple points. These fixes restore it.
+
+### P1 — `autoMemoryDirectory` Per-Project (Architecture Fix)
+
+**Problem:** `installClaudeCode()` writes `autoMemoryDirectory` to `~/.claude/settings.json` (global). All projects share one path, so `memo capture --auto` reads from whichever project was last initialized — cross-project pollution or empty reads.
+
+**Fix:** Remove `autoMemoryDirectory` from the global Claude settings write. Instead, `memo capture --auto` resolves the capture directory from the local `.memobank/config.yaml` (or falls back to `.memobank/` in the git root).
+
+**Changes:**
+
+- `src/platforms/claude-code.ts`: remove the `autoMemoryDirectory` write from `installClaudeCode()`
+- `src/commands/capture.ts`: when `--auto` is set, use `findRepoRoot(cwd)` to locate `.memobank/` — already what `repoRoot` does, just remove the global override path
+- `src/commands/install.ts`: same removal if it writes `autoMemoryDirectory`
+
+**Result:** Each project's Stop hook captures into its own `.memobank/`, isolated by git root.
+
+### P2 — `token_budget` Default: 500 → 2000
+
+**Problem:** `token_budget: 500` means recall output is capped at ~500 tokens. A single substantive lesson is 200–400 tokens, so Claude sees at most 1–2 complete memories per recall.
+
+**Fix:** Change the default `token_budget` in `src/core/config.ts` (or wherever defaults live) from `500` to `2000`. Also update `.memobank/config.yaml` for this project.
+
+### P3 — Relax `noise-filter` LOW_VALUE_PATTERNS
+
+**Problem:** The pattern `/^(run|execute|test|build|lint)/i` filters content starting with action verbs — which includes many valid workflow lessons like "Run `npm ci` instead of `npm install` to respect lockfile."
+
+**Fix:** Remove this specific pattern from `LOW_VALUE_PATTERNS` in `src/core/noise-filter.ts`. The remaining length check (`< 50 chars`) and other patterns are sufficient guards.
+
+```typescript
+// Remove this line:
+/^(run|execute|test|build|lint)/i,
+```
+
+### P4 — CLAUDE.md Capture Triggers (Self-Improvement Loop)
+
+Already covered in Fix 6 (CLAUDE.md workflow rules). Ensure the capture triggers are explicit:
+
+```markdown
+## Self-Improvement
+
+- After fixing a non-obvious bug: `memo write lesson --name="..." --description="..." --content="..."`
+- After discovering a reusable workflow: `memo write workflow --name="..." ...`
+- After a correction from the user: run `memo write lesson` AND update this CLAUDE.md with the rule
+- Before starting work in an unfamiliar area: `memo recall "<topic>"`
+```
+
+---
+
+## 10. Update memobank Skill Docs
 
 **Problem:** The memobank skill (`~/.claude/skills/memobank/SKILL.md`) describes `memo init` as a "4-step interactive TUI". After Fix 4, the default is non-interactive.
 
@@ -277,9 +327,11 @@ embedding:
 | `memo init --interactive`          | Launches existing TUI unchanged                                                                                     |
 | `memo init --platform claude-code` | Only installs Claude Code hook                                                                                      |
 | Slash commands                     | `/recall query` in Claude Code → runs `memo recall "query" --code`, reads MEMORY.md                                 |
-| SessionStart hook                  | New session → MEMORY.md updated within 10 s, no stdout                                                              |
-| Empty query recall                 | `memo recall ""` → returns top-5 by score, no error                                                                 |
 | `.memobank/config.yaml`            | `memo recall "test"` works without lancedb installed                                                                |
+| Per-project capture                | Two projects initialized → `memo capture --auto` in each writes to its own `.memobank/`, not the other's            |
+| token_budget                       | `memo recall "query"` returns up to 2000 tokens of content, not 500                                                 |
+| noise-filter                       | Lesson starting with "Run npm ci…" is captured, not filtered                                                        |
+| Global settings clean              | `~/.claude/settings.json` no longer contains `autoMemoryDirectory` after `memo install`                             |
 
 ---
 
