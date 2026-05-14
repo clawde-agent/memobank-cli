@@ -1,7 +1,7 @@
 "use strict";
 /**
  * Claude Code platform install helper
- * Sets autoMemoryDirectory in ~/.claude/settings.json
+ * Installs memobank hooks in ~/.claude/settings.json
  * Schema: https://www.schemastore.org/claude-code-settings.json
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
@@ -76,8 +76,7 @@ function installClaudeCode(repoRoot, enableAutoMemory = true) {
     if (enableAutoMemory) {
         settings.autoMemoryEnabled = true;
     }
-    // Remove any legacy memobank Stop hook (no longer needed — Claude Code's
-    // native auto-memory writes directly to autoMemoryDirectory).
+    // Remove any legacy memobank Stop hook before re-adding the current one.
     const hooks = settings.hooks;
     if (hooks?.Stop) {
         const stopHooks = hooks.Stop;

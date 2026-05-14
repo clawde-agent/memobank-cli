@@ -1,6 +1,6 @@
 # UX Fixes Design
 
-> **Status:** Draft
+> **Status:** Implemented
 > **Date:** 2026-05-14
 > **Scope:** 11 items — hook config, CLI silent mode, write template cleanup, memo init quick mode, slash commands, CLAUDE.md rules, memo study command, memobank config, skill docs, self-improvement flywheel (autoMemoryDirectory per-project, token_budget, noise-filter)
 

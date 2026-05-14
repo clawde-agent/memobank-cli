@@ -39,6 +39,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.ensureGitignoreFull = ensureGitignoreFull;
 exports.quickInit = quickInit;
 exports.initCommand = initCommand;
 const fs = __importStar(require("fs"));
@@ -138,7 +139,7 @@ function initCommand(options) {
         }
         createTierDirs(projectDir);
         (0, config_1.initConfig)(projectDir, projectName);
-        ensureGitignoreFull(cwd);
+        ensureGitignoreFull((0, store_1.findGitRoot)(cwd));
         console.log(`✓ Project memory initialized at: ${projectDir}`);
         console.log('  Commit .memobank/ with your code — it IS the team memory.');
     }

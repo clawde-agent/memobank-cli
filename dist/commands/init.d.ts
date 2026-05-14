@@ -8,6 +8,7 @@ export interface QuickInitOptions {
     platform?: string;
     repoRoot?: string;
 }
+export declare function ensureGitignoreFull(gitRoot: string): void;
 export declare function quickInit(options: QuickInitOptions): Promise<void>;
 export declare function initCommand(options: {
     global?: boolean;
