@@ -27,6 +27,7 @@ export interface WriteOptions {
   tags?: string;
   content?: string;
   repo?: string;
+  symbol?: string;
 }
 
 /**
@@ -45,15 +46,6 @@ created: ${new Date().toISOString()}
 ---
 
 ${baseTemplate}
-
----
-# SECURITY CHECKLIST (remove this section before saving)
-# - [ ] No API keys, passwords, or tokens
-# - [ ] No IP addresses or hostnames
-# - [ ] No email addresses or phone numbers
-# - [ ] No database connection strings
-# - [ ] No private keys or certificates
-# - [ ] Content is at appropriate abstraction level (high/medium)
 `;
 }
 
@@ -81,7 +73,7 @@ function parseTemplate(content: string, type: MemoryType): any {
 
     if (inFrontmatter) {
       frontmatter += line + '\n';
-    } else if (!line.startsWith('# SECURITY CHECKLIST')) {
+    } else {
       body += line + '\n';
     }
   }
@@ -153,11 +145,6 @@ export async function writeMemoryCommand(
 
     const editor = process.env.EDITOR || 'vi';
     console.log(`Opening ${editor}...`);
-    console.log('\n📝 Security Guidelines:');
-    console.log('   • Do NOT include API keys, passwords, or tokens');
-    console.log('   • Do NOT include IP addresses or hostnames');
-    console.log('   • Do NOT include email addresses or phone numbers');
-    console.log('   • Keep content at high/medium abstraction level\n');
 
     try {
       await execAsync(`${editor} "${tmpFile}"`);
@@ -169,6 +156,29 @@ export async function writeMemoryCommand(
       return;
     } finally {
       fs.unlinkSync(tmpFile);
+    }
+  }
+
+  // Symbol anchoring (v0.8.1+)
+  if (options.symbol) {
+    try {
+      const { CodeIndex } = await import('../engines/code-index');
+      const dbPath = CodeIndex.getDbPath(repoRoot);
+      if (fs.existsSync(dbPath)) {
+        const idx = new CodeIndex(dbPath);
+        const syms = idx.search(options.symbol, 1);
+        idx.close();
+        if (syms.length > 0 && syms[0].symbol.hash) {
+          memoryData.codeRefs = [syms[0].symbol.hash];
+          console.log(
+            `✓ Anchored to symbol: ${syms[0].symbol.qualifiedName} (${syms[0].symbol.hash.slice(0, 8)})`
+          );
+        } else {
+          console.warn(`⚠️  Symbol "${options.symbol}" not found in index. Link skipped.`);
+        }
+      }
+    } catch {
+      // ignore
     }
   }
 
