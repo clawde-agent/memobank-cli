@@ -295,6 +295,21 @@ function walkTypeScript(
         }
         break;
       }
+      case 'import_statement': {
+        const sourceNode = node.childForFieldName('source');
+        if (sourceNode) {
+          const raw = getNodeText(sourceNode, source);
+          const moduleName = raw.replace(/^['"]|['"]$/g, '');
+          edges.push({
+            sourceName: relPath,
+            sourceFile: relPath,
+            targetName: moduleName,
+            kind: 'imports',
+            line: node.startPosition.row + 1,
+          });
+        }
+        break;
+      }
       default:
         break;
     }

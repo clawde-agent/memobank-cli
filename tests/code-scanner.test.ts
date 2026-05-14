@@ -224,3 +224,26 @@ describe('scanFile — csharp', () => {
     expect(symbols.find((s) => s.name === 'Meow')?.parentName).toBe('Cat');
   });
 });
+
+describe('scanFile — import edges', () => {
+  function tmpTs(code: string): string {
+    const f = path.join(os.tmpdir(), `memo_test_${Date.now()}.ts`);
+    fs.writeFileSync(f, code);
+    return f;
+  }
+
+  test('ts: extracts import edges', () => {
+    const f = tmpTs("import { readFile } from 'fs';\nimport type { Foo } from './foo';\n");
+    const { edges } = scanFile(f, os.tmpdir());
+    expect(edges.some((e) => e.targetName === 'fs' && e.kind === 'imports')).toBe(true);
+    expect(edges.some((e) => e.targetName === './foo' && e.kind === 'imports')).toBe(true);
+  });
+
+  test('ts: import edge sourceName is the file relPath', () => {
+    const f = tmpTs("import { x } from 'lodash';\n");
+    const { edges } = scanFile(f, os.tmpdir());
+    const importEdge = edges.find((e) => e.kind === 'imports');
+    expect(importEdge?.sourceName).toBeTruthy();
+    expect(importEdge?.targetName).toBe('lodash');
+  });
+});
