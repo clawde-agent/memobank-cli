@@ -8,13 +8,14 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { initConfig } from '../config';
-import { findRepoRoot, findGitRoot } from '../core/store';
+import { findGitRoot } from '../core/store';
 import { detectProjectName, detectPlatforms } from '../core/platform-detector';
 import { installClaudeCode } from '../platforms/claude-code';
 import { installCursor } from '../platforms/cursor';
 import { installCodex } from '../platforms/codex';
 import { installGemini } from '../platforms/gemini';
 import { installQwen } from '../platforms/qwen';
+import { codeScanCommand } from './code-scan';
 
 export interface QuickInitOptions {
   platform?: string;
@@ -43,7 +44,9 @@ export function ensureGitignoreFull(gitRoot: string): void {
 
 export async function quickInit(options: QuickInitOptions): Promise<void> {
   const cwd = process.cwd();
-  const gitRoot = options.repoRoot ?? findRepoRoot(cwd);
+  // Use findGitRoot (not findRepoRoot) so fresh projects always get a project-tier
+  // .memobank/ at the git root, rather than falling back to ~/.memobank/<name>.
+  const gitRoot = options.repoRoot ?? findGitRoot(cwd);
   const memobankRoot = path.join(gitRoot, '.memobank');
   const projectName = detectProjectName();
 
@@ -80,6 +83,14 @@ export async function quickInit(options: QuickInitOptions): Promise<void> {
   console.log(`✓ memobank initialized (project: ${projectName}, platforms: ${platformList})`);
   if (!installed.length) {
     console.log('  Tip: run memo init --interactive to configure platforms manually.');
+  }
+
+  // Auto-run code indexing so recall --code works immediately after init.
+  try {
+    await codeScanCommand(undefined, { summarize: true, repo: memobankRoot });
+  } catch {
+    // Non-fatal: tree-sitter may not be installed (optional dep).
+    console.log('  Tip: run memo index-code to enable code-aware recall.');
   }
 }
 

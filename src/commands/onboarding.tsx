@@ -18,6 +18,7 @@ import { installGemini } from '../platforms/gemini';
 import { installQwen } from '../platforms/qwen';
 import { installCursor } from '../platforms/cursor';
 import { workspaceInit } from './workspace';
+import { codeScanCommand } from './code-scan';
 import { detectProjectName, detectPlatforms, type PlatformItem } from '../core/platform-detector';
 
 type MultiSelectItem = PlatformItem;
@@ -178,10 +179,34 @@ async function runSetup(state: OnboardingState, gitRoot: string): Promise<{ line
     summaryLines.push(`Reranker: ${state.rerankerProvider} (set ${keyVar} env var)`);
   }
 
+  // Auto-run code indexing so recall --code works immediately after setup.
+  try {
+    await codeScanCommand(undefined, { summarize: true, repo: repoRoot });
+    summaryLines.push('✓ Code index built');
+  } catch {
+    summaryLines.push('  Tip: run memo index-code to enable code-aware recall');
+  }
+
   return { lines: summaryLines, autoMemoryWarning };
 }
 
 export async function onboardingCommand(): Promise<void> {
+  // Ink requires raw mode (interactive terminal). Detect early and give a clear
+  // actionable message instead of a cryptic React stack trace.
+  if (!process.stdin.isTTY || !(process.stdin as NodeJS.ReadStream & { setRawMode?: unknown }).setRawMode) {
+    console.error(
+      '⚠️  memo onboarding requires an interactive terminal (raw mode not supported here).\n' +
+      '\n' +
+      'Run this command in a real terminal, or use the non-interactive alternative:\n' +
+      '\n' +
+      '  memo init --platform claude-code    # Claude Code\n' +
+      '  memo init --platform cursor         # Cursor\n' +
+      '  memo init --platform codex          # Codex\n' +
+      '  memo init                           # auto-detect installed platforms\n'
+    );
+    process.exit(1);
+  }
+
   const gitRoot = findGitRoot(process.cwd());
 
   // Use Function constructor to bypass TypeScript's import() -> require() transform.

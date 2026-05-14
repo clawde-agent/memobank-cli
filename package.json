@@ -18,7 +18,8 @@
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "typecheck": "tsc --noEmit",
-    "prepare": "husky"
+    "prepare": "husky",
+    "postinstall": "node scripts/postinstall.js"
   },
   "keywords": [
     "memory",
@@ -45,6 +46,7 @@
   },
   "homepage": "https://github.com/clawde-agent/memobank-cli#readme",
   "dependencies": {
+    "apache-arrow": "^18.1.0",
     "chalk": "^5.3.0",
     "commander": "^14.0.3",
     "glob": "^13.0.6",
