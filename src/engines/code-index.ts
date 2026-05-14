@@ -287,6 +287,37 @@ export class CodeIndex {
     tx();
   }
 
+  getLinkedMemories(query: string): { memoryPath: string; minDepth: number }[] {
+    const MAX_DEPTH = 2;
+    // Wrap in quotes for FTS5 phrase safety; strip existing quotes first
+    const ftsQuery = `"${query.replace(/"/g, '')}"`;
+    const rows = this.db
+      .prepare(
+        `WITH RECURSIVE reachable(hash, depth) AS (
+           SELECT s.hash, 0
+           FROM symbols_fts
+           JOIN symbols s ON symbols_fts.rowid = s.id
+           WHERE symbols_fts MATCH ? AND s.hash IS NOT NULL
+
+           UNION
+
+           SELECT s2.hash, r.depth + 1
+           FROM reachable r
+           JOIN symbols s1 ON s1.hash = r.hash
+           JOIN edges e ON e.source_id = s1.id
+           JOIN symbols s2 ON s2.name = e.target_name
+           WHERE r.depth < ? AND s2.hash IS NOT NULL
+         )
+         SELECT msr.memory_path, MIN(r.depth) AS min_depth
+         FROM reachable r
+         JOIN memory_symbol_refs msr ON msr.symbol_hash = r.hash
+         GROUP BY msr.memory_path
+         ORDER BY min_depth ASC`
+      )
+      .all(ftsQuery, MAX_DEPTH) as { memory_path: string; min_depth: number }[];
+    return rows.map((r) => ({ memoryPath: r.memory_path, minDepth: r.min_depth }));
+  }
+
   getStats(): { files: number; symbols: number; edges: number } {
     const files = (this.db.prepare('SELECT COUNT(*) AS n FROM files').get() as { n: number }).n;
     const syms = (this.db.prepare('SELECT COUNT(*) AS n FROM symbols').get() as { n: number }).n;

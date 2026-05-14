@@ -158,4 +158,78 @@ describe('CodeIndex', () => {
       expect(rows).toHaveLength(0);
     });
   });
+
+  describe('getLinkedMemories', () => {
+    function setup(): void {
+      // Two files, three symbols, one call edge
+      index.upsertFile('src/auth.ts', 'typescript', 'h1', Date.now());
+      index.upsertFile('src/jwt.ts', 'typescript', 'h2', Date.now());
+      const verifyToken = makeSymbol({
+        name: 'verifyToken',
+        qualifiedName: 'verifyToken',
+        hash: 'hash-vt',
+        file: 'src/auth.ts',
+      });
+      const checkExpiry = makeSymbol({
+        name: 'checkExpiry',
+        qualifiedName: 'checkExpiry',
+        hash: 'hash-ce',
+        file: 'src/jwt.ts',
+      });
+      const unrelated = makeSymbol({
+        name: 'parseHeaders',
+        qualifiedName: 'parseHeaders',
+        hash: 'hash-ph',
+        file: 'src/jwt.ts',
+      });
+      // verifyToken calls checkExpiry
+      index.upsertSymbols(
+        'src/auth.ts',
+        [verifyToken],
+        [
+          {
+            sourceName: 'verifyToken',
+            sourceFile: 'src/auth.ts',
+            targetName: 'checkExpiry',
+            kind: 'calls',
+            line: 5,
+          },
+        ]
+      );
+      index.upsertSymbols('src/jwt.ts', [checkExpiry, unrelated], []);
+      // memory anchored to verifyToken (depth 0)
+      index.linkMemory('lesson/jwt-lesson.md', 'verifyToken raises on expired JWT');
+      // memory anchored to checkExpiry (depth 1 from verifyToken query)
+      index.linkMemory('lesson/expiry-lesson.md', 'checkExpiry validates exp claim');
+    }
+
+    it('returns depth-0 memory when query matches its symbol directly', () => {
+      setup();
+      const linked = index.getLinkedMemories('verifyToken');
+      const found = linked.find((l) => l.memoryPath === 'lesson/jwt-lesson.md');
+      expect(found).toBeDefined();
+      expect(found!.minDepth).toBe(0);
+    });
+
+    it('returns depth-1 memory reachable via call edge', () => {
+      setup();
+      const linked = index.getLinkedMemories('verifyToken');
+      const found = linked.find((l) => l.memoryPath === 'lesson/expiry-lesson.md');
+      expect(found).toBeDefined();
+      expect(found!.minDepth).toBe(1);
+    });
+
+    it('returns empty array when no symbols match query', () => {
+      setup();
+      const linked = index.getLinkedMemories('completelyUnknownXyz999');
+      expect(linked).toHaveLength(0);
+    });
+
+    it('does not return memories beyond depth 2', () => {
+      setup();
+      const linked = index.getLinkedMemories('verifyToken');
+      const allWithinBound = linked.every((l) => l.minDepth <= 2);
+      expect(allWithinBound).toBe(true);
+    });
+  });
 });
