@@ -2,7 +2,7 @@
 
 > **Status:** Draft
 > **Date:** 2026-05-14
-> **Scope:** 4 targeted fixes — hook config, CLI silent mode, write template cleanup, memo init quick mode
+> **Scope:** 9 fixes — hook config, CLI silent mode, write template cleanup, memo init quick mode, slash commands, SessionStart hook, CLAUDE.md rules, memobank config, skill docs
 
 ---
 
@@ -176,6 +176,132 @@ Replace the current `init` command action with:
 
 ---
 
+## 5. `.claude/commands/` — Project Slash Commands
+
+**Problem:** memobank has no Claude Code slash commands. Developers working in this repo must type full `memo recall` / `memo capture` commands manually.
+
+**New files:**
+
+### `.claude/commands/recall.md`
+
+```markdown
+---
+name: recall
+description: Search memobank memories for the current query
+argument-hint: [query]
+allowed-tools: Bash
+---
+
+Run: `memo recall "$ARGUMENTS" --code`
+
+Then read MEMORY.md and use the recalled context to inform your next response.
+```
+
+### `.claude/commands/capture.md`
+
+```markdown
+---
+name: capture
+description: Capture a lesson or decision to memobank memory
+argument-hint: [type] [name] e.g. lesson auth-fix
+allowed-tools: Bash
+---
+
+Run: `memo write $ARGUMENTS`
+```
+
+---
+
+## 6. `SessionStart` Hook — Auto Recall
+
+**Problem:** The memobank skill spec says recall runs at session start, but no hook enforces this. Users must manually run `memo recall`.
+
+**Fix location:** `src/platforms/claude-code.ts`
+
+Add a `SessionStart` hook alongside the existing `Stop` hook:
+
+```json
+"SessionStart": [
+  {
+    "matcher": "",
+    "hooks": [
+      {
+        "type": "command",
+        "command": "memo recall --silent --top 5",
+        "timeout": 10000,
+        "async": true,
+        "statusMessage": "Loading memories...",
+        "once": true
+      }
+    ]
+  }
+]
+```
+
+**Notes:**
+
+- `once: true` — fires once per session, not on every resume
+- `--silent` — no stdout pollution; MEMORY.md is written as the side-effect
+- `--top 5` — bounded token cost (5 memories max at session start)
+- Query defaults to empty string → retriever returns top-scored memories by recency/frequency
+
+Requires `recall` to support being called without a query (returns top-k by score). Add this to `recall.ts`: if query is empty, use `""` and let the engine return top results.
+
+---
+
+## 7. CLAUDE.md — Add Workflow Rules
+
+**Problem:** Current CLAUDE.md is purely structural documentation. No behaviour constraints for Claude working in this repo.
+
+**Additions** (append to existing CLAUDE.md, ~15 lines):
+
+```markdown
+## Workflow Rules
+
+- After fixing a non-obvious bug, run `memo write lesson` to capture it
+- Run `npm run typecheck && npm run lint` before claiming a task complete
+- Do not modify `dist/` directly — always build via `npm run build`
+- When adding a new CLI command, register it in `src/cli.ts` and add a test file in `tests/`
+- Do not add `console.log` debugging statements to production code paths
+```
+
+---
+
+## 8. Fix Project `.memobank/config.yaml`
+
+**Problem:** The project's own `.memobank/config.yaml` does not exist. The last recall used `lancedb` engine (which requires optional deps) and returned 0 results. The project isn't using its own tool effectively.
+
+**Fix:** Create `.memobank/config.yaml` with text engine defaults:
+
+```yaml
+project:
+  name: memobank-cli
+
+memory:
+  top_k: 5
+  token_budget: 4000
+
+embedding:
+  engine: text
+```
+
+**Result:** `memo recall` works out of the box with zero dependencies, consistent with the project's own "text engine is zero-dependency default" principle.
+
+---
+
+## 9. Update memobank Skill Docs
+
+**Problem:** The memobank skill (`~/.claude/skills/memobank/SKILL.md`) describes `memo init` as a "4-step interactive TUI". After Fix 4, the default is non-interactive.
+
+**Fix:** Update the relevant section in the skill to reflect:
+
+- Default: `memo init` (non-interactive, auto-detects everything)
+- Full setup: `memo init --interactive`
+
+**Location:** Find and update in the installed skill file and the source template used by `memo install`.
+
+---
+
 ## Testing
 
 | Fix                                | Test                                                                                                                |
@@ -187,6 +313,10 @@ Replace the current `init` command action with:
 | `memo init` quick                  | Run in a git repo → one-line output, config written, hook installed                                                 |
 | `memo init --interactive`          | Launches existing TUI unchanged                                                                                     |
 | `memo init --platform claude-code` | Only installs Claude Code hook                                                                                      |
+| Slash commands                     | `/recall query` in Claude Code → runs `memo recall "query" --code`, reads MEMORY.md                                 |
+| SessionStart hook                  | New session → MEMORY.md updated within 10 s, no stdout                                                              |
+| Empty query recall                 | `memo recall ""` → returns top-5 by score, no error                                                                 |
+| `.memobank/config.yaml`            | `memo recall "test"` works without lancedb installed                                                                |
 
 ---
 
