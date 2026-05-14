@@ -114,7 +114,7 @@ export async function recallCommand(query: string, options: RecallOptions): Prom
     engine,
     scope,
     explain,
-    options.code ?? false
+    options.code ?? 'auto'
   );
 
   if (options.format === 'json') {
