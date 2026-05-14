@@ -197,3 +197,30 @@ describe('scanFile — rust', () => {
     expect(symbols.some((s) => s.name === 'Speak' && s.kind === 'interface')).toBe(true);
   });
 });
+
+describe('scanFile — csharp', () => {
+  function tmpCs(code: string): string {
+    const f = path.join(os.tmpdir(), `memo_test_${Date.now()}.cs`);
+    fs.writeFileSync(f, code);
+    return f;
+  }
+
+  test('csharp: extracts class and method', () => {
+    const f = tmpCs('public class Dog {\n    public void Bark() {}\n}\n');
+    const { symbols } = scanFile(f, os.tmpdir());
+    expect(symbols.some((s) => s.name === 'Dog' && s.kind === 'class')).toBe(true);
+    expect(symbols.some((s) => s.name === 'Bark' && s.kind === 'method')).toBe(true);
+  });
+
+  test('csharp: extracts interface', () => {
+    const f = tmpCs('public interface IAnimal {\n    void Speak();\n}\n');
+    const { symbols } = scanFile(f, os.tmpdir());
+    expect(symbols.some((s) => s.name === 'IAnimal' && s.kind === 'interface')).toBe(true);
+  });
+
+  test('csharp: method has parentName', () => {
+    const f = tmpCs('public class Cat {\n    public void Meow() {}\n}\n');
+    const { symbols } = scanFile(f, os.tmpdir());
+    expect(symbols.find((s) => s.name === 'Meow')?.parentName).toBe('Cat');
+  });
+});

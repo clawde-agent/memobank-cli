@@ -42,9 +42,16 @@ function loadGrammar(language: IndexedLanguage): unknown {
       case 'yaml':
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         return require('tree-sitter-yaml') as unknown;
-      case 'csharp':
+      case 'csharp': {
+        // tree-sitter-c-sharp uses ESM with top-level await and cannot be require()'d directly.
+        // Load the native binding via node-gyp-build instead.
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        return require('tree-sitter-c-sharp') as unknown;
+        const ngb = require('node-gyp-build') as (root: string) => unknown;
+        const csharpRoot = require
+          .resolve('tree-sitter-c-sharp/package.json')
+          .replace(/\/package\.json$/, '');
+        return ngb(csharpRoot);
+      }
       default:
         return null;
     }
@@ -561,6 +568,83 @@ function walkRust(
   return { symbols, edges };
 }
 
+function walkCSharp(
+  tree: { rootNode: TreeNode },
+  source: string,
+  relPath: string
+): { symbols: CodeSymbol[]; edges: CodeEdge[] } {
+  const symbols: CodeSymbol[] = [];
+  const edges: CodeEdge[] = [];
+  let currentClass: string | null = null;
+
+  function visit(node: TreeNode): void {
+    switch (node.type) {
+      case 'class_declaration': {
+        const nameNode = node.childForFieldName('name');
+        if (!nameNode) break;
+        const name = getNodeText(nameNode, source);
+        const prev = currentClass;
+        currentClass = name;
+        symbols.push({
+          name,
+          qualifiedName: name,
+          kind: 'class',
+          file: relPath,
+          lineStart: node.startPosition.row + 1,
+          lineEnd: node.endPosition.row + 1,
+          signature: `class ${name}`,
+          isExported: true,
+          hash: getLogicalHash(node, source),
+        });
+        for (let i = 0; i < node.childCount; i++) visit(node.child(i));
+        currentClass = prev;
+        return;
+      }
+      case 'interface_declaration': {
+        const nameNode = node.childForFieldName('name');
+        if (!nameNode) break;
+        const name = getNodeText(nameNode, source);
+        symbols.push({
+          name,
+          qualifiedName: name,
+          kind: 'interface',
+          file: relPath,
+          lineStart: node.startPosition.row + 1,
+          lineEnd: node.endPosition.row + 1,
+          signature: `interface ${name}`,
+          isExported: true,
+          hash: getLogicalHash(node, source),
+        });
+        break;
+      }
+      case 'method_declaration': {
+        const nameNode = node.childForFieldName('name');
+        if (!nameNode) break;
+        const name = getNodeText(nameNode, source);
+        symbols.push({
+          name,
+          qualifiedName: currentClass ? `${currentClass}.${name}` : name,
+          kind: 'method',
+          file: relPath,
+          lineStart: node.startPosition.row + 1,
+          lineEnd: node.endPosition.row + 1,
+          signature: buildSignature(node, source),
+          isExported: true,
+          parentName: currentClass ?? undefined,
+          hash: getLogicalHash(node, source),
+        });
+        break;
+      }
+      default:
+        break;
+    }
+    for (let i = 0; i < node.childCount; i++) visit(node.child(i));
+  }
+
+  visit(tree.rootNode);
+  return { symbols, edges };
+}
+
 export function scanFile(filePath: string, scanRoot: string): ScanFileResult {
   const language = detectLanguage(filePath);
   if (!language) {
@@ -612,6 +696,10 @@ export function scanFile(filePath: string, scanRoot: string): ScanFileResult {
     }
     if (language === 'rust') {
       const result = walkRust(tree, source, relPath);
+      return { ...result, hash };
+    }
+    if (language === 'csharp') {
+      const result = walkCSharp(tree, source, relPath);
       return { ...result, hash };
     }
     return { symbols: [], edges: [], hash };
