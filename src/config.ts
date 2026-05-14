@@ -27,7 +27,18 @@ const DEFAULT_CONFIG: MemoConfig = {
 };
 
 function getConfigPath(repoRoot: string): string {
-  return path.join(repoRoot, 'meta', 'config.yaml');
+  // Primary location: .memobank/meta/config.yaml
+  // Alias: .memobank/config.yaml — accepted for user convenience, with a migration hint.
+  const canonical = path.join(repoRoot, 'meta', 'config.yaml');
+  const alias = path.join(repoRoot, 'config.yaml');
+  if (!fs.existsSync(canonical) && fs.existsSync(alias)) {
+    console.warn(
+      `⚠️  memobank: config found at .memobank/config.yaml (old location).\n` +
+        `   Move it to .memobank/meta/config.yaml to silence this warning.\n`
+    );
+    return alias;
+  }
+  return canonical;
 }
 
 export function loadConfig(repoRoot: string): MemoConfig {
