@@ -12,6 +12,7 @@ import {
   writePending,
   writeMemory,
 } from '../src/core/store';
+import { CodeIndex } from '../src/engines/code-index';
 
 function makeTempRepo(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-test-'));
@@ -210,5 +211,61 @@ describe('writePending', () => {
     });
     expect(fs.existsSync(path.join(repo, '.pending'))).toBe(true);
     fs.rmSync(repo, { recursive: true });
+  });
+});
+
+describe('writeMemory → linkMemory integration', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-store-graph-'));
+    // Create the meta/ dir and a code index with a known symbol
+    fs.mkdirSync(path.join(tmpDir, 'meta'), { recursive: true });
+    const dbPath = path.join(tmpDir, 'meta', 'code-index.db');
+    const idx = new CodeIndex(dbPath);
+    idx.upsertFile('src/auth.ts', 'typescript', 'h1', Date.now());
+    idx.upsertSymbols(
+      'src/auth.ts',
+      [
+        {
+          name: 'verifyToken',
+          qualifiedName: 'verifyToken',
+          kind: 'function' as const,
+          file: 'src/auth.ts',
+          lineStart: 1,
+          lineEnd: 10,
+          isExported: true,
+          hash: 'hash-vt',
+        },
+      ],
+      []
+    );
+    idx.close();
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  it('populates memory_symbol_refs after writeMemory', () => {
+    writeMemory(tmpDir, {
+      name: 'jwt-lesson',
+      type: 'lesson',
+      description: 'verifyToken raises on expired JWT',
+      tags: ['auth'],
+      confidence: 'high',
+      status: 'active',
+      created: '2026-01-01',
+      content: 'Some content.',
+    });
+    const dbPath = path.join(tmpDir, 'meta', 'code-index.db');
+    const idx = new CodeIndex(dbPath);
+    const rows = (idx as any).db.prepare('SELECT * FROM memory_symbol_refs').all() as {
+      memory_path: string;
+      symbol_hash: string;
+    }[];
+    idx.close();
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows[0].symbol_hash).toBe('hash-vt');
   });
 });
