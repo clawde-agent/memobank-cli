@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { detectGemini } from '../platforms/gemini';
 import { detectQwen } from '../platforms/qwen';
 
@@ -14,7 +14,7 @@ export interface PlatformItem {
 /** Detect git repo name from cwd */
 export function detectProjectName(): string {
   try {
-    const result = execSync('git rev-parse --show-toplevel', {
+    const result = execFileSync('git', ['rev-parse', '--show-toplevel'], {
       encoding: 'utf-8',
       stdio: 'pipe',
     }).trim();
@@ -29,7 +29,7 @@ export function detectPlatforms(): PlatformItem[] {
   const home = process.env.HOME || process.env.USERPROFILE || '';
   const isInPath = (cmd: string): boolean => {
     try {
-      execSync(`which ${cmd}`, { stdio: 'pipe' });
+      execFileSync('which', [cmd], { stdio: 'pipe' });
       return true;
     } catch {
       return false;

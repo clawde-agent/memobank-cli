@@ -6,8 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { execFileSync } from 'child_process';
 import { writeMemory, findRepoRoot } from '../core/store';
 import type { MemoryType, Confidence } from '../types';
 import {
@@ -18,8 +17,6 @@ import {
   checkAbstractionLevel,
   generateMemorySlug,
 } from '../core/memory-template';
-
-const execAsync = promisify(exec);
 
 export interface WriteOptions {
   name?: string;
@@ -150,7 +147,9 @@ export async function writeMemoryCommand(
     }
 
     try {
-      await execAsync(`${editor} "${tmpFile}"`);
+      // Use execFileSync with the editor as a separate arg to avoid shell injection
+      // via a malicious $EDITOR value.
+      execFileSync(editor, [tmpFile], { stdio: 'inherit' });
       const editedContent = fs.readFileSync(tmpFile, 'utf-8');
       memoryData = parseTemplate(editedContent, type);
     } catch (error) {
@@ -158,7 +157,7 @@ export async function writeMemoryCommand(
       fs.unlinkSync(tmpFile);
       return;
     } finally {
-      fs.unlinkSync(tmpFile);
+      if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
     }
   }
 
