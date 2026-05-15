@@ -5,7 +5,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 const QWEN_PROTOCOL = `
 ## Memobank Memory Protocol
@@ -48,7 +48,7 @@ export function detectQwen(): boolean {
 
 function isInPath(cmd: string): boolean {
   try {
-    execSync(`which ${cmd}`, { stdio: 'pipe' });
+    execFileSync('which', [cmd], { stdio: 'pipe' });
     return true;
   } catch {
     return false;

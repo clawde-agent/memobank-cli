@@ -1,0 +1,20 @@
+# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.
+version: v1.25.1
+# ignores vulnerabilities until expiry date; change duration by modifying expiry date
+ignore:
+  b65dfd85-05ec-4940-bc40-69095b0a90f9:
+    - '*':
+        reason: 'test fixture, not a real credential'
+        expires: 2027-01-01T00:00:00.000Z
+        created: 2026-05-15T06:48:52.029Z
+  87298bab-a5ac-4245-9d49-54a8337537d1:
+    - '*':
+        reason: 'test fixture, not a real credential'
+        expires: 2027-01-01T00:00:00.000Z
+        created: 2026-05-15T06:48:55.054Z
+  3782db3d-f511-4fa1-976b-0b88ed6abc5e:
+    - '*':
+        reason: 'test fixture, not a real credential'
+        expires: 2027-01-01T00:00:00.000Z
+        created: 2026-05-15T06:48:58.098Z
+patch: {}

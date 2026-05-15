@@ -256,7 +256,7 @@ export class LanceDbEngine implements EngineAdapter {
    * Generate unique memory ID
    */
   private memoryId(memory: MemoryFile): string {
-    const hash = createHash('md5').update(memory.path).digest('hex');
+    const hash = createHash('sha256').update(memory.path).digest('hex');
     return hash.slice(0, 16);
   }
 
@@ -264,7 +264,7 @@ export class LanceDbEngine implements EngineAdapter {
    * Hash memory content for change detection
    */
   private contentHash(memory: MemoryFile): string {
-    return createHash('md5')
+    return createHash('sha256')
       .update(memory.content + memory.description + memory.tags.join(','))
       .digest('hex');
   }

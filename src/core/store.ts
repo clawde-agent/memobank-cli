@@ -167,15 +167,17 @@ export interface PendingEntry {
 }
 
 export function writePending(memoBankDir: string, entry: PendingEntry): void {
-  const pendingDir = path.join(memoBankDir, '.pending');
+  const pendingDir = path.resolve(memoBankDir, '.pending');
   if (!fs.existsSync(pendingDir)) {
     fs.mkdirSync(pendingDir, { recursive: true });
   }
-  fs.writeFileSync(
-    path.join(pendingDir, `${entry.id}.json`),
-    JSON.stringify(entry, null, 2),
-    'utf-8'
-  );
+  // Sanitize entry.id to prevent path traversal: allow only alphanumeric, dash, underscore.
+  const safeId = entry.id.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const outPath = path.resolve(pendingDir, `${safeId}.json`);
+  if (!outPath.startsWith(pendingDir + path.sep)) {
+    throw new Error(`Security: pending file path escapes pending directory: ${outPath}`);
+  }
+  fs.writeFileSync(outPath, JSON.stringify(entry, null, 2), 'utf-8');
 }
 
 function loadFromDir(baseDir: string, scope: MemoryScope): MemoryFile[] {
