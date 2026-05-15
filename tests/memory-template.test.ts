@@ -61,15 +61,15 @@ describe('memory-template', () => {
     });
 
     it('should redact AWS keys', () => {
-      // Assembled at runtime so static scanners don't flag the test file itself.
-      const content = ['AKIA', 'IOSFODNN7EXAMPLE'].join('');
+      // snyk-ignore: test fixture — not a real credential
+      const content = 'AKIAIOSFODNN7EXAMPLE';
       const { sanitized } = sanitizeContent(content);
       expect(sanitized).toContain('[REDACTED_AWS_KEY]');
     });
 
     it('should redact GitHub tokens', () => {
-      // Assembled at runtime so static scanners don't flag the test file itself.
-      const content = ['ghp_', 'x'.repeat(36)].join('');
+      // snyk-ignore: test fixture — not a real credential
+      const content = 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
       const { sanitized } = sanitizeContent(content);
       expect(sanitized).toContain('[REDACTED_GITHUB_TOKEN]');
     });
@@ -81,11 +81,8 @@ describe('memory-template', () => {
     });
 
     it('should redact JWT tokens', () => {
-      // Assembled at runtime so static scanners don't flag the test file itself.
-      const header = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9';
-      const payload = 'eyJzdWIiOiIxMjM0NTY3ODkwIn0';
-      const sig = 'dGVzdA';
-      const content = [header, payload, sig].join('.');
+      // snyk-ignore: test fixture — not a real credential
+      const content = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dGVzdA';
       const { sanitized } = sanitizeContent(content);
       expect(sanitized).toContain('[REDACTED_JWT]');
     });
