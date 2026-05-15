@@ -6,7 +6,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18.0-green.svg)](https://nodejs.org/)
 [![CI](https://github.com/clawde-agent/memobank-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/clawde-agent/memobank-cli/actions/workflows/ci.yml)
-[![Known Vulnerabilities](https://snyk.io/test/github/clawde-agent/memobank-cli/badge.svg)](https://snyk.io/test/github/clawde-agent/memobank-cli)
+[![Known Vulnerabilities](https://snyk.io/test/github/clawde-agent/memobank-cli/badge.svg?targetFile=package-lock.json)](https://app.snyk.io/org/clydeshen/project/45e3c665-aec3-466f-aa21-9a0c115d18b4)
 
 AI agents forget everything between sessions.
 Static files like CLAUDE.md go stale and require manual upkeep.
