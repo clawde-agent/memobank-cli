@@ -61,12 +61,14 @@ describe('memory-template', () => {
     });
 
     it('should redact AWS keys', () => {
+      // snyk-ignore: test fixture — not a real credential
       const content = 'AKIAIOSFODNN7EXAMPLE';
       const { sanitized } = sanitizeContent(content);
       expect(sanitized).toContain('[REDACTED_AWS_KEY]');
     });
 
     it('should redact GitHub tokens', () => {
+      // snyk-ignore: test fixture — not a real credential
       const content = 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
       const { sanitized } = sanitizeContent(content);
       expect(sanitized).toContain('[REDACTED_GITHUB_TOKEN]');
@@ -79,6 +81,7 @@ describe('memory-template', () => {
     });
 
     it('should redact JWT tokens', () => {
+      // snyk-ignore: test fixture — not a real credential
       const content = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dGVzdA';
       const { sanitized } = sanitizeContent(content);
       expect(sanitized).toContain('[REDACTED_JWT]');
