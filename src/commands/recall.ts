@@ -8,6 +8,7 @@ import { findRepoRoot } from '../core/store';
 import { loadConfig } from '../config';
 import { recall, writeRecallResults } from '../core/retriever';
 import { TextEngine } from '../engines/text-engine';
+import { HybridEngine } from '../engines/hybrid-engine';
 import { EmbeddingGenerator } from '../core/embedding';
 import type { MemoryScope } from '../types';
 import type { EmbeddingConfig } from '../core/embedding';
@@ -55,7 +56,9 @@ export async function selectEngine(
       }
     }
     const embeddingGenerator = new EmbeddingGenerator(embedConfig);
-    return { engine: new LanceDbEngine(repoRoot, embeddingGenerator), warning: null };
+    const lanceEngine = new LanceDbEngine(repoRoot, embeddingGenerator);
+    const textEngine = new TextEngine();
+    return { engine: new HybridEngine(textEngine, lanceEngine), warning: null };
   } catch (err) {
     const msg = (err as Error).message;
     const provider = embedConfig.provider ?? 'ollama';
