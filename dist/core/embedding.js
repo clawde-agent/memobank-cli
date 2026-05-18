@@ -16,11 +16,26 @@ class EmbeddingGenerator {
         const apiKey = config.apiKey || (config.provider === 'ollama' ? 'ollama' : '');
         this.client = new openai_1.OpenAI({
             apiKey,
-            baseURL: config.baseUrl || this.getDefaultBaseUrl(config.provider),
+            baseURL: this.normalizeBaseUrl(config.baseUrl, config.provider),
         });
     }
     getDimensions() {
         return this.config.dimensions;
+    }
+    /**
+     * Normalize base URL: use provided URL (ensuring /v1 suffix for OpenAI-compatible APIs),
+     * or fall back to provider default.
+     */
+    normalizeBaseUrl(baseUrl, provider) {
+        if (!baseUrl) {
+            return this.getDefaultBaseUrl(provider);
+        }
+        // OpenAI-compatible providers (ollama, jina, custom) need a /v1 path.
+        // If the user omitted it, append automatically.
+        if (!baseUrl.endsWith('/v1') && !baseUrl.includes('/v1/')) {
+            return baseUrl.replace(/\/$/, '') + '/v1';
+        }
+        return baseUrl;
     }
     /**
      * Get default base URL for provider

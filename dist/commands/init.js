@@ -52,6 +52,8 @@ const cursor_1 = require("../platforms/cursor");
 const codex_1 = require("../platforms/codex");
 const gemini_1 = require("../platforms/gemini");
 const qwen_1 = require("../platforms/qwen");
+const code_scan_1 = require("./code-scan");
+const hook_installer_1 = require("../core/hook-installer");
 const GITIGNORE_ENTRIES = [
     '.memobank/meta/access-log.json',
     '.memobank/meta/code-index.db',
@@ -74,7 +76,9 @@ function ensureGitignoreFull(gitRoot) {
 }
 async function quickInit(options) {
     const cwd = process.cwd();
-    const gitRoot = options.repoRoot ?? (0, store_1.findRepoRoot)(cwd);
+    // Use findGitRoot (not findRepoRoot) so fresh projects always get a project-tier
+    // .memobank/ at the git root, rather than falling back to ~/.memobank/<name>.
+    const gitRoot = options.repoRoot ?? (0, store_1.findGitRoot)(cwd);
     const memobankRoot = path.join(gitRoot, '.memobank');
     const projectName = (0, platform_detector_1.detectProjectName)();
     createTierDirs(memobankRoot);
@@ -111,6 +115,21 @@ async function quickInit(options) {
     console.log(`✓ memobank initialized (project: ${projectName}, platforms: ${platformList})`);
     if (!installed.length) {
         console.log('  Tip: run memo init --interactive to configure platforms manually.');
+    }
+    // Install post-commit hook for incremental code indexing
+    if (fs.existsSync(path.join(gitRoot, '.git'))) {
+        if (!(0, hook_installer_1.isHookInstalled)(gitRoot)) {
+            (0, hook_installer_1.installPostCommitHook)(gitRoot);
+            console.log('✓ Installed post-commit hook for incremental code indexing');
+        }
+    }
+    // Auto-run code indexing so recall --code works immediately after init.
+    try {
+        await (0, code_scan_1.codeScanCommand)(undefined, { summarize: true, repo: memobankRoot });
+    }
+    catch {
+        // Non-fatal: tree-sitter may not be installed (optional dep).
+        console.log('  Tip: run memo index-code to enable code-aware recall.');
     }
 }
 const MEMORY_TYPES = ['lesson', 'decision', 'workflow', 'architecture'];

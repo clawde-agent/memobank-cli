@@ -37,13 +37,55 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.selectEngine = selectEngine;
 exports.recallCommand = recallCommand;
 const fs = __importStar(require("fs"));
 const store_1 = require("../core/store");
 const config_1 = require("../config");
 const retriever_1 = require("../core/retriever");
 const text_engine_1 = require("../engines/text-engine");
+const hybrid_engine_1 = require("../engines/hybrid-engine");
 const embedding_1 = require("../core/embedding");
+async function selectEngine(engineName, repoRoot, embedConfig) {
+    if (engineName !== 'lancedb') {
+        return { engine: new text_engine_1.TextEngine(), warning: null };
+    }
+    if (!embedConfig) {
+        const warning = `⚠  Vector search unavailable (embedding config missing or API key not set)\n  Falling back to text search.`;
+        return { engine: new text_engine_1.TextEngine(), warning };
+    }
+    try {
+        const { LanceDbEngine } = await Promise.resolve().then(() => __importStar(require('../engines/lancedb-engine')));
+        const { EmbeddingGenerator } = await Promise.resolve().then(() => __importStar(require('../core/embedding')));
+        // Validate API key before constructing — fail fast for cloud providers
+        const provider = embedConfig.provider ?? 'ollama';
+        if (provider !== 'ollama' && provider !== 'custom') {
+            const keyMap = {
+                openai: process.env.OPENAI_API_KEY,
+                azure: process.env.OPENAI_API_KEY ?? process.env.AZURE_API_KEY,
+                jina: process.env.JINA_API_KEY,
+            };
+            const key = keyMap[provider] ?? process.env.OPENAI_API_KEY;
+            if (!key) {
+                throw new Error(`${provider.toUpperCase()}_API_KEY is not set`);
+            }
+        }
+        const embeddingGenerator = new EmbeddingGenerator(embedConfig);
+        const lanceEngine = new LanceDbEngine(repoRoot, embeddingGenerator);
+        const textEngine = new text_engine_1.TextEngine();
+        return { engine: new hybrid_engine_1.HybridEngine(textEngine, lanceEngine), warning: null };
+    }
+    catch (err) {
+        const msg = err.message;
+        const provider = embedConfig.provider ?? 'ollama';
+        const model = embedConfig.model ?? 'mxbai-embed-large';
+        const hint = provider === 'ollama'
+            ? `  Check: ollama serve && ollama pull ${model}`
+            : `  Check: ${provider.toUpperCase()}_API_KEY is set`;
+        const warning = `⚠  Vector search unavailable (${msg})\n${hint}\n  Falling back to text search.`;
+        return { engine: new text_engine_1.TextEngine(), warning };
+    }
+}
 async function recallCommand(query, options) {
     // Validate query
     if (!query || !query.trim()) {
@@ -72,15 +114,23 @@ async function recallCommand(query, options) {
                 return;
             }
             const idx = new CodeIndex(dbPath);
-            const refs = idx.getRefs(options.refs);
-            idx.close();
-            if (refs.length === 0) {
-                console.log(`No callers found for: ${options.refs}`);
-                return;
+            try {
+                const refs = idx.getRefs(options.refs);
+                if (refs.length === 0) {
+                    if (!options.silent) {
+                        process.stdout.write(`No callers found for: ${options.refs}\n`);
+                    }
+                    return;
+                }
+                if (!options.silent) {
+                    process.stdout.write(`\n## Callers of \`${options.refs}\` (${refs.length})\n\n`);
+                    for (const r of refs) {
+                        process.stdout.write(`- ${r.symbol.qualifiedName}  ${r.symbol.file}:${r.symbol.lineStart}\n`);
+                    }
+                }
             }
-            console.log(`\n## Callers of \`${options.refs}\` (${refs.length})\n`);
-            for (const r of refs) {
-                console.log(`- ${r.symbol.qualifiedName}  ${r.symbol.file}:${r.symbol.lineStart}`);
+            finally {
+                idx.close();
             }
             return;
         }
@@ -95,38 +145,28 @@ async function recallCommand(query, options) {
     }
     const scope = options.scope || 'all';
     const explain = options.explain || false;
-    let engine;
-    if (options.engine === 'lancedb') {
-        try {
-            const { LanceDbEngine } = await Promise.resolve().then(() => __importStar(require('../engines/lancedb-engine')));
-            const embedConfig = embedding_1.EmbeddingGenerator.fromMemoConfig(config);
-            if (!embedConfig) {
-                throw new Error('embedding config missing or API key not set');
-            }
-            const embeddingGenerator = new embedding_1.EmbeddingGenerator(embedConfig);
-            engine = new LanceDbEngine(repoRoot, embeddingGenerator);
-        }
-        catch (err) {
-            const msg = err.message;
-            const provider = config.embedding?.provider ?? 'ollama';
-            const model = config.embedding?.model ?? 'mxbai-embed-large';
-            const hint = provider === 'ollama'
-                ? `  Check: ollama serve && ollama pull ${model}`
-                : `  Check: ${provider.toUpperCase()}_API_KEY is set`;
-            process.stderr.write(`\n⚠  Vector search unavailable (${msg})\n${hint}\n  Falling back to text search.\n\n`);
-            engine = new text_engine_1.TextEngine();
-        }
+    // Determine engine: explicit --engine flag overrides config
+    const engineName = options.engine ?? config.embedding.engine;
+    const embedConfig = embedding_1.EmbeddingGenerator.fromMemoConfig(config);
+    const { engine, warning } = await selectEngine(engineName, repoRoot, embedConfig);
+    if (warning && !options.silent) {
+        process.stderr.write('\n' + warning + '\n\n');
     }
-    const { results, markdown, symbolResults } = await (0, retriever_1.recall)(query, repoRoot, config, engine, scope, explain, options.code ?? false);
+    const { results, markdown, symbolResults } = await (0, retriever_1.recall)(query, repoRoot, config, engine, scope, explain, options.code ?? 'auto');
     if (options.format === 'json') {
-        console.log(JSON.stringify({ results, symbolResults }, null, 2));
+        if (!options.silent) {
+            process.stdout.write(JSON.stringify({ results, symbolResults }, null, 2) + '\n');
+        }
         return;
     }
     if (!options.silent) {
-        console.log(markdown);
+        process.stdout.write(markdown + '\n');
     }
+    const actualEngineName = engine instanceof text_engine_1.TextEngine && engineName === 'lancedb'
+        ? 'text (fallback from lancedb)'
+        : engineName;
     if (!options.dryRun) {
-        (0, retriever_1.writeRecallResults)(repoRoot, results, query, config.embedding.engine);
+        (0, retriever_1.writeRecallResults)(repoRoot, results, query, actualEngineName);
     }
 }
 //# sourceMappingURL=recall.js.map

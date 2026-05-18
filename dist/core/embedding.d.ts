@@ -17,6 +17,11 @@ export declare class EmbeddingGenerator {
     constructor(config: EmbeddingConfig);
     getDimensions(): number;
     /**
+     * Normalize base URL: use provided URL (ensuring /v1 suffix for OpenAI-compatible APIs),
+     * or fall back to provider default.
+     */
+    private normalizeBaseUrl;
+    /**
      * Get default base URL for provider
      */
     private getDefaultBaseUrl;

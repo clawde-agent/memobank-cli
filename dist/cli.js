@@ -55,6 +55,7 @@ const workspace_1 = require("./commands/workspace");
 const init_1 = require("./commands/init");
 const migrate_1 = require("./commands/migrate");
 const scan_1 = require("./commands/scan");
+const distill_1 = require("./commands/distill");
 const process_queue_1 = require("./commands/process-queue");
 const code_scan_1 = require("./commands/code-scan");
 const store_1 = require("./core/store");
@@ -517,6 +518,7 @@ program
     .option('--force', 'Re-index all files (ignore hash cache)')
     .option('--langs <list>', 'Comma-separated language filter, e.g. typescript,python')
     .option('--repo <path>', 'Memobank repository path')
+    .option('--incremental [files...]', 'only re-index specified files (used by git hook)')
     .action(async (scanPath, options) => {
     try {
         await (0, code_scan_1.codeScanCommand)(scanPath, {
@@ -526,6 +528,8 @@ program
                 ? options.langs.split(',').map((l) => l.trim())
                 : undefined,
             repo: options.repo,
+            incremental: !!options.incremental,
+            files: Array.isArray(options.incremental) ? options.incremental : undefined,
         });
     }
     catch (error) {
@@ -540,6 +544,19 @@ program
     .option('--background', 'Spawn as background process and return immediately')
     .action(async (options) => {
     await (0, process_queue_1.processQueueCommand)({ background: options.background });
+});
+program
+    .command('distill')
+    .description('Distill project memories to workspace or personal tier')
+    .requiredOption('--to <tier>', 'Target tier: workspace or personal')
+    .option('--repo <path>', 'Override repo root')
+    .option('--silent', 'Suppress output')
+    .action(async (options) => {
+    if (options.to !== 'workspace' && options.to !== 'personal') {
+        console.error('--to must be "workspace" or "personal"');
+        process.exit(1);
+    }
+    await (0, distill_1.distillCommand)(options);
 });
 // Parse and execute
 program.parse(process.argv);

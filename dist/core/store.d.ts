@@ -14,6 +14,12 @@ export declare function findGitRoot(cwd: string): string;
  * memoBankDir is the .memobank/ directory (e.g. /repo/.memobank).
  */
 export declare function resolveProjectId(memoBankDir: string): string;
+/**
+ * Guard: verify repoRoot belongs to the same git project as cwd.
+ * Compares the git root of cwd against the parent of repoRoot.
+ * Throws if they differ — prevents cross-project writes.
+ */
+export declare function assertRepoRootMatchesCwd(repoRoot: string, cwd: string): void;
 export interface PendingCandidate {
     name: string;
     type: MemoryType;
@@ -36,6 +42,7 @@ export declare function writePending(memoBankDir: string, entry: PendingEntry): 
  */
 export declare function loadAll(repoRoot: string, scope?: MemoryScope | 'all', globalDir?: string, workspaceDir?: string): MemoryFile[];
 export declare function loadFile(filePath: string): MemoryFile;
+export declare function updateMemoryContent(repoRoot: string, name: string, newContent: string): void;
 export declare function writeMemory(repoRoot: string, memory: Omit<MemoryFile, 'path' | 'scope'>): string;
 /** Patch status in a memory file's frontmatter in-place */
 export declare function updateMemoryStatus(filePath: string, status: Status): void;

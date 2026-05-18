@@ -11,6 +11,11 @@ export declare class CodeIndex {
     upsertSymbols(filePath: string, symbols: CodeSymbol[], edges: CodeEdge[]): void;
     search(query: string, topK: number): SymbolResult[];
     getRefs(symbolName: string): SymbolResult[];
+    linkMemory(memoryPath: string, description: string): void;
+    getLinkedMemories(query: string): {
+        memoryPath: string;
+        minDepth: number;
+    }[];
     getStats(): {
         files: number;
         symbols: number;

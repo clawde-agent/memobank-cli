@@ -47,6 +47,7 @@ export interface MemoConfig {
     project: {
         name: string;
         description?: string;
+        project_id?: string;
     };
     memory: {
         token_budget: number;
@@ -117,6 +118,8 @@ export interface CodeScanOptions {
     force?: boolean;
     langs?: IndexedLanguage[];
     repo?: string;
+    incremental?: boolean;
+    files?: string[];
 }
 export interface RefsOptions {
     repo?: string;

@@ -1,0 +1,1 @@
+{"version":3,"file":"distill.d.ts","sourceRoot":"","sources":["../../src/commands/distill.ts"],"names":[],"mappings":"AAaA,MAAM,WAAW,cAAc;IAC7B,EAAE,EAAE,WAAW,GAAG,UAAU,CAAC;IAC7B,IAAI,CAAC,EAAE,MAAM,CAAC;IACd,MAAM,CAAC,EAAE,OAAO,CAAC;CAClB;AAkBD,wBAAsB,cAAc,CAAC,OAAO,EAAE,cAAc,GAAG,OAAO,CAAC,IAAI,CAAC,CA4G3E"}

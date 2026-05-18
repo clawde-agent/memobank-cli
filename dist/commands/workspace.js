@@ -66,7 +66,7 @@ function workspaceInit(remoteUrl, repoRoot) {
     }
     let cloned = false;
     try {
-        (0, child_process_1.execSync)(`git clone "${remoteUrl}" "${wsDir}"`, { stdio: 'pipe' });
+        (0, child_process_1.execFileSync)('git', ['clone', remoteUrl, wsDir], { stdio: 'pipe' });
         cloned = true;
         console.log('✓ Cloned workspace repository.');
     }
@@ -75,18 +75,18 @@ function workspaceInit(remoteUrl, repoRoot) {
     }
     if (!cloned) {
         fs.mkdirSync(wsDir, { recursive: true });
-        (0, child_process_1.execSync)(`git init "${wsDir}"`, { stdio: 'pipe' });
-        (0, child_process_1.execSync)(`git -C "${wsDir}" remote add origin "${remoteUrl}"`, { stdio: 'pipe' });
+        (0, child_process_1.execFileSync)('git', ['init', wsDir], { stdio: 'pipe' });
+        (0, child_process_1.execFileSync)('git', ['-C', wsDir, 'remote', 'add', 'origin', remoteUrl], { stdio: 'pipe' });
         for (const type of MEMORY_TYPES) {
             fs.mkdirSync(path.join(wsDir, type), { recursive: true });
             fs.writeFileSync(path.join(wsDir, type, '.gitkeep'), '');
         }
-        (0, child_process_1.execSync)(`git -C "${wsDir}" add -A`, { stdio: 'pipe' });
-        (0, child_process_1.execSync)(`git -C "${wsDir}" commit -m "chore: initialize workspace memory repo"`, {
+        (0, child_process_1.execFileSync)('git', ['-C', wsDir, 'add', '-A'], { stdio: 'pipe' });
+        (0, child_process_1.execFileSync)('git', ['-C', wsDir, 'commit', '-m', 'chore: initialize workspace memory repo'], {
             stdio: 'pipe',
         });
         try {
-            (0, child_process_1.execSync)(`git -C "${wsDir}" push -u origin main`, { stdio: 'pipe' });
+            (0, child_process_1.execFileSync)('git', ['-C', wsDir, 'push', '-u', 'origin', 'main'], { stdio: 'pipe' });
         }
         catch {
             /* push may fail for empty remotes — ok */
@@ -110,18 +110,16 @@ function workspaceSync(repoRoot, push = false) {
     console.log('Pulling from workspace remote...');
     (0, child_process_1.execFileSync)('git', ['-C', wsDir, 'pull', 'origin', branch], { stdio: 'inherit' });
     if (push) {
-        (0, child_process_1.execSync)(`git -C "${wsDir}" add -A`, { stdio: 'pipe' });
+        (0, child_process_1.execFileSync)('git', ['-C', wsDir, 'add', '-A'], { stdio: 'pipe' });
         let hasChanges = false;
         try {
-            (0, child_process_1.execSync)(`git -C "${wsDir}" diff --staged --quiet`, { stdio: 'pipe' });
+            (0, child_process_1.execFileSync)('git', ['-C', wsDir, 'diff', '--staged', '--quiet'], { stdio: 'pipe' });
         }
         catch {
             hasChanges = true;
         }
         if (hasChanges) {
-            (0, child_process_1.execSync)(`git -C "${wsDir}" commit -m "chore: workspace sync [memo workspace sync]"`, {
-                stdio: 'inherit',
-            });
+            (0, child_process_1.execFileSync)('git', ['-C', wsDir, 'commit', '-m', 'chore: workspace sync [memo workspace sync]'], { stdio: 'inherit' });
             (0, child_process_1.execFileSync)('git', ['-C', wsDir, 'push', 'origin', branch], { stdio: 'inherit' });
             console.log('✓ Pushed to workspace remote.');
         }

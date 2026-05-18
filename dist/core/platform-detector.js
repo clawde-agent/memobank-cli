@@ -43,7 +43,7 @@ const qwen_1 = require("../platforms/qwen");
 /** Detect git repo name from cwd */
 function detectProjectName() {
     try {
-        const result = (0, child_process_1.execSync)('git rev-parse --show-toplevel', {
+        const result = (0, child_process_1.execFileSync)('git', ['rev-parse', '--show-toplevel'], {
             encoding: 'utf-8',
             stdio: 'pipe',
         }).trim();
@@ -58,7 +58,7 @@ function detectPlatforms() {
     const home = process.env.HOME || process.env.USERPROFILE || '';
     const isInPath = (cmd) => {
         try {
-            (0, child_process_1.execSync)(`which ${cmd}`, { stdio: 'pipe' });
+            (0, child_process_1.execFileSync)('which', [cmd], { stdio: 'pipe' });
             return true;
         }
         catch {

@@ -53,6 +53,7 @@ const gemini_1 = require("../platforms/gemini");
 const qwen_1 = require("../platforms/qwen");
 const cursor_1 = require("../platforms/cursor");
 const workspace_1 = require("./workspace");
+const code_scan_1 = require("./code-scan");
 const platform_detector_1 = require("../core/platform-detector");
 /** Test Ollama connectivity and model availability */
 async function testOllamaConnection(baseUrl, model) {
@@ -144,14 +145,16 @@ async function runSetup(state, gitRoot) {
         const config = (0, config_1.loadConfig)(repoRoot);
         config.embedding.engine = 'lancedb';
         if (state.embeddingProvider === 'ollama') {
-            const ollamaUrl = state.embeddingUrl || 'http://localhost:11434';
+            const rawUrl = (state.embeddingUrl || 'http://localhost:11434').replace(/\/v1\/?$/, '').replace(/\/$/, '');
+            // Normalize for OpenAI-compatible SDK: always store with /v1 suffix.
+            const ollamaUrl = rawUrl + '/v1';
             const ollamaModel = state.embeddingModel || 'mxbai-embed-large';
             config.embedding.provider = 'ollama';
             config.embedding.base_url = ollamaUrl;
             config.embedding.model = ollamaModel;
             config.embedding.dimensions = 1024;
-            // Test connectivity
-            const ollamaErr = await testOllamaConnection(ollamaUrl, ollamaModel);
+            // Test connectivity using the base URL (without /v1) via Ollama's native API.
+            const ollamaErr = await testOllamaConnection(rawUrl, ollamaModel);
             if (ollamaErr) {
                 summaryLines.push(`⚠  Ollama: ${ollamaErr}`);
             }
@@ -198,11 +201,46 @@ async function runSetup(state, gitRoot) {
         };
         (0, config_1.writeConfig)(repoRoot, config);
         const keyVar = state.rerankerProvider === 'jina' ? 'JINA_API_KEY' : 'COHERE_API_KEY';
-        summaryLines.push(`Reranker: ${state.rerankerProvider} (set ${keyVar} env var)`);
+        if (state.rerankerApiKey.trim()) {
+            const envPath = path.join(repoRoot, '.env');
+            const envLine = `${keyVar}=${state.rerankerApiKey.trim()}\n`;
+            const existing = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : '';
+            if (!existing.includes(`${keyVar}=`)) {
+                fs.writeFileSync(envPath, existing + envLine, 'utf-8');
+                summaryLines.push(`✓ Reranker: ${state.rerankerProvider} (${keyVar} saved to .env)`);
+            }
+            else {
+                summaryLines.push(`✓ Reranker: ${state.rerankerProvider} (${keyVar} already in .env)`);
+            }
+        }
+        else {
+            summaryLines.push(`Reranker: ${state.rerankerProvider} (set ${keyVar} env var)`);
+        }
+    }
+    // Auto-run code indexing so recall --code works immediately after setup.
+    try {
+        await (0, code_scan_1.codeScanCommand)(undefined, { summarize: true, repo: repoRoot });
+        summaryLines.push('✓ Code index built');
+    }
+    catch {
+        summaryLines.push('  Tip: run memo index-code to enable code-aware recall');
     }
     return { lines: summaryLines, autoMemoryWarning };
 }
 async function onboardingCommand() {
+    // Ink requires raw mode (interactive terminal). Detect early and give a clear
+    // actionable message instead of a cryptic React stack trace.
+    if (!process.stdin.isTTY || !process.stdin.setRawMode) {
+        console.error('⚠️  memo onboarding requires an interactive terminal (raw mode not supported here).\n' +
+            '\n' +
+            'Run this command in a real terminal, or use the non-interactive alternative:\n' +
+            '\n' +
+            '  memo init --platform claude-code    # Claude Code\n' +
+            '  memo init --platform cursor         # Cursor\n' +
+            '  memo init --platform codex          # Codex\n' +
+            '  memo init                           # auto-detect installed platforms\n');
+        process.exit(1);
+    }
     const gitRoot = (0, store_1.findGitRoot)(process.cwd());
     // Use Function constructor to bypass TypeScript's import() -> require() transform.
     // ink, ink-text-input, ink-select-input are ESM-only packages that cannot be
@@ -271,6 +309,7 @@ async function onboardingCommand() {
             embeddingApiKey: '',
             enableReranker: false,
             rerankerProvider: '',
+            rerankerApiKey: '',
         });
         const [nameInput, setNameInput] = useState(defaultName);
         const [projectDirInput, setProjectDirInput] = useState('.memobank');
@@ -278,6 +317,7 @@ async function onboardingCommand() {
         const [ollamaUrlInput, setOllamaUrlInput] = useState('http://localhost:11434');
         const [ollamaModelInput, setOllamaModelInput] = useState('mxbai-embed-large');
         const [openaiKeyInput, setOpenaiKeyInput] = useState('');
+        const [rerankerKeyInput, setRerankerKeyInput] = useState('');
         const [jinaKeyInput, setJinaKeyInput] = useState('');
         const [done, setDone] = useState(false);
         const [summary, setSummary] = useState([]);
@@ -409,14 +449,20 @@ async function onboardingCommand() {
             },
         })) : null, state.step === 'reranker-provider' ? React.createElement(Box, { flexDirection: 'column' }, React.createElement(Text, { bold: true }, 'Reranker provider:'), React.createElement(SelectInput, {
             items: [
-                { label: 'Jina AI  (set JINA_API_KEY)', value: 'jina' },
-                { label: 'Cohere   (set COHERE_API_KEY)', value: 'cohere' },
+                { label: 'Jina AI', value: 'jina' },
+                { label: 'Cohere', value: 'cohere' },
             ],
             onSelect: (item) => {
+                setState(s => ({ ...s, step: 'reranker-key', enableReranker: true, rerankerProvider: String(item.value) }));
+            },
+        })) : null, state.step === 'reranker-key' ? React.createElement(Box, { flexDirection: 'column' }, React.createElement(Text, { bold: true }, `${state.rerankerProvider === 'jina' ? 'JINA_API_KEY' : 'COHERE_API_KEY'}:`), React.createElement(Text, { dimColor: true }, '  Paste your API key (leave empty to set later via env var)'), React.createElement(TextInput, {
+            value: rerankerKeyInput,
+            onChange: setRerankerKeyInput,
+            onSubmit: (value) => {
                 if (setupRunning.current)
                     return;
                 setupRunning.current = true;
-                const finalState = { ...state, step: 'done', enableReranker: true, rerankerProvider: String(item.value) };
+                const finalState = { ...state, step: 'done', rerankerApiKey: value.trim() };
                 setState(finalState);
                 runSetup(finalState, gitRoot).then(({ lines, autoMemoryWarning: warn }) => {
                     setSummary(lines);

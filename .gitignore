@@ -118,3 +118,9 @@ test-memobank/
 docs/
 .roam/
 .github/workflows/roam.yml
+
+# memobank
+.memobank/meta/access-log.json
+.memobank/meta/code-index.db
+.memobank/.lancedb/
+.memobank/pending/

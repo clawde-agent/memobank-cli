@@ -42,10 +42,8 @@ const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const os = __importStar(require("os"));
 const child_process_1 = require("child_process");
-const util_1 = require("util");
 const store_1 = require("../core/store");
 const memory_template_1 = require("../core/memory-template");
-const execAsync = (0, util_1.promisify)(child_process_1.exec);
 /**
  * Memory template for editor
  */
@@ -125,6 +123,14 @@ function parseTemplate(content, type) {
 async function writeMemoryCommand(type, options = {}) {
     const cwd = process.cwd();
     const repoRoot = (0, store_1.findRepoRoot)(cwd, options.repo);
+    // Guard against cross-project writes
+    try {
+        (0, store_1.assertRepoRootMatchesCwd)(repoRoot, cwd);
+    }
+    catch (err) {
+        console.error(`❌ ${err.message}`);
+        return;
+    }
     // Check if non-interactive mode
     const isNonInteractive = options.name && options.description && options.content;
     let memoryData;
@@ -151,7 +157,9 @@ async function writeMemoryCommand(type, options = {}) {
             console.log(`Opening ${editor}...`);
         }
         try {
-            await execAsync(`${editor} "${tmpFile}"`);
+            // Use execFileSync with the editor as a separate arg to avoid shell injection
+            // via a malicious $EDITOR value.
+            (0, child_process_1.execFileSync)(editor, [tmpFile], { stdio: 'inherit' });
             const editedContent = fs.readFileSync(tmpFile, 'utf-8');
             memoryData = parseTemplate(editedContent, type);
         }
@@ -161,7 +169,8 @@ async function writeMemoryCommand(type, options = {}) {
             return;
         }
         finally {
-            fs.unlinkSync(tmpFile);
+            if (fs.existsSync(tmpFile))
+                fs.unlinkSync(tmpFile);
         }
     }
     // Symbol anchoring (v0.8.1+)
@@ -269,6 +278,29 @@ async function writeMemoryCommand(type, options = {}) {
         if (!options.silent) {
             console.log(`✅ Created: ${filePath}`);
         }
+        // Async vector upsert — fire-and-forget, never blocks or throws to user
+        setImmediate(async () => {
+            try {
+                const { loadConfig } = await Promise.resolve().then(() => __importStar(require('../config')));
+                const { EmbeddingGenerator } = await Promise.resolve().then(() => __importStar(require('../core/embedding')));
+                const { selectEngine } = await Promise.resolve().then(() => __importStar(require('./recall')));
+                const cfg = loadConfig(repoRoot);
+                if (cfg.embedding.engine !== 'lancedb')
+                    return;
+                const embedCfg = EmbeddingGenerator.fromMemoConfig(cfg);
+                const { engine, warning } = await selectEngine('lancedb', repoRoot, embedCfg);
+                if (warning)
+                    return; // unavailable
+                if (engine.index) {
+                    const { loadFile } = await Promise.resolve().then(() => __importStar(require('../core/store')));
+                    const mem = loadFile(filePath);
+                    await engine.index([mem], true);
+                }
+            }
+            catch {
+                // silent — vector index is best-effort
+            }
+        });
     }
     catch (error) {
         console.error(`Error writing memory: ${error.message}`);
