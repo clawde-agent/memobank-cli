@@ -28,6 +28,8 @@ import {
 import { initCommand } from './commands/init';
 import { migrate } from './commands/migrate';
 import { scanCommand } from './commands/scan';
+import { distillCommand } from './commands/distill';
+import type { DistillOptions } from './commands/distill';
 import { processQueueCommand } from './commands/process-queue';
 import { codeScanCommand } from './commands/code-scan';
 import { findRepoRoot } from './core/store';
@@ -528,6 +530,20 @@ program
   .option('--background', 'Spawn as background process and return immediately')
   .action(async (options) => {
     await processQueueCommand({ background: options.background as boolean | undefined });
+  });
+
+program
+  .command('distill')
+  .description('Distill project memories to workspace or personal tier')
+  .requiredOption('--to <tier>', 'Target tier: workspace or personal')
+  .option('--repo <path>', 'Override repo root')
+  .option('--silent', 'Suppress output')
+  .action(async (options: DistillOptions) => {
+    if (options.to !== 'workspace' && options.to !== 'personal') {
+      console.error('--to must be "workspace" or "personal"');
+      process.exit(1);
+    }
+    await distillCommand(options);
   });
 
 // Parse and execute
