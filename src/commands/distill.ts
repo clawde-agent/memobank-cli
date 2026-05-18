@@ -10,9 +10,12 @@ import {
 } from '../core/store';
 import { loadConfig } from '../config';
 import { distillToWorkspace, distillToPersonal } from '../core/distiller';
+import { synthesizeScenes } from '../core/scene-synthesizer';
+import { readSceneIndex } from '../core/scene-index';
+import { generateSceneNavigation } from '../core/scene-navigation';
 
 export interface DistillOptions {
-  to: 'workspace' | 'personal';
+  to: 'workspace' | 'personal' | 'scenes';
   repo?: string;
   silent?: boolean;
 }
@@ -107,7 +110,7 @@ export async function distillCommand(options: DistillOptions): Promise<void> {
     }
 
     log(`Distilled ${distilled.length} memories to workspace: ${workspaceDir}`, options.silent);
-  } else {
+  } else if (options.to === 'personal') {
     // --to personal
     const projectId = resolveProjectId(repoRoot);
     const personalDir = getGlobalDir(projectId);
@@ -140,5 +143,23 @@ export async function distillCommand(options: DistillOptions): Promise<void> {
     fs.mkdirSync(personalDir, { recursive: true });
     fs.writeFileSync(personaPath, persona, 'utf-8');
     log(`Persona written to ${personaPath}`, options.silent);
+  } else if (options.to === 'scenes') {
+    const all = loadAll(repoRoot, 'project');
+    if (all.length === 0) {
+      log('No memories found for scene synthesis.', options.silent);
+      return;
+    }
+    log(`Synthesizing scenes from ${all.length} memories...`, options.silent);
+    const results = await synthesizeScenes(all, repoRoot, apiKey);
+    if (results.length === 0) {
+      log('No scenes produced.', options.silent);
+      return;
+    }
+    log(`Created/updated ${results.length} scene(s).`, options.silent);
+    if (!options.silent) {
+      const index = await readSceneIndex(repoRoot);
+      const nav = generateSceneNavigation(repoRoot, index);
+      if (nav) process.stdout.write('\n' + nav + '\n');
+    }
   }
 }
