@@ -60,4 +60,18 @@ describe('capture-cursor', () => {
       fs.rmSync(metaDir, { recursive: true });
     }
   });
+
+  it('readCursor rethrows non-ENOENT errors', async () => {
+    const metaDir = makeTempDir();
+    try {
+      // Create a directory at the cursor path to cause EISDIR on read
+      const cursorPath = path.join(metaDir, 'capture-cursor.json');
+      fs.mkdirSync(cursorPath, { recursive: true });
+
+      // readCursor should rethrow the EISDIR error
+      await expect(readCursor(metaDir)).rejects.toThrow();
+    } finally {
+      fs.rmSync(metaDir, { recursive: true });
+    }
+  });
 });

@@ -12,7 +12,8 @@ export async function readCursor(metaDir: string): Promise<CaptureCursor> {
   try {
     const raw = await fs.readFile(cursorPath, 'utf-8');
     return JSON.parse(raw) as CaptureCursor;
-  } catch {
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
     return { processedSessions: [] };
   }
 }
