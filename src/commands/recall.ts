@@ -4,7 +4,10 @@
  */
 
 import * as fs from 'fs';
+import * as path from 'path';
 import { findRepoRoot } from '../core/store';
+import { readSceneIndex } from '../core/scene-index';
+import { generateSceneNavigation, stripSceneNavigation } from '../core/scene-navigation';
 import { loadConfig } from '../config';
 import { recall, writeRecallResults } from '../core/retriever';
 import { TextEngine } from '../engines/text-engine';
@@ -175,5 +178,15 @@ export async function recallCommand(query: string, options: RecallOptions): Prom
 
   if (!options.dryRun) {
     writeRecallResults(repoRoot, results, query, actualEngineName);
+
+    // Append scene navigation if scenes exist
+    const sceneIndex = await readSceneIndex(repoRoot);
+    if (sceneIndex.length > 0) {
+      const memoryPath = path.join(repoRoot, 'MEMORY.md');
+      const existing = fs.existsSync(memoryPath) ? fs.readFileSync(memoryPath, 'utf-8') : '';
+      const stripped = stripSceneNavigation(existing);
+      const nav = generateSceneNavigation(repoRoot, sceneIndex);
+      fs.writeFileSync(memoryPath, stripped + '\n\n' + nav, 'utf-8');
+    }
   }
 }

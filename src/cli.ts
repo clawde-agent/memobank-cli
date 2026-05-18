@@ -534,13 +534,13 @@ program
 
 program
   .command('distill')
-  .description('Distill project memories to workspace or personal tier')
-  .requiredOption('--to <tier>', 'Target tier: workspace or personal')
+  .description('Distill project memories to workspace, personal, or scenes tier')
+  .requiredOption('--to <tier>', 'Target tier: workspace, personal, or scenes')
   .option('--repo <path>', 'Override repo root')
   .option('--silent', 'Suppress output')
   .action(async (options: DistillOptions) => {
-    if (options.to !== 'workspace' && options.to !== 'personal') {
-      console.error('--to must be "workspace" or "personal"');
+    if (options.to !== 'workspace' && options.to !== 'personal' && options.to !== 'scenes') {
+      console.error('--to must be "workspace", "personal", or "scenes"');
       process.exit(1);
     }
     await distillCommand(options);
