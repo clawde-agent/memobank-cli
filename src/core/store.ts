@@ -271,6 +271,17 @@ export function loadFile(filePath: string): MemoryFile {
   };
 }
 
+export function updateMemoryContent(repoRoot: string, name: string, newContent: string): void {
+  const memories = loadAll(repoRoot, 'project');
+  const target = memories.find((m) => m.name === name);
+  if (!target) return;
+  const raw = fs.readFileSync(target.path, 'utf-8');
+  const fmEnd = raw.indexOf('\n---\n', 4);
+  if (fmEnd === -1) return;
+  const frontmatter = raw.slice(0, fmEnd + 5);
+  fs.writeFileSync(target.path, frontmatter + newContent, 'utf-8');
+}
+
 export function writeMemory(repoRoot: string, memory: Omit<MemoryFile, 'path' | 'scope'>): string {
   const typeDir = path.join(repoRoot, memory.type);
   if (!fs.existsSync(typeDir)) {
