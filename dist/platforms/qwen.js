@@ -80,7 +80,7 @@ function detectQwen() {
 }
 function isInPath(cmd) {
     try {
-        (0, child_process_1.execSync)(`which ${cmd}`, { stdio: 'pipe' });
+        (0, child_process_1.execFileSync)('which', [cmd], { stdio: 'pipe' });
         return true;
     }
     catch {

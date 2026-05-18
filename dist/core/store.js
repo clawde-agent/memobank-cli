@@ -42,9 +42,11 @@ exports.getWorkspaceDir = getWorkspaceDir;
 exports.findRepoRoot = findRepoRoot;
 exports.findGitRoot = findGitRoot;
 exports.resolveProjectId = resolveProjectId;
+exports.assertRepoRootMatchesCwd = assertRepoRootMatchesCwd;
 exports.writePending = writePending;
 exports.loadAll = loadAll;
 exports.loadFile = loadFile;
+exports.updateMemoryContent = updateMemoryContent;
 exports.writeMemory = writeMemory;
 exports.updateMemoryStatus = updateMemoryStatus;
 exports.writeMemoryMd = writeMemoryMd;
@@ -71,20 +73,6 @@ function getProjectDir(repoRoot) {
 function getWorkspaceDir(workspaceName) {
     return path.join(osHomeDir(), '.memobank', '_workspace', workspaceName);
 }
-/** Directories that are never a memobank project dir */
-const SKIP_DIRS = new Set([
-    'node_modules',
-    '.git',
-    'dist',
-    'build',
-    'coverage',
-    '.next',
-    '.nuxt',
-    '.turbo',
-    'out',
-    'tmp',
-    '.cache',
-]);
 function findRepoRoot(cwd, repoFlag) {
     if (repoFlag) {
         return path.resolve(repoFlag);
@@ -99,22 +87,6 @@ function findRepoRoot(cwd, repoFlag) {
         const defaultConfigPath = path.join(current, '.memobank', 'meta', 'config.yaml');
         if (fs.existsSync(defaultConfigPath)) {
             return path.join(current, '.memobank');
-        }
-        // Scan immediate subdirs for a custom-named memobank dir
-        try {
-            const entries = fs.readdirSync(current, { withFileTypes: true });
-            for (const entry of entries) {
-                if (!entry.isDirectory() || SKIP_DIRS.has(entry.name) || entry.name === '.memobank') {
-                    continue;
-                }
-                const customConfigPath = path.join(current, entry.name, 'meta', 'config.yaml');
-                if (fs.existsSync(customConfigPath)) {
-                    return path.join(current, entry.name);
-                }
-            }
-        }
-        catch {
-            /* ignore permission errors */
         }
         // Legacy: meta/config.yaml at root
         if (fs.existsSync(path.join(current, 'meta', 'config.yaml'))) {
@@ -184,12 +156,38 @@ function resolveProjectId(memoBankDir) {
     // 3. parent directory name
     return path.basename(gitCwd);
 }
+/**
+ * Guard: verify repoRoot belongs to the same git project as cwd.
+ * Compares the git root of cwd against the parent of repoRoot.
+ * Throws if they differ — prevents cross-project writes.
+ */
+function assertRepoRootMatchesCwd(repoRoot, cwd) {
+    const cwdGitRoot = findGitRoot(cwd);
+    // If cwd has no git root (findGitRoot returns cwd itself and no .git exists), skip the guard
+    if (cwdGitRoot === cwd && !fs.existsSync(path.join(cwd, '.git'))) {
+        return;
+    }
+    const repoParent = path.dirname(repoRoot); // .memobank/ → repo root
+    // Canonical comparison: repoParent must be at or below cwdGitRoot
+    const rel = path.relative(cwdGitRoot, repoParent);
+    const isInside = !rel.startsWith('..') && !path.isAbsolute(rel);
+    if (!isInside) {
+        throw new Error(`Memobank project mismatch: repoRoot "${repoRoot}" does not belong to the git repo at "${cwdGitRoot}". ` +
+            `Set MEMOBANK_REPO env var or run memo init in the correct directory.`);
+    }
+}
 function writePending(memoBankDir, entry) {
-    const pendingDir = path.join(memoBankDir, '.pending');
+    const pendingDir = path.resolve(memoBankDir, '.pending');
     if (!fs.existsSync(pendingDir)) {
         fs.mkdirSync(pendingDir, { recursive: true });
     }
-    fs.writeFileSync(path.join(pendingDir, `${entry.id}.json`), JSON.stringify(entry, null, 2), 'utf-8');
+    // Sanitize entry.id to prevent path traversal: allow only alphanumeric, dash, underscore.
+    const safeId = entry.id.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const outPath = path.resolve(pendingDir, `${safeId}.json`);
+    if (!outPath.startsWith(pendingDir + path.sep)) {
+        throw new Error(`Security: pending file path escapes pending directory: ${outPath}`);
+    }
+    fs.writeFileSync(outPath, JSON.stringify(entry, null, 2), 'utf-8');
 }
 function loadFromDir(baseDir, scope) {
     const memories = [];
@@ -276,6 +274,18 @@ function loadFile(filePath) {
         codeRefs: Array.isArray(data.codeRefs) ? data.codeRefs : undefined,
     };
 }
+function updateMemoryContent(repoRoot, name, newContent) {
+    const memories = loadAll(repoRoot, 'project');
+    const target = memories.find((m) => m.name === name);
+    if (!target)
+        return;
+    const raw = fs.readFileSync(target.path, 'utf-8');
+    const fmEnd = raw.indexOf('\n---\n', 4);
+    if (fmEnd === -1)
+        return;
+    const frontmatter = raw.slice(0, fmEnd + 5);
+    fs.writeFileSync(target.path, frontmatter + newContent, 'utf-8');
+}
 function writeMemory(repoRoot, memory) {
     const typeDir = path.join(repoRoot, memory.type);
     if (!fs.existsSync(typeDir)) {
@@ -314,6 +324,24 @@ function writeMemory(repoRoot, memory) {
     }
     const fileContent = gray_matter_1.default.stringify(memory.content, frontmatter);
     fs.writeFileSync(filePath, fileContent, 'utf-8');
+    // Auto-link to code symbols (optional dep — silent failure if not installed)
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { CodeIndex } = require('../engines/code-index');
+        const dbPath = CodeIndex.getDbPath(repoRoot);
+        if (fs.existsSync(dbPath)) {
+            const idx = new CodeIndex(dbPath);
+            try {
+                idx.linkMemory(path.relative(repoRoot, filePath), memory.description);
+            }
+            finally {
+                idx.close();
+            }
+        }
+    }
+    catch {
+        // better-sqlite3 not installed or db locked — non-fatal
+    }
     return filePath;
 }
 /** Patch status in a memory file's frontmatter in-place */

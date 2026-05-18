@@ -243,14 +243,14 @@ class LanceDbEngine {
      * Generate unique memory ID
      */
     memoryId(memory) {
-        const hash = (0, crypto_1.createHash)('md5').update(memory.path).digest('hex');
+        const hash = (0, crypto_1.createHash)('sha256').update(memory.path).digest('hex');
         return hash.slice(0, 16);
     }
     /**
      * Hash memory content for change detection
      */
     contentHash(memory) {
-        return (0, crypto_1.createHash)('md5')
+        return (0, crypto_1.createHash)('sha256')
             .update(memory.content + memory.description + memory.tags.join(','))
             .digest('hex');
     }

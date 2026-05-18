@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { execFileSync } from 'child_process';
-import { writeMemory, findRepoRoot } from '../core/store';
+import { writeMemory, findRepoRoot, assertRepoRootMatchesCwd } from '../core/store';
 import type { MemoryType, Confidence } from '../types';
 import {
   generateMemoryFile,
@@ -117,6 +117,14 @@ export async function writeMemoryCommand(
 ): Promise<void> {
   const cwd = process.cwd();
   const repoRoot = findRepoRoot(cwd, options.repo);
+
+  // Guard against cross-project writes
+  try {
+    assertRepoRootMatchesCwd(repoRoot, cwd);
+  } catch (err) {
+    console.error(`❌ ${(err as Error).message}`);
+    return;
+  }
 
   // Check if non-interactive mode
   const isNonInteractive = options.name && options.description && options.content;
@@ -278,6 +286,27 @@ export async function writeMemoryCommand(
     if (!options.silent) {
       console.log(`✅ Created: ${filePath}`);
     }
+
+    // Async vector upsert — fire-and-forget, never blocks or throws to user
+    setImmediate(async () => {
+      try {
+        const { loadConfig } = await import('../config');
+        const { EmbeddingGenerator } = await import('../core/embedding');
+        const { selectEngine } = await import('./recall');
+        const cfg = loadConfig(repoRoot);
+        if (cfg.embedding.engine !== 'lancedb') return;
+        const embedCfg = EmbeddingGenerator.fromMemoConfig(cfg);
+        const { engine, warning } = await selectEngine('lancedb', repoRoot, embedCfg);
+        if (warning) return; // unavailable
+        if (engine.index) {
+          const { loadFile } = await import('../core/store');
+          const mem = loadFile(filePath);
+          await engine.index([mem], true);
+        }
+      } catch {
+        // silent — vector index is best-effort
+      }
+    });
   } catch (error) {
     console.error(`Error writing memory: ${(error as Error).message}`);
   }

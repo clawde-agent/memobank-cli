@@ -51,7 +51,19 @@ function estimateTokenCount(text) {
 /**
  * Recall memories for a query
  */
-async function recall(query, repoRoot, config, engine, scope = 'all', explain = false, withCode = false) {
+async function recall(query, repoRoot, config, engine, scope = 'all', explain = false, withCode = 'auto') {
+    const autoCode = withCode === 'auto'
+        ? (() => {
+            try {
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
+                const { CodeIndex } = require('../engines/code-index');
+                return fs.existsSync(CodeIndex.getDbPath(repoRoot));
+            }
+            catch {
+                return false;
+            }
+        })()
+        : withCode;
     const globalDir = (0, store_1.getGlobalDir)(config.project.name);
     const workspaceDir = config.workspace?.enabled
         ? (0, store_1.getWorkspaceDir)(path.basename(config.workspace.remote ?? '', '.git'))
@@ -60,17 +72,21 @@ async function recall(query, repoRoot, config, engine, scope = 'all', explain = 
     const searchEngine = engine || new text_engine_1.TextEngine();
     const accessLogs = (0, lifecycle_manager_1.loadAccessLogs)(repoRoot);
     let symbolResults;
-    if (withCode) {
+    let linkedMemories = [];
+    if (autoCode) {
         try {
-            const { CodeIndex } = await Promise.resolve().then(() => __importStar(require('../engines/code-index')));
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { CodeIndex } = require('../engines/code-index');
             const dbPath = CodeIndex.getDbPath(repoRoot);
             if (fs.existsSync(dbPath)) {
                 const idx = new CodeIndex(dbPath);
-                symbolResults = idx.search(query, config.memory.top_k ?? 10);
-                idx.close();
-            }
-            else {
-                process.stderr.write('⚠  No code index found. Run: memo index-code [path]\n');
+                try {
+                    symbolResults = idx.search(query, config.memory.top_k ?? 10);
+                    linkedMemories = idx.getLinkedMemories(query);
+                }
+                finally {
+                    idx.close();
+                }
             }
         }
         catch {
@@ -78,16 +94,14 @@ async function recall(query, repoRoot, config, engine, scope = 'all', explain = 
         }
     }
     let results = await searchEngine.search(query, memories, config.memory.top_k);
-    // Dual-track priority: Boost memories that reference found code symbol hashes
-    if (symbolResults && symbolResults.length > 0) {
-        const symbolHashes = new Set(symbolResults.map((sr) => sr.symbol.hash).filter(Boolean));
+    // Graph boost: memories linked to symbols reachable from query via call graph
+    if (linkedMemories.length > 0) {
+        const depthMap = new Map(linkedMemories.map((l) => [l.memoryPath, l.minDepth]));
         results = results.map((r) => {
-            const hasCodeMatch = r.memory.codeRefs?.some((hash) => symbolHashes.has(hash));
-            if (hasCodeMatch) {
-                // High boost for deterministic code-anchored memories
-                return { ...r, score: Math.min(1.0, r.score + 0.5) };
-            }
-            return r;
+            const depth = depthMap.get(r.memory.path);
+            if (depth === undefined)
+                return r;
+            return { ...r, score: Math.min(1.0, r.score + 0.5 / (depth + 1)) };
         });
     }
     // Apply access frequency boost

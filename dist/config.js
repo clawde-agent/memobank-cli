@@ -63,7 +63,16 @@ const DEFAULT_CONFIG = {
     lifecycle: { ...DEFAULT_LIFECYCLE },
 };
 function getConfigPath(repoRoot) {
-    return path.join(repoRoot, 'meta', 'config.yaml');
+    // Primary location: .memobank/meta/config.yaml
+    // Alias: .memobank/config.yaml — accepted for user convenience, with a migration hint.
+    const canonical = path.join(repoRoot, 'meta', 'config.yaml');
+    const alias = path.join(repoRoot, 'config.yaml');
+    if (!fs.existsSync(canonical) && fs.existsSync(alias)) {
+        console.warn(`⚠️  memobank: config found at .memobank/config.yaml (old location).\n` +
+            `   Move it to .memobank/meta/config.yaml to silence this warning.\n`);
+        return alias;
+    }
+    return canonical;
 }
 function loadConfig(repoRoot) {
     const configPath = getConfigPath(repoRoot);
@@ -109,6 +118,15 @@ function writeConfig(repoRoot, config) {
     }
 }
 function initConfig(repoRoot, projectName) {
+    const configPath = getConfigPath(repoRoot);
+    if (fs.existsSync(configPath)) {
+        // Preserve existing user config — only ensure project.name is set.
+        const existing = loadConfig(repoRoot);
+        if (!existing.project?.name) {
+            writeConfig(repoRoot, { ...existing, project: { ...existing.project, name: projectName } });
+        }
+        return;
+    }
     writeConfig(repoRoot, { ...DEFAULT_CONFIG, project: { name: projectName } });
 }
 //# sourceMappingURL=config.js.map

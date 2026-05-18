@@ -51,7 +51,7 @@ export interface LifecycleConfig {
 }
 
 export interface MemoConfig {
-  project: { name: string; description?: string };
+  project: { name: string; description?: string; project_id?: string };
   memory: { token_budget: number; top_k: number };
   embedding: {
     engine: Engine;
@@ -126,6 +126,8 @@ export interface CodeScanOptions {
   force?: boolean;
   langs?: IndexedLanguage[];
   repo?: string;
+  incremental?: boolean;
+  files?: string[];
 }
 
 export interface RefsOptions {

@@ -8,8 +8,11 @@ import { findRepoRoot } from '../core/store';
 import { loadConfig } from '../config';
 import { recall, writeRecallResults } from '../core/retriever';
 import { TextEngine } from '../engines/text-engine';
+import { HybridEngine } from '../engines/hybrid-engine';
 import { EmbeddingGenerator } from '../core/embedding';
 import type { MemoryScope } from '../types';
+import type { EmbeddingConfig } from '../core/embedding';
+import type { EngineAdapter } from '../engines/engine-adapter';
 
 export interface RecallOptions {
   top?: number;
@@ -22,6 +25,51 @@ export interface RecallOptions {
   code?: boolean;
   refs?: string;
   silent?: boolean;
+}
+
+export async function selectEngine(
+  engineName: string,
+  repoRoot: string,
+  embedConfig: EmbeddingConfig | null
+): Promise<{ engine: EngineAdapter; warning: string | null }> {
+  if (engineName !== 'lancedb') {
+    return { engine: new TextEngine(), warning: null };
+  }
+  if (!embedConfig) {
+    const warning = `⚠  Vector search unavailable (embedding config missing or API key not set)\n  Falling back to text search.`;
+    return { engine: new TextEngine(), warning };
+  }
+  try {
+    const { LanceDbEngine } = await import('../engines/lancedb-engine');
+    const { EmbeddingGenerator } = await import('../core/embedding');
+    // Validate API key before constructing — fail fast for cloud providers
+    const provider = embedConfig.provider ?? 'ollama';
+    if (provider !== 'ollama' && provider !== 'custom') {
+      const keyMap: Record<string, string | undefined> = {
+        openai: process.env.OPENAI_API_KEY,
+        azure: process.env.OPENAI_API_KEY ?? process.env.AZURE_API_KEY,
+        jina: process.env.JINA_API_KEY,
+      };
+      const key = keyMap[provider] ?? process.env.OPENAI_API_KEY;
+      if (!key) {
+        throw new Error(`${provider.toUpperCase()}_API_KEY is not set`);
+      }
+    }
+    const embeddingGenerator = new EmbeddingGenerator(embedConfig);
+    const lanceEngine = new LanceDbEngine(repoRoot, embeddingGenerator);
+    const textEngine = new TextEngine();
+    return { engine: new HybridEngine(textEngine, lanceEngine), warning: null };
+  } catch (err) {
+    const msg = (err as Error).message;
+    const provider = embedConfig.provider ?? 'ollama';
+    const model = embedConfig.model ?? 'mxbai-embed-large';
+    const hint =
+      provider === 'ollama'
+        ? `  Check: ollama serve && ollama pull ${model}`
+        : `  Check: ${provider.toUpperCase()}_API_KEY is set`;
+    const warning = `⚠  Vector search unavailable (${msg})\n${hint}\n  Falling back to text search.`;
+    return { engine: new TextEngine(), warning };
+  }
 }
 
 export async function recallCommand(query: string, options: RecallOptions): Promise<void> {
@@ -59,12 +107,18 @@ export async function recallCommand(query: string, options: RecallOptions): Prom
       try {
         const refs = idx.getRefs(options.refs);
         if (refs.length === 0) {
-          console.log(`No callers found for: ${options.refs}`);
+          if (!options.silent) {
+            process.stdout.write(`No callers found for: ${options.refs}\n`);
+          }
           return;
         }
-        console.log(`\n## Callers of \`${options.refs}\` (${refs.length})\n`);
-        for (const r of refs) {
-          console.log(`- ${r.symbol.qualifiedName}  ${r.symbol.file}:${r.symbol.lineStart}`);
+        if (!options.silent) {
+          process.stdout.write(`\n## Callers of \`${options.refs}\` (${refs.length})\n\n`);
+          for (const r of refs) {
+            process.stdout.write(
+              `- ${r.symbol.qualifiedName}  ${r.symbol.file}:${r.symbol.lineStart}\n`
+            );
+          }
         }
       } finally {
         idx.close();
@@ -85,29 +139,12 @@ export async function recallCommand(query: string, options: RecallOptions): Prom
   const scope = (options.scope as MemoryScope) || 'all';
   const explain = options.explain || false;
 
-  let engine;
-  if (options.engine === 'lancedb') {
-    try {
-      const { LanceDbEngine } = await import('../engines/lancedb-engine');
-      const embedConfig = EmbeddingGenerator.fromMemoConfig(config);
-      if (!embedConfig) {
-        throw new Error('embedding config missing or API key not set');
-      }
-      const embeddingGenerator = new EmbeddingGenerator(embedConfig);
-      engine = new LanceDbEngine(repoRoot, embeddingGenerator);
-    } catch (err) {
-      const msg = (err as Error).message;
-      const provider = config.embedding?.provider ?? 'ollama';
-      const model = config.embedding?.model ?? 'mxbai-embed-large';
-      const hint =
-        provider === 'ollama'
-          ? `  Check: ollama serve && ollama pull ${model}`
-          : `  Check: ${provider.toUpperCase()}_API_KEY is set`;
-      process.stderr.write(
-        `\n⚠  Vector search unavailable (${msg})\n${hint}\n  Falling back to text search.\n\n`
-      );
-      engine = new TextEngine();
-    }
+  // Determine engine: explicit --engine flag overrides config
+  const engineName = options.engine ?? config.embedding.engine;
+  const embedConfig = EmbeddingGenerator.fromMemoConfig(config);
+  const { engine, warning } = await selectEngine(engineName, repoRoot, embedConfig);
+  if (warning && !options.silent) {
+    process.stderr.write('\n' + warning + '\n\n');
   }
 
   const { results, markdown, symbolResults } = await recall(
@@ -121,15 +158,22 @@ export async function recallCommand(query: string, options: RecallOptions): Prom
   );
 
   if (options.format === 'json') {
-    console.log(JSON.stringify({ results, symbolResults }, null, 2));
+    if (!options.silent) {
+      process.stdout.write(JSON.stringify({ results, symbolResults }, null, 2) + '\n');
+    }
     return;
   }
 
   if (!options.silent) {
-    console.log(markdown);
+    process.stdout.write(markdown + '\n');
   }
 
+  const actualEngineName =
+    engine instanceof TextEngine && engineName === 'lancedb'
+      ? 'text (fallback from lancedb)'
+      : engineName;
+
   if (!options.dryRun) {
-    writeRecallResults(repoRoot, results, query, config.embedding.engine);
+    writeRecallResults(repoRoot, results, query, actualEngineName);
   }
 }

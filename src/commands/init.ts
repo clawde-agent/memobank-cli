@@ -16,6 +16,7 @@ import { installCodex } from '../platforms/codex';
 import { installGemini } from '../platforms/gemini';
 import { installQwen } from '../platforms/qwen';
 import { codeScanCommand } from './code-scan';
+import { installPostCommitHook, isHookInstalled } from '../core/hook-installer';
 
 export interface QuickInitOptions {
   platform?: string;
@@ -83,6 +84,14 @@ export async function quickInit(options: QuickInitOptions): Promise<void> {
   console.log(`✓ memobank initialized (project: ${projectName}, platforms: ${platformList})`);
   if (!installed.length) {
     console.log('  Tip: run memo init --interactive to configure platforms manually.');
+  }
+
+  // Install post-commit hook for incremental code indexing
+  if (fs.existsSync(path.join(gitRoot, '.git'))) {
+    if (!isHookInstalled(gitRoot)) {
+      installPostCommitHook(gitRoot);
+      console.log('✓ Installed post-commit hook for incremental code indexing');
+    }
   }
 
   // Auto-run code indexing so recall --code works immediately after init.

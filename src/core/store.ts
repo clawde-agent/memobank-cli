@@ -27,21 +27,6 @@ export function getWorkspaceDir(workspaceName: string): string {
   return path.join(osHomeDir(), '.memobank', '_workspace', workspaceName);
 }
 
-/** Directories that are never a memobank project dir */
-const SKIP_DIRS = new Set([
-  'node_modules',
-  '.git',
-  'dist',
-  'build',
-  'coverage',
-  '.next',
-  '.nuxt',
-  '.turbo',
-  'out',
-  'tmp',
-  '.cache',
-]);
-
 export function findRepoRoot(cwd: string, repoFlag?: string): string {
   if (repoFlag) {
     return path.resolve(repoFlag);
@@ -57,22 +42,6 @@ export function findRepoRoot(cwd: string, repoFlag?: string): string {
     const defaultConfigPath = path.join(current, '.memobank', 'meta', 'config.yaml');
     if (fs.existsSync(defaultConfigPath)) {
       return path.join(current, '.memobank');
-    }
-
-    // Scan immediate subdirs for a custom-named memobank dir
-    try {
-      const entries = fs.readdirSync(current, { withFileTypes: true });
-      for (const entry of entries) {
-        if (!entry.isDirectory() || SKIP_DIRS.has(entry.name) || entry.name === '.memobank') {
-          continue;
-        }
-        const customConfigPath = path.join(current, entry.name, 'meta', 'config.yaml');
-        if (fs.existsSync(customConfigPath)) {
-          return path.join(current, entry.name);
-        }
-      }
-    } catch {
-      /* ignore permission errors */
     }
 
     // Legacy: meta/config.yaml at root
@@ -148,6 +117,30 @@ export function resolveProjectId(memoBankDir: string): string {
 
   // 3. parent directory name
   return path.basename(gitCwd);
+}
+
+/**
+ * Guard: verify repoRoot belongs to the same git project as cwd.
+ * Compares the git root of cwd against the parent of repoRoot.
+ * Throws if they differ — prevents cross-project writes.
+ */
+export function assertRepoRootMatchesCwd(repoRoot: string, cwd: string): void {
+  const cwdGitRoot = findGitRoot(cwd);
+  // If cwd has no git root (findGitRoot returns cwd itself and no .git exists), skip the guard
+  if (cwdGitRoot === cwd && !fs.existsSync(path.join(cwd, '.git'))) {
+    return;
+  }
+  const repoParent = path.dirname(repoRoot); // .memobank/ → repo root
+
+  // Canonical comparison: repoParent must be at or below cwdGitRoot
+  const rel = path.relative(cwdGitRoot, repoParent);
+  const isInside = !rel.startsWith('..') && !path.isAbsolute(rel);
+  if (!isInside) {
+    throw new Error(
+      `Memobank project mismatch: repoRoot "${repoRoot}" does not belong to the git repo at "${cwdGitRoot}". ` +
+        `Set MEMOBANK_REPO env var or run memo init in the correct directory.`
+    );
+  }
 }
 
 export interface PendingCandidate {
@@ -276,6 +269,17 @@ export function loadFile(filePath: string): MemoryFile {
     project: data.project as string | undefined,
     codeRefs: Array.isArray(data.codeRefs) ? (data.codeRefs as string[]) : undefined,
   };
+}
+
+export function updateMemoryContent(repoRoot: string, name: string, newContent: string): void {
+  const memories = loadAll(repoRoot, 'project');
+  const target = memories.find((m) => m.name === name);
+  if (!target) return;
+  const raw = fs.readFileSync(target.path, 'utf-8');
+  const fmEnd = raw.indexOf('\n---\n', 4);
+  if (fmEnd === -1) return;
+  const frontmatter = raw.slice(0, fmEnd + 5);
+  fs.writeFileSync(target.path, frontmatter + newContent, 'utf-8');
 }
 
 export function writeMemory(repoRoot: string, memory: Omit<MemoryFile, 'path' | 'scope'>): string {

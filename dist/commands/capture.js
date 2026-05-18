@@ -66,44 +66,69 @@ async function capture(options = {}) {
     // 1. Get session text
     let sessionText = '';
     if (options.auto) {
-        // Read Claude Code auto-memory topic files from the project tier root
-        // (autoMemoryDirectory = repoRoot = .memobank/).
-        // Topic files are flat .md files written directly by Claude Code — exclude
-        // MEMORY.md (the index) and subdirectories (lesson/, decision/, etc.).
-        const autoMemoryDir = repoRoot;
-        if (fs.existsSync(autoMemoryDir)) {
-            const STRUCTURED_DIRS = new Set(['lesson', 'decision', 'workflow', 'architecture', 'meta']);
-            const files = fs
-                .readdirSync(autoMemoryDir)
-                .filter((f) => {
-                if (!f.endsWith('.md') || f === 'MEMORY.md') {
-                    return false;
-                }
-                const fullPath = path.join(autoMemoryDir, f);
-                // Skip subdirectories (memobank structured tiers)
-                if (fs.statSync(fullPath).isDirectory()) {
-                    return false;
-                }
-                if (STRUCTURED_DIRS.has(f.replace(/\.md$/, ''))) {
-                    return false;
-                }
-                return true;
-            })
-                .map((f) => path.join(autoMemoryDir, f))
-                .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
-            if (files.length > 0 && files[0]) {
-                sessionText = fs.readFileSync(files[0], 'utf-8');
-                log(`Read from: ${files[0]}`);
-            }
-            else {
-                log('No recent Claude Code auto-memory files found');
-                return;
-            }
-        }
-        else {
-            log('Project memory directory not found');
+        const { readCursor, markSessionProcessed } = await Promise.resolve().then(() => __importStar(require('../core/capture-cursor')));
+        const { findUnprocessedSessions, parseTranscriptFile, writeL0 } = await Promise.resolve().then(() => __importStar(require('../core/transcript-parser')));
+        const metaDir = path.join(repoRoot, 'meta');
+        const cursor = await readCursor(metaDir);
+        const unprocessed = await findUnprocessedSessions(cwd, cursor.processedSessions);
+        if (unprocessed.length === 0) {
+            log('No new sessions to capture');
             return;
         }
+        const l0Dir = path.join(repoRoot, 'l0');
+        for (const { sessionId, file } of unprocessed) {
+            log(`Processing session ${sessionId}...`);
+            const turns = await parseTranscriptFile(file);
+            if (turns.length === 0) {
+                await markSessionProcessed(metaDir, sessionId);
+                continue;
+            }
+            // Write L0 archive (fire-and-forget)
+            writeL0(l0Dir, sessionId, turns).catch(() => {
+                /* silent */
+            });
+            sessionText = turns
+                .map((t) => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.text}`)
+                .join('\n\n');
+            const sanitized = (0, sanitizer_1.sanitize)(sessionText);
+            const extracted = await (0, smart_extractor_1.extract)(sanitized, process.env.ANTHROPIC_API_KEY);
+            if (extracted.length === 0) {
+                log(`No memories extracted from session ${sessionId}`);
+                await markSessionProcessed(metaDir, sessionId);
+                continue;
+            }
+            const { dedupLLMBatch } = await Promise.resolve().then(() => __importStar(require('../core/dedup')));
+            const { loadAll } = await Promise.resolve().then(() => __importStar(require('../core/store')));
+            const existingMemories = loadAll(repoRoot, 'project');
+            const candidates = extracted.map((item) => ({
+                name: item.name,
+                type: item.type,
+                description: item.description,
+                tags: item.tags,
+                confidence: item.confidence,
+                content: item.content,
+            }));
+            const { toWrite, toSkip, toUpdate } = await dedupLLMBatch(candidates, existingMemories);
+            log(`Session ${sessionId}: ${toWrite.length} new, ${toSkip.length} skipped, ${toUpdate.length} updates`);
+            if (toWrite.length > 0) {
+                const entry = {
+                    id: `LRN-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                    timestamp: new Date().toISOString(),
+                    projectId: (0, store_1.resolveProjectId)(repoRoot),
+                    candidates: toWrite,
+                };
+                (0, store_1.writePending)(repoRoot, entry);
+            }
+            for (const { targetName, updatedContent } of toUpdate) {
+                if (!updatedContent)
+                    continue;
+                const { updateMemoryContent } = await Promise.resolve().then(() => __importStar(require('../core/store')));
+                updateMemoryContent(repoRoot, targetName, updatedContent);
+            }
+            await markSessionProcessed(metaDir, sessionId);
+        }
+        await (0, queue_processor_1.processQueue)(repoRoot);
+        return;
     }
     else if (options.session) {
         // Read from provided session text or file

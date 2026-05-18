@@ -8,4 +8,23 @@ export declare function deduplicate(candidates: PendingCandidate[], existing: Me
     toWrite: PendingCandidate[];
     toSkip: PendingCandidate[];
 }>;
+export interface DedupBatchAction {
+    action: 'store' | 'skip' | 'update' | 'merge';
+    targetName?: string;
+    updatedContent?: string;
+}
+export type DedupBatchLLM = (items: Array<{
+    candidate: PendingCandidate;
+    existing: MemoryFile;
+}>) => Promise<DedupBatchAction[]>;
+export interface DedupBatchResult {
+    toWrite: PendingCandidate[];
+    toSkip: PendingCandidate[];
+    toUpdate: Array<{
+        candidate: PendingCandidate;
+        targetName: string;
+        updatedContent?: string;
+    }>;
+}
+export declare function dedupLLMBatch(candidates: PendingCandidate[], existing: MemoryFile[], llm?: DedupBatchLLM): Promise<DedupBatchResult>;
 //# sourceMappingURL=dedup.d.ts.map

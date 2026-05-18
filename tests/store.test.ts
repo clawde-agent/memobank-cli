@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
+  findRepoRoot,
   getGlobalDir,
   getProjectDir,
   getWorkspaceDir,
@@ -11,6 +12,7 @@ import {
   resolveProjectId,
   writePending,
   writeMemory,
+  assertRepoRootMatchesCwd,
 } from '../src/core/store';
 import { CodeIndex } from '../src/engines/code-index';
 
@@ -210,6 +212,92 @@ describe('writePending', () => {
       candidates: [],
     });
     expect(fs.existsSync(path.join(repo, '.pending'))).toBe(true);
+    fs.rmSync(repo, { recursive: true });
+  });
+});
+
+describe('findRepoRoot — no sibling contamination', () => {
+  it('does not return a sibling project memobank dir when working in another project', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-siblings-'));
+    // project A: no memobank config (simulates uninitialized project)
+    const projectA = path.join(base, 'project-a', 'src');
+    fs.mkdirSync(projectA, { recursive: true });
+    // project B: has a custom-named memobank dir (project-b-memo/meta/config.yaml)
+    // The sibling scan finds dirs like this at parent level: base/project-b-memo/meta/config.yaml
+    const projectBMemo = path.join(base, 'project-b-memo');
+    fs.mkdirSync(path.join(projectBMemo, 'meta'), { recursive: true });
+    fs.writeFileSync(
+      path.join(projectBMemo, 'meta', 'config.yaml'),
+      'project:\n  name: project-b\n'
+    );
+
+    const result = findRepoRoot(projectA);
+    // Before this fix, the sibling scan would return project-b's dir. This test verifies it is no longer returned.
+    expect(path.resolve(result)).not.toEqual(path.resolve(projectBMemo));
+    expect(result).toMatch(/\.memobank/);
+    fs.rmSync(base, { recursive: true });
+  });
+});
+
+describe('assertRepoRootMatchesCwd', () => {
+  it('throws when repoRoot project_id does not match current git root', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-guard-'));
+    // repoRoot belongs to "project-b"
+    const repoRoot = path.join(base, 'project-b-memobank');
+    fs.mkdirSync(path.join(repoRoot, 'meta'), { recursive: true });
+    fs.writeFileSync(
+      path.join(repoRoot, 'meta', 'config.yaml'),
+      'project:\n  name: project-b\n  project_id: "project-b-id"\n'
+    );
+    // cwd is "project-a"
+    const projectADir = path.join(base, 'project-a');
+    fs.mkdirSync(path.join(projectADir, '.git'), { recursive: true });
+    fs.writeFileSync(
+      path.join(projectADir, '.git', 'config'),
+      '[core]\n  repositoryformatversion = 0\n'
+    );
+
+    expect(() => assertRepoRootMatchesCwd(repoRoot, projectADir)).toThrow(/project mismatch/i);
+    fs.rmSync(base, { recursive: true });
+  });
+
+  it('does not throw when repoRoot is inside cwd git root', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-guard-ok-'));
+    fs.mkdirSync(path.join(base, '.git'), { recursive: true });
+    fs.writeFileSync(path.join(base, '.git', 'config'), '[core]\n  repositoryformatversion = 0\n');
+    const repoRoot = path.join(base, '.memobank');
+    fs.mkdirSync(path.join(repoRoot, 'meta'), { recursive: true });
+    fs.writeFileSync(
+      path.join(repoRoot, 'meta', 'config.yaml'),
+      'project:\n  name: my-project\n  project_id: "my-project"\n'
+    );
+
+    expect(() => assertRepoRootMatchesCwd(repoRoot, base)).not.toThrow();
+    fs.rmSync(base, { recursive: true });
+  });
+});
+
+describe('writeMemory — vector index upsert side-effect', () => {
+  it('calls upsert-like path without throwing when LanceDB not available', async () => {
+    const repo = makeTempRepo();
+    // Write config with lancedb engine
+    fs.writeFileSync(
+      path.join(repo, 'meta', 'config.yaml'),
+      'project:\n  name: test\nembedding:\n  engine: lancedb\n  provider: openai\n  model: text-embedding-3-small\n'
+    );
+    // writeMemory must not throw even when LanceDB is unavailable
+    expect(() =>
+      writeMemory(repo, {
+        name: 'test-vector',
+        type: 'lesson',
+        description: 'A test lesson',
+        tags: [],
+        confidence: 'medium',
+        status: 'experimental',
+        created: new Date().toISOString(),
+        content: 'Some lesson content here.',
+      })
+    ).not.toThrow();
     fs.rmSync(repo, { recursive: true });
   });
 });
