@@ -286,6 +286,27 @@ export async function writeMemoryCommand(
     if (!options.silent) {
       console.log(`✅ Created: ${filePath}`);
     }
+
+    // Async vector upsert — fire-and-forget, never blocks or throws to user
+    setImmediate(async () => {
+      try {
+        const { loadConfig } = await import('../config');
+        const { EmbeddingGenerator } = await import('../core/embedding');
+        const { selectEngine } = await import('./recall');
+        const cfg = loadConfig(repoRoot);
+        if (cfg.embedding.engine !== 'lancedb') return;
+        const embedCfg = EmbeddingGenerator.fromMemoConfig(cfg);
+        const { engine, warning } = await selectEngine('lancedb', repoRoot, embedCfg);
+        if (warning) return; // unavailable
+        if (typeof (engine as any).index === 'function') {
+          const { loadFile } = await import('../core/store');
+          const mem = loadFile(filePath);
+          await (engine as any).index([mem], true);
+        }
+      } catch {
+        // silent — vector index is best-effort
+      }
+    });
   } catch (error) {
     console.error(`Error writing memory: ${(error as Error).message}`);
   }

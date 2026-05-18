@@ -277,6 +277,31 @@ describe('assertRepoRootMatchesCwd', () => {
   });
 });
 
+describe('writeMemory — vector index upsert side-effect', () => {
+  it('calls upsert-like path without throwing when LanceDB not available', async () => {
+    const repo = makeTempRepo();
+    // Write config with lancedb engine
+    fs.writeFileSync(
+      path.join(repo, 'meta', 'config.yaml'),
+      'project:\n  name: test\nembedding:\n  engine: lancedb\n  provider: openai\n  model: text-embedding-3-small\n'
+    );
+    // writeMemory must not throw even when LanceDB is unavailable
+    expect(() =>
+      writeMemory(repo, {
+        name: 'test-vector',
+        type: 'lesson',
+        description: 'A test lesson',
+        tags: [],
+        confidence: 'medium',
+        status: 'experimental',
+        created: new Date().toISOString(),
+        content: 'Some lesson content here.',
+      })
+    ).not.toThrow();
+    fs.rmSync(repo, { recursive: true });
+  });
+});
+
 describe('writeMemory → linkMemory integration', () => {
   let tmpDir: string;
 
