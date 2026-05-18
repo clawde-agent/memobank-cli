@@ -115,3 +115,110 @@ function trigrams(text: string): Set<string> {
   }
   return result;
 }
+
+// ─── LLM Batch Dedup for Capture Pipeline ────────────────────────────────────
+
+export interface DedupBatchAction {
+  action: 'store' | 'skip' | 'update' | 'merge';
+  targetName?: string;
+  updatedContent?: string;
+}
+
+export type DedupBatchLLM = (
+  items: Array<{ candidate: PendingCandidate; existing: MemoryFile }>
+) => Promise<DedupBatchAction[]>;
+
+export interface DedupBatchResult {
+  toWrite: PendingCandidate[];
+  toSkip: PendingCandidate[];
+  toUpdate: Array<{ candidate: PendingCandidate; targetName: string; updatedContent?: string }>;
+}
+
+const INJECTION_PATTERNS = [
+  /ignore\b.{0,30}\b(instructions|rules|guidelines)/i,
+  /disregard\b.{0,30}\b(instructions|rules)/i,
+  /you are now (?!going|about|ready)/i,
+  /(?:ignore|forget|override)\b.{0,20}\b(previous|above|prior)/i,
+  /忽略(?:所有|之前|以上|先前)?(?:的)?(?:指令|规则)/,
+  /无视(?:所有|之前|以上)?(?:的)?(?:指令|规则|限制)/,
+];
+
+function looksLikeInjection(text: string): boolean {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  return INJECTION_PATTERNS.some((p) => p.test(normalized));
+}
+
+export async function dedupLLMBatch(
+  candidates: PendingCandidate[],
+  existing: MemoryFile[],
+  llm?: DedupBatchLLM
+): Promise<DedupBatchResult> {
+  const toWrite: PendingCandidate[] = [];
+  const toSkip: PendingCandidate[] = [];
+  const toUpdate: DedupBatchResult['toUpdate'] = [];
+  const ambiguous: Array<{ candidate: PendingCandidate; existing: MemoryFile }> = [];
+
+  for (const candidate of candidates) {
+    const combinedText = `${candidate.name} ${candidate.description} ${candidate.content}`;
+    if (looksLikeInjection(combinedText)) {
+      toSkip.push(candidate);
+      continue;
+    }
+
+    if (existing.some((e) => e.name === candidate.name)) {
+      toSkip.push(candidate);
+      continue;
+    }
+
+    let maxScore = 0;
+    let closestExisting: MemoryFile | undefined;
+    const candidateText = `${candidate.name} ${candidate.description}`;
+    for (const e of existing) {
+      const score = jaccard(candidateText, `${e.name} ${e.description}`);
+      if (score > maxScore) {
+        maxScore = score;
+        closestExisting = e;
+      }
+    }
+
+    if (maxScore >= 0.8) {
+      toSkip.push(candidate);
+    } else if (maxScore >= 0.4 && closestExisting) {
+      ambiguous.push({ candidate, existing: closestExisting });
+    } else {
+      toWrite.push(candidate);
+    }
+  }
+
+  if (ambiguous.length > 0 && llm) {
+    try {
+      const decisions = await llm(ambiguous);
+      for (let i = 0; i < ambiguous.length; i++) {
+        const decision = decisions[i];
+        const { candidate } = ambiguous[i]!;
+        if (!decision || decision.action === 'skip') {
+          toSkip.push(candidate);
+        } else if (decision.action === 'store') {
+          toWrite.push(candidate);
+        } else if (
+          (decision.action === 'update' || decision.action === 'merge') &&
+          decision.targetName
+        ) {
+          toUpdate.push({
+            candidate,
+            targetName: decision.targetName,
+            updatedContent: decision.updatedContent,
+          });
+        } else {
+          toWrite.push(candidate);
+        }
+      }
+    } catch {
+      for (const { candidate } of ambiguous) toWrite.push(candidate);
+    }
+  } else {
+    for (const { candidate } of ambiguous) toWrite.push(candidate);
+  }
+
+  return { toWrite, toSkip, toUpdate };
+}
