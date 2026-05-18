@@ -12,8 +12,17 @@ import {
   resolveProjectId,
   writePending,
   writeMemory,
+  assertRepoRootMatchesCwd,
 } from '../src/core/store';
 import { CodeIndex } from '../src/engines/code-index';
+
+// Skip the cross-project guard in tests — temp dirs are outside the test runner's git repo
+beforeAll(() => {
+  process.env.MEMOBANK_SKIP_GUARD = '1';
+});
+afterAll(() => {
+  delete process.env.MEMOBANK_SKIP_GUARD;
+});
 
 function makeTempRepo(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-test-'));
@@ -234,6 +243,44 @@ describe('findRepoRoot — no sibling contamination', () => {
     // Before this fix, the sibling scan would return project-b's dir. This test verifies it is no longer returned.
     expect(path.resolve(result)).not.toEqual(path.resolve(projectBMemo));
     expect(result).toMatch(/\.memobank/);
+    fs.rmSync(base, { recursive: true });
+  });
+});
+
+describe('assertRepoRootMatchesCwd', () => {
+  it('throws when repoRoot project_id does not match current git root', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-guard-'));
+    // repoRoot belongs to "project-b"
+    const repoRoot = path.join(base, 'project-b-memobank');
+    fs.mkdirSync(path.join(repoRoot, 'meta'), { recursive: true });
+    fs.writeFileSync(
+      path.join(repoRoot, 'meta', 'config.yaml'),
+      'project:\n  name: project-b\n  project_id: "project-b-id"\n'
+    );
+    // cwd is "project-a"
+    const projectADir = path.join(base, 'project-a');
+    fs.mkdirSync(path.join(projectADir, '.git'), { recursive: true });
+    fs.writeFileSync(
+      path.join(projectADir, '.git', 'config'),
+      '[core]\n  repositoryformatversion = 0\n'
+    );
+
+    expect(() => assertRepoRootMatchesCwd(repoRoot, projectADir)).toThrow(/project mismatch/i);
+    fs.rmSync(base, { recursive: true });
+  });
+
+  it('does not throw when repoRoot is inside cwd git root', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-guard-ok-'));
+    fs.mkdirSync(path.join(base, '.git'), { recursive: true });
+    fs.writeFileSync(path.join(base, '.git', 'config'), '[core]\n  repositoryformatversion = 0\n');
+    const repoRoot = path.join(base, '.memobank');
+    fs.mkdirSync(path.join(repoRoot, 'meta'), { recursive: true });
+    fs.writeFileSync(
+      path.join(repoRoot, 'meta', 'config.yaml'),
+      'project:\n  name: my-project\n  project_id: "my-project"\n'
+    );
+
+    expect(() => assertRepoRootMatchesCwd(repoRoot, base)).not.toThrow();
     fs.rmSync(base, { recursive: true });
   });
 });

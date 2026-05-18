@@ -119,6 +119,30 @@ export function resolveProjectId(memoBankDir: string): string {
   return path.basename(gitCwd);
 }
 
+/**
+ * Guard: verify repoRoot belongs to the same git project as cwd.
+ * Compares the git root of cwd against the parent of repoRoot.
+ * Throws if they differ — prevents cross-project writes.
+ */
+export function assertRepoRootMatchesCwd(repoRoot: string, cwd: string): void {
+  const cwdGitRoot = findGitRoot(cwd);
+  // If cwd has no git root (findGitRoot returns cwd itself and no .git exists), skip the guard
+  if (cwdGitRoot === cwd && !fs.existsSync(path.join(cwd, '.git'))) {
+    return;
+  }
+  const repoParent = path.dirname(repoRoot); // .memobank/ → repo root
+
+  // Canonical comparison: repoParent must be at or below cwdGitRoot
+  const rel = path.relative(cwdGitRoot, repoParent);
+  const isInside = !rel.startsWith('..') && !path.isAbsolute(rel);
+  if (!isInside) {
+    throw new Error(
+      `Memobank project mismatch: repoRoot "${repoRoot}" does not belong to the git repo at "${cwdGitRoot}". ` +
+        `Set MEMOBANK_REPO env var or run memo init in the correct directory.`
+    );
+  }
+}
+
 export interface PendingCandidate {
   name: string;
   type: MemoryType;
@@ -248,6 +272,11 @@ export function loadFile(filePath: string): MemoryFile {
 }
 
 export function writeMemory(repoRoot: string, memory: Omit<MemoryFile, 'path' | 'scope'>): string {
+  // Guard: refuse to write if repoRoot belongs to a different project
+  if (process.env.MEMOBANK_SKIP_GUARD !== '1') {
+    assertRepoRootMatchesCwd(repoRoot, process.cwd());
+  }
+
   const typeDir = path.join(repoRoot, memory.type);
   if (!fs.existsSync(typeDir)) {
     fs.mkdirSync(typeDir, { recursive: true });
