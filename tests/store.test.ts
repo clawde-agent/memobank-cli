@@ -223,16 +223,17 @@ describe('findRepoRoot — no sibling contamination', () => {
     fs.mkdirSync(projectA, { recursive: true });
     // project B: has a custom-named memobank dir (project-b-memo/meta/config.yaml)
     // The sibling scan finds dirs like this at parent level: base/project-b-memo/meta/config.yaml
-    const siblingMemoDir = path.join(base, 'project-b-memo');
-    fs.mkdirSync(path.join(siblingMemoDir, 'meta'), { recursive: true });
+    const projectBMemo = path.join(base, 'project-b-memo');
+    fs.mkdirSync(path.join(projectBMemo, 'meta'), { recursive: true });
     fs.writeFileSync(
-      path.join(siblingMemoDir, 'meta', 'config.yaml'),
+      path.join(projectBMemo, 'meta', 'config.yaml'),
       'project:\n  name: project-b\n'
     );
 
     const result = findRepoRoot(projectA);
-    // Must NOT return project-b's memobank dir
-    expect(result).not.toContain('project-b');
+    // Before this fix, the sibling scan would return project-b's dir. This test verifies it is no longer returned.
+    expect(path.resolve(result)).not.toEqual(path.resolve(projectBMemo));
+    expect(result).toMatch(/\.memobank/);
     fs.rmSync(base, { recursive: true });
   });
 });
