@@ -27,21 +27,6 @@ export function getWorkspaceDir(workspaceName: string): string {
   return path.join(osHomeDir(), '.memobank', '_workspace', workspaceName);
 }
 
-/** Directories that are never a memobank project dir */
-const SKIP_DIRS = new Set([
-  'node_modules',
-  '.git',
-  'dist',
-  'build',
-  'coverage',
-  '.next',
-  '.nuxt',
-  '.turbo',
-  'out',
-  'tmp',
-  '.cache',
-]);
-
 export function findRepoRoot(cwd: string, repoFlag?: string): string {
   if (repoFlag) {
     return path.resolve(repoFlag);
@@ -57,22 +42,6 @@ export function findRepoRoot(cwd: string, repoFlag?: string): string {
     const defaultConfigPath = path.join(current, '.memobank', 'meta', 'config.yaml');
     if (fs.existsSync(defaultConfigPath)) {
       return path.join(current, '.memobank');
-    }
-
-    // Scan immediate subdirs for a custom-named memobank dir
-    try {
-      const entries = fs.readdirSync(current, { withFileTypes: true });
-      for (const entry of entries) {
-        if (!entry.isDirectory() || SKIP_DIRS.has(entry.name) || entry.name === '.memobank') {
-          continue;
-        }
-        const customConfigPath = path.join(current, entry.name, 'meta', 'config.yaml');
-        if (fs.existsSync(customConfigPath)) {
-          return path.join(current, entry.name);
-        }
-      }
-    } catch {
-      /* ignore permission errors */
     }
 
     // Legacy: meta/config.yaml at root

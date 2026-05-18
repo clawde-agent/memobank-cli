@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
+  findRepoRoot,
   getGlobalDir,
   getProjectDir,
   getWorkspaceDir,
@@ -211,6 +212,28 @@ describe('writePending', () => {
     });
     expect(fs.existsSync(path.join(repo, '.pending'))).toBe(true);
     fs.rmSync(repo, { recursive: true });
+  });
+});
+
+describe('findRepoRoot — no sibling contamination', () => {
+  it('does not return a sibling project memobank dir when working in another project', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-siblings-'));
+    // project A: no memobank config (simulates uninitialized project)
+    const projectA = path.join(base, 'project-a', 'src');
+    fs.mkdirSync(projectA, { recursive: true });
+    // project B: has a custom-named memobank dir (project-b-memo/meta/config.yaml)
+    // The sibling scan finds dirs like this at parent level: base/project-b-memo/meta/config.yaml
+    const siblingMemoDir = path.join(base, 'project-b-memo');
+    fs.mkdirSync(path.join(siblingMemoDir, 'meta'), { recursive: true });
+    fs.writeFileSync(
+      path.join(siblingMemoDir, 'meta', 'config.yaml'),
+      'project:\n  name: project-b\n'
+    );
+
+    const result = findRepoRoot(projectA);
+    // Must NOT return project-b's memobank dir
+    expect(result).not.toContain('project-b');
+    fs.rmSync(base, { recursive: true });
   });
 });
 
