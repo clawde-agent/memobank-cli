@@ -126,6 +126,8 @@ export interface CodeScanOptions {
   force?: boolean;
   langs?: IndexedLanguage[];
   repo?: string;
+  incremental?: boolean;
+  files?: string[];
 }
 
 export interface RefsOptions {

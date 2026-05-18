@@ -17,6 +17,21 @@ const SKIP_DIRS = [
   'out',
   'tmp',
   '.cache',
+  '.venv',
+  'venv',
+  '__pycache__',
+  '.pytest_cache',
+  '.mypy_cache',
+  '.tox',
+  'target',
+  'vendor',
+  '.svelte-kit',
+  'htmlcov',
+  '.terraform',
+  'bin',
+  'obj',
+  '.vs',
+  'packages',
 ];
 
 function collectFiles(scanRoot: string, langs: Set<IndexedLanguage> | null): string[] {
@@ -71,6 +86,35 @@ export async function codeScanCommand(
 
   const cwd = process.cwd();
   const repoRoot = findRepoRoot(cwd, options.repo);
+
+  // Incremental mode: only scan the explicitly provided files
+  if (options.incremental && options.files && options.files.length > 0) {
+    const dbPath = CodeIndex.getDbPath(repoRoot);
+    const metaDir = path.dirname(dbPath);
+    if (!fs.existsSync(metaDir)) {
+      // No index yet — skip silently (index hasn't been initialized)
+      return;
+    }
+    const idx = new CodeIndex(dbPath);
+    let indexed = 0;
+    for (const filePath of options.files) {
+      if (!fs.existsSync(filePath)) continue;
+      const lang = detectLanguage(filePath);
+      if (!lang) continue;
+      const { hash, symbols, edges } = scanFile(filePath, path.dirname(filePath));
+      const relPath = path.relative(cwd, filePath);
+      if (!options.force && !idx.needsReindex(relPath, hash)) continue;
+      idx.upsertFile(relPath, lang, hash, fs.statSync(filePath).mtimeMs);
+      idx.upsertSymbols(relPath, symbols, edges);
+      indexed++;
+    }
+    idx.close();
+    if (!options.summarize) {
+      console.log(`Incremental index: ${indexed} file(s) updated`);
+    }
+    return;
+  }
+
   const scanRoot = scanPath ? path.resolve(scanPath) : cwd;
 
   if (!fs.existsSync(scanRoot)) {

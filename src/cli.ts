@@ -502,6 +502,7 @@ program
   .option('--force', 'Re-index all files (ignore hash cache)')
   .option('--langs <list>', 'Comma-separated language filter, e.g. typescript,python')
   .option('--repo <path>', 'Memobank repository path')
+  .option('--incremental [files...]', 'only re-index specified files (used by git hook)')
   .action(async (scanPath: string | undefined, options) => {
     try {
       await codeScanCommand(scanPath, {
@@ -511,6 +512,8 @@ program
           ? (options.langs.split(',').map((l: string) => l.trim()) as IndexedLanguage[])
           : undefined,
         repo: options.repo,
+        incremental: !!options.incremental,
+        files: Array.isArray(options.incremental) ? options.incremental : undefined,
       });
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`);

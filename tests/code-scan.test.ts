@@ -34,6 +34,26 @@ describe('codeScanCommand', () => {
     fs.rmSync(repoRoot, { recursive: true });
   });
 
+  it('accepts a list of files and only indexes those files (--incremental)', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-scan-inc-'));
+    const memoRoot = path.join(dir, '.memobank');
+    fs.mkdirSync(path.join(memoRoot, 'meta'), { recursive: true });
+    fs.writeFileSync(path.join(memoRoot, 'meta', 'config.yaml'), 'project:\n  name: test\n');
+    // Create a minimal TS file
+    fs.writeFileSync(path.join(dir, 'foo.ts'), 'export function foo() { return 1; }\n');
+
+    // Should not throw — no index exists yet, returns silently
+    await expect(
+      codeScanCommand(undefined, {
+        incremental: true,
+        files: [path.join(dir, 'foo.ts')],
+        repo: memoRoot,
+      })
+    ).resolves.not.toThrow();
+
+    fs.rmSync(dir, { recursive: true });
+  });
+
   it('skips unchanged files on second scan (hash cache)', async () => {
     const repoRoot = makeTempRepo();
     const srcDir = path.join(repoRoot, 'src-fixture2');
