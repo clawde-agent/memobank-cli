@@ -298,10 +298,10 @@ export async function writeMemoryCommand(
         const embedCfg = EmbeddingGenerator.fromMemoConfig(cfg);
         const { engine, warning } = await selectEngine('lancedb', repoRoot, embedCfg);
         if (warning) return; // unavailable
-        if (typeof (engine as any).index === 'function') {
+        if (engine.index) {
           const { loadFile } = await import('../core/store');
           const mem = loadFile(filePath);
-          await (engine as any).index([mem], true);
+          await engine.index([mem], true);
         }
       } catch {
         // silent — vector index is best-effort

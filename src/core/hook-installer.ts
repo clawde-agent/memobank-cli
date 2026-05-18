@@ -8,7 +8,9 @@ const HOOK_BLOCK = `${MEMOBANK_BLOCK_START}
 # Auto-installed by memobank. Remove this block or run: memo hooks uninstall
 changed=$(git diff-tree --no-commit-id -r --name-only HEAD 2>/dev/null | grep -E '\\.(ts|tsx|js|jsx|py|go|rs|java|c|cpp|cs|rb|swift|kt)$' || true)
 if [ -n "$changed" ]; then
-  memo index-code --incremental $changed >/dev/null 2>&1 &
+  echo "$changed" | while IFS= read -r f; do
+    memo index-code --incremental "$f" >/dev/null 2>&1
+  done &
 fi
 ${MEMOBANK_BLOCK_END}`;
 
