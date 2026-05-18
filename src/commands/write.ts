@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { execFileSync } from 'child_process';
-import { writeMemory, findRepoRoot } from '../core/store';
+import { writeMemory, findRepoRoot, assertRepoRootMatchesCwd } from '../core/store';
 import type { MemoryType, Confidence } from '../types';
 import {
   generateMemoryFile,
@@ -117,6 +117,14 @@ export async function writeMemoryCommand(
 ): Promise<void> {
   const cwd = process.cwd();
   const repoRoot = findRepoRoot(cwd, options.repo);
+
+  // Guard against cross-project writes
+  try {
+    assertRepoRootMatchesCwd(repoRoot, cwd);
+  } catch (err) {
+    console.error(`❌ ${(err as Error).message}`);
+    return;
+  }
 
   // Check if non-interactive mode
   const isNonInteractive = options.name && options.description && options.content;

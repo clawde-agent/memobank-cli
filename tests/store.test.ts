@@ -16,14 +16,6 @@ import {
 } from '../src/core/store';
 import { CodeIndex } from '../src/engines/code-index';
 
-// Skip the cross-project guard in tests — temp dirs are outside the test runner's git repo
-beforeAll(() => {
-  process.env.MEMOBANK_SKIP_GUARD = '1';
-});
-afterAll(() => {
-  delete process.env.MEMOBANK_SKIP_GUARD;
-});
-
 function makeTempRepo(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-test-'));
   fs.mkdirSync(path.join(dir, 'meta'), { recursive: true });

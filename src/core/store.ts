@@ -272,11 +272,6 @@ export function loadFile(filePath: string): MemoryFile {
 }
 
 export function writeMemory(repoRoot: string, memory: Omit<MemoryFile, 'path' | 'scope'>): string {
-  // Guard: refuse to write if repoRoot belongs to a different project
-  if (process.env.MEMOBANK_SKIP_GUARD !== '1') {
-    assertRepoRootMatchesCwd(repoRoot, process.cwd());
-  }
-
   const typeDir = path.join(repoRoot, memory.type);
   if (!fs.existsSync(typeDir)) {
     fs.mkdirSync(typeDir, { recursive: true });
