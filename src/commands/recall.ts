@@ -104,12 +104,18 @@ export async function recallCommand(query: string, options: RecallOptions): Prom
       try {
         const refs = idx.getRefs(options.refs);
         if (refs.length === 0) {
-          console.log(`No callers found for: ${options.refs}`);
+          if (!options.silent) {
+            process.stdout.write(`No callers found for: ${options.refs}\n`);
+          }
           return;
         }
-        console.log(`\n## Callers of \`${options.refs}\` (${refs.length})\n`);
-        for (const r of refs) {
-          console.log(`- ${r.symbol.qualifiedName}  ${r.symbol.file}:${r.symbol.lineStart}`);
+        if (!options.silent) {
+          process.stdout.write(`\n## Callers of \`${options.refs}\` (${refs.length})\n\n`);
+          for (const r of refs) {
+            process.stdout.write(
+              `- ${r.symbol.qualifiedName}  ${r.symbol.file}:${r.symbol.lineStart}\n`
+            );
+          }
         }
       } finally {
         idx.close();
@@ -149,12 +155,14 @@ export async function recallCommand(query: string, options: RecallOptions): Prom
   );
 
   if (options.format === 'json') {
-    console.log(JSON.stringify({ results, symbolResults }, null, 2));
+    if (!options.silent) {
+      process.stdout.write(JSON.stringify({ results, symbolResults }, null, 2) + '\n');
+    }
     return;
   }
 
   if (!options.silent) {
-    console.log(markdown);
+    process.stdout.write(markdown + '\n');
   }
 
   const actualEngineName =
