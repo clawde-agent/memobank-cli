@@ -54,6 +54,15 @@ describe('CodeIndex', () => {
     expect(tables.map((t) => t.name)).toEqual(['memory_edges', 'memory_nodes']);
   });
 
+  it('creates memory_nodes and memory_edges tables', () => {
+    const tables = (index as any).db
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('memory_nodes','memory_edges') ORDER BY name"
+      )
+      .all() as { name: string }[];
+    expect(tables.map((t) => t.name)).toEqual(['memory_edges', 'memory_nodes']);
+  });
+
   it('upserts a file and its symbols', () => {
     const sym = makeSymbol();
     index.upsertFile('src/core/store.ts', 'typescript', 'abc123', Date.now());
