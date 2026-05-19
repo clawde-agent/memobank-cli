@@ -40,7 +40,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.selectEngine = selectEngine;
 exports.recallCommand = recallCommand;
 const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
 const store_1 = require("../core/store");
+const scene_index_1 = require("../core/scene-index");
+const scene_navigation_1 = require("../core/scene-navigation");
 const config_1 = require("../config");
 const retriever_1 = require("../core/retriever");
 const text_engine_1 = require("../engines/text-engine");
@@ -167,6 +170,15 @@ async function recallCommand(query, options) {
         : engineName;
     if (!options.dryRun) {
         (0, retriever_1.writeRecallResults)(repoRoot, results, query, actualEngineName);
+        // Append scene navigation if scenes exist
+        const sceneIndex = await (0, scene_index_1.readSceneIndex)(repoRoot);
+        if (sceneIndex.length > 0) {
+            const memoryPath = path.join(repoRoot, 'MEMORY.md');
+            const existing = fs.existsSync(memoryPath) ? fs.readFileSync(memoryPath, 'utf-8') : '';
+            const stripped = (0, scene_navigation_1.stripSceneNavigation)(existing);
+            const nav = (0, scene_navigation_1.generateSceneNavigation)(repoRoot, sceneIndex);
+            fs.writeFileSync(memoryPath, stripped + '\n\n' + nav, 'utf-8');
+        }
     }
 }
 //# sourceMappingURL=recall.js.map

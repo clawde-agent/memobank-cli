@@ -43,6 +43,9 @@ const gray_matter_1 = __importDefault(require("gray-matter"));
 const store_1 = require("../core/store");
 const config_1 = require("../config");
 const distiller_1 = require("../core/distiller");
+const scene_synthesizer_1 = require("../core/scene-synthesizer");
+const scene_index_1 = require("../core/scene-index");
+const scene_navigation_1 = require("../core/scene-navigation");
 function log(msg, silent) {
     if (!silent)
         process.stdout.write(msg + '\n');
@@ -115,7 +118,7 @@ async function distillCommand(options) {
         }
         log(`Distilled ${distilled.length} memories to workspace: ${workspaceDir}`, options.silent);
     }
-    else {
+    else if (options.to === 'personal') {
         // --to personal
         const projectId = (0, store_1.resolveProjectId)(repoRoot);
         const personalDir = (0, store_1.getGlobalDir)(projectId);
@@ -137,6 +140,26 @@ async function distillCommand(options) {
         fs.mkdirSync(personalDir, { recursive: true });
         fs.writeFileSync(personaPath, persona, 'utf-8');
         log(`Persona written to ${personaPath}`, options.silent);
+    }
+    else if (options.to === 'scenes') {
+        const all = (0, store_1.loadAll)(repoRoot, 'project');
+        if (all.length === 0) {
+            log('No memories found for scene synthesis.', options.silent);
+            return;
+        }
+        log(`Synthesizing scenes from ${all.length} memories...`, options.silent);
+        const results = await (0, scene_synthesizer_1.synthesizeScenes)(all, repoRoot, apiKey);
+        if (results.length === 0) {
+            log('No scenes produced.', options.silent);
+            return;
+        }
+        log(`Created/updated ${results.length} scene(s).`, options.silent);
+        if (!options.silent) {
+            const index = await (0, scene_index_1.readSceneIndex)(repoRoot);
+            const nav = (0, scene_navigation_1.generateSceneNavigation)(repoRoot, index);
+            if (nav)
+                process.stdout.write('\n' + nav + '\n');
+        }
     }
 }
 //# sourceMappingURL=distill.js.map

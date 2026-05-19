@@ -25,8 +25,8 @@ const SECRET_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
   { pattern: /secret\s*(is|=|:)\s*\S+/gi, label: 'secret value' },
   { pattern: /token\s*(is|=|:)\s*\S+/gi, label: 'token value' },
   // Chinese-language patterns
-  { pattern: /密码[是为：:]\s*\S+/g, label: '中文密码' },
-  { pattern: /密钥[是为：:]\s*\S+/g, label: '中文密钥' },
+  { pattern: /密码[是为：:]\s*\S+/g, label: 'Chinese password' },
+  { pattern: /密钥[是为：:]\s*\S+/g, label: 'Chinese key' },
 ];
 
 /**
