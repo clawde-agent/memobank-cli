@@ -31,6 +31,7 @@ import { scanCommand } from './commands/scan';
 import { distillCommand } from './commands/distill';
 import type { DistillOptions } from './commands/distill';
 import { processQueueCommand } from './commands/process-queue';
+import { skillFeedbackCommand } from './commands/skill-feedback';
 import { codeScanCommand } from './commands/code-scan';
 import { findRepoRoot } from './core/store';
 import { loadConfig } from './config';
@@ -546,6 +547,20 @@ program
       process.exit(1);
     }
     await distillCommand(options);
+  });
+
+program
+  .command('skill-feedback')
+  .description('Report recall misses, never-recalled memories, and isolated graph nodes')
+  .option('--repo <path>', 'Point to an existing memobank repo')
+  .action(async (options) => {
+    try {
+      const repoRoot = findRepoRoot(process.cwd(), options.repo);
+      await skillFeedbackCommand(repoRoot);
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
   });
 
 // Parse and execute
