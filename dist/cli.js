@@ -57,6 +57,7 @@ const migrate_1 = require("./commands/migrate");
 const scan_1 = require("./commands/scan");
 const distill_1 = require("./commands/distill");
 const process_queue_1 = require("./commands/process-queue");
+const skill_feedback_1 = require("./commands/skill-feedback");
 const code_scan_1 = require("./commands/code-scan");
 const store_1 = require("./core/store");
 const config_1 = require("./config");
@@ -209,9 +210,11 @@ program
     .option('--if <condition>', 'Condition string (skips interactive prompt)')
     .option('--list', 'List available lessons to study')
     .option('--repo <path>', 'Memobank repository path')
+    .option('--auto', 'batch mode: scan access logs and write study-suggestions.json')
+    .option('--silent', 'suppress console output (use with --auto)')
     .action(async (lessonName, options) => {
     try {
-        await (0, study_1.studyCommand)(lessonName, options);
+        await (0, study_1.studyCommand)(lessonName, { ...options, auto: options.auto, silent: options.silent });
     }
     catch (error) {
         console.error(`Error: ${error.message}`);
@@ -557,6 +560,20 @@ program
         process.exit(1);
     }
     await (0, distill_1.distillCommand)(options);
+});
+program
+    .command('skill-feedback')
+    .description('Report recall misses, never-recalled memories, and isolated graph nodes')
+    .option('--repo <path>', 'Point to an existing memobank repo')
+    .action(async (options) => {
+    try {
+        const repoRoot = (0, store_1.findRepoRoot)(process.cwd(), options.repo);
+        await (0, skill_feedback_1.skillFeedbackCommand)(repoRoot);
+    }
+    catch (error) {
+        console.error(`Error: ${error.message}`);
+        process.exit(1);
+    }
 });
 // Parse and execute
 program.parse(process.argv);

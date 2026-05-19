@@ -36,12 +36,69 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.studyAutoCommand = studyAutoCommand;
 exports.studyCommand = studyCommand;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const readline = __importStar(require("readline"));
 const gray_matter_1 = __importDefault(require("gray-matter"));
 const store_1 = require("../core/store");
+async function studyAutoCommand(repoRoot, options) {
+    const { loadAccessLogs, saveAccessLogs } = await Promise.resolve().then(() => __importStar(require('../core/lifecycle-manager')));
+    const logs = loadAccessLogs(repoRoot);
+    const now = new Date();
+    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+    const candidates = [];
+    const lessonFiles = findLessons(repoRoot);
+    for (const filePath of lessonFiles) {
+        const log = logs[filePath];
+        if (!log)
+            continue;
+        if (log.accessCount < 3)
+            continue;
+        // Read frontmatter to check type and status
+        let parsed;
+        try {
+            parsed = (0, gray_matter_1.default)(fs.readFileSync(filePath, 'utf-8'));
+        }
+        catch {
+            continue;
+        }
+        const data = parsed.data;
+        if (data.status === 'deprecated' || data.status === 'needs-review')
+            continue;
+        // 7-day cooldown
+        if (log.last_study_suggested) {
+            const daysSince = now.getTime() - new Date(log.last_study_suggested).getTime();
+            if (daysSince < SEVEN_DAYS_MS)
+                continue;
+        }
+        const lessonName = path.basename(filePath, '.md').replace(/^\d{4}-\d{2}-\d{2}-/, '');
+        candidates.push({
+            name: lessonName,
+            access_count: log.accessCount,
+            suggested_at: now.toISOString(),
+        });
+        // Update last_study_suggested in access log
+        log.last_study_suggested = now.toISOString();
+    }
+    if (candidates.length === 0)
+        return;
+    // Write suggestions file
+    const metaDir = path.join(repoRoot, 'meta');
+    if (!fs.existsSync(metaDir)) {
+        fs.mkdirSync(metaDir, { recursive: true });
+    }
+    const suggestionsPath = path.join(metaDir, 'study-suggestions.json');
+    fs.writeFileSync(suggestionsPath, JSON.stringify(candidates, null, 2), 'utf-8');
+    // Flush updated access logs (synchronous — must complete before this fn returns)
+    saveAccessLogs(repoRoot, logs);
+    if (!options.silent) {
+        for (const c of candidates) {
+            process.stdout.write(`💡 memo study ${c.name} — recalled ${c.access_count} times\n`);
+        }
+    }
+}
 function findLessons(repoRoot) {
     const dirs = ['lesson', 'decision', 'workflow', 'architecture'];
     const results = [];
@@ -87,6 +144,10 @@ async function promptCondition(lessonName) {
 }
 async function studyCommand(lessonName, options) {
     const repoRoot = (0, store_1.findRepoRoot)(process.cwd(), options.repo);
+    if (options.auto) {
+        await studyAutoCommand(repoRoot, { silent: options.silent });
+        return;
+    }
     if (options.list || !lessonName) {
         const files = findLessons(repoRoot);
         if (files.length === 0) {

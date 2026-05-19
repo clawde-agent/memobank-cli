@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CodeIndex = void 0;
 const path = __importStar(require("path"));
+const memory_graph_1 = require("./memory-graph");
 const SCHEMA = `
 PRAGMA foreign_keys = ON;
 PRAGMA journal_mode = WAL;
@@ -112,9 +113,11 @@ CREATE INDEX IF NOT EXISTS idx_msr_symbol ON memory_symbol_refs(symbol_hash);
 class CodeIndex {
     db;
     constructor(dbPath) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const Database = require('better-sqlite3');
         this.db = new Database(dbPath);
         this.db.exec(SCHEMA);
+        (0, memory_graph_1.ensureGraphSchema)(this.db);
     }
     static isAvailable() {
         try {

@@ -84,6 +84,16 @@ export interface ExtractionResult {
     confidence: Confidence;
     content: string;
 }
+export interface MemoryNodeInput {
+    id: string;
+    file_path: string;
+    content: string;
+    type: string;
+    tags: string[];
+    status: string;
+    content_hash: string;
+    updated_at: string;
+}
 export type SymbolKind = 'function' | 'class' | 'interface' | 'type' | 'const' | 'method';
 export type EdgeKind = 'calls' | 'imports' | 'inherits';
 export type IndexedLanguage = 'typescript' | 'javascript' | 'python' | 'go' | 'rust' | 'yaml' | 'csharp';

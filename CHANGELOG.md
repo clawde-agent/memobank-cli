@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-05-20
+
+### Added
+
+- **Code-Memory Graph** — `memo index-code` now builds a `memory_edges` table in `code-index.db` linking code symbols to memories (`mentions` edges via FTS5) and memories to each other (`related_to` edges via Jaccard tag overlap). Incremental: only rebuilt when file content hash changes.
+- **Graph-expanded recall** — `memo recall` adds a third search path (Path C): starting from the top symbol hits, it traverses the memory graph up to depth 2 and merges graph-adjacent memories into results via Reciprocal Rank Fusion (RRF). Non-fatal: missing `code-index.db` silently skips Path C.
+- **Recall miss tracking** — when `memo recall` returns zero results, the query is appended to `meta/recall-misses.json` for later analysis.
+- **`memo study --auto`** — scans access logs, identifies memories recalled 3+ times, and writes `meta/study-suggestions.json`. 7-day cooldown prevents repeated suggestions for the same memory. Called automatically by the Stop hook.
+- **`memo skill-feedback`** — reports recall miss count, memories that have never been recalled, and isolated graph nodes (nodes with no edges). Useful for diagnosing gaps in the memory system.
+
+### Changed
+
+- Stop hook now runs synchronously: `memo capture --auto && memo process-queue && memo study --auto --silent`. The `--background` detach was removed since the synchronous path completes quickly.
+- `AccessLog` interface adds `last_study_suggested?: string` (ISO timestamp) to track 7-day study cooldown per memory.
+
+## [0.10.0] - 2026-05-14
+
+### Added
+
+- **Scene synthesis** — `memo distill --to scenes` clusters memories by tag similarity and calls an LLM once per cluster to write narrative `.memobank/scenes/<topic-YYYY-MM>.md` files. Scene navigation is injected into `MEMORY.md` on every `memo recall`.
+
 ## [0.8.0] - 2026-05-13
 
 ### Added

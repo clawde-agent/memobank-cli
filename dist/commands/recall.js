@@ -49,6 +49,8 @@ const retriever_1 = require("../core/retriever");
 const text_engine_1 = require("../engines/text-engine");
 const hybrid_engine_1 = require("../engines/hybrid-engine");
 const embedding_1 = require("../core/embedding");
+const memory_graph_1 = require("../engines/memory-graph");
+const rrf_1 = require("../core/rrf");
 async function selectEngine(engineName, repoRoot, embedConfig) {
     if (engineName !== 'lancedb') {
         return { engine: new text_engine_1.TextEngine(), warning: null };
@@ -87,6 +89,39 @@ async function selectEngine(engineName, repoRoot, embedConfig) {
             : `  Check: ${provider.toUpperCase()}_API_KEY is set`;
         const warning = `⚠  Vector search unavailable (${msg})\n${hint}\n  Falling back to text search.`;
         return { engine: new text_engine_1.TextEngine(), warning };
+    }
+}
+function appendRecallMiss(repoRoot, query) {
+    const missesPath = path.join(repoRoot, 'meta', 'recall-misses.json');
+    let misses = [];
+    try {
+        if (fs.existsSync(missesPath)) {
+            misses = JSON.parse(fs.readFileSync(missesPath, 'utf-8'));
+        }
+    }
+    catch {
+        misses = [];
+    }
+    misses.push({ query, timestamp: new Date().toISOString(), result_count: 0 });
+    fs.writeFileSync(missesPath, JSON.stringify(misses, null, 2), 'utf-8');
+}
+function printStudyHint(repoRoot, silent) {
+    if (silent)
+        return;
+    const suggestionsPath = path.join(repoRoot, 'meta', 'study-suggestions.json');
+    try {
+        if (!fs.existsSync(suggestionsPath))
+            return;
+        const suggestions = JSON.parse(fs.readFileSync(suggestionsPath, 'utf-8'));
+        if (suggestions.length === 0)
+            return;
+        process.stdout.write('\n');
+        for (const s of suggestions.slice(0, 3)) {
+            process.stdout.write(`memo study ${s.name} — recalled ${s.access_count} times\n`);
+        }
+    }
+    catch {
+        // corrupt or unreadable — skip silently
     }
 }
 async function recallCommand(query, options) {
@@ -155,11 +190,62 @@ async function recallCommand(query, options) {
     if (warning && !options.silent) {
         process.stderr.write('\n' + warning + '\n\n');
     }
-    const { results, markdown, symbolResults } = await (0, retriever_1.recall)(query, repoRoot, config, engine, scope, explain, options.code ?? 'auto');
+    const recallOutput = await (0, retriever_1.recall)(query, repoRoot, config, engine, scope, explain, options.code ?? 'auto');
+    let results = recallOutput.results;
+    const { markdown, symbolResults } = recallOutput;
+    // Path C: graph expansion (depth ≤ 2) — additive, non-fatal
+    let graphExpandedResults = [];
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { CodeIndex } = require('../engines/code-index');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const Database = require('better-sqlite3');
+        const dbPath = CodeIndex.getDbPath(repoRoot);
+        if (fs.existsSync(dbPath)) {
+            const db = new Database(dbPath);
+            try {
+                const seeds = [
+                    ...results.map((r) => ({ id: r.memory.name, node_type: 'memory' })),
+                    ...(symbolResults ?? []).map((s) => ({
+                        id: s.symbol.name,
+                        node_type: 'symbol',
+                    })),
+                ];
+                const expandedIds = (0, memory_graph_1.graphExpand)(db, seeds);
+                const alreadyIn = new Set(results.map((r) => r.memory.name));
+                const allMemories = (0, store_1.loadAll)(repoRoot);
+                graphExpandedResults = expandedIds
+                    .filter((id) => !alreadyIn.has(id))
+                    .map((id) => allMemories.find((m) => m.name === id))
+                    .filter((m) => m !== undefined)
+                    .map((m) => ({ memory: m, score: 0.1 }));
+            }
+            finally {
+                db.close();
+            }
+        }
+    }
+    catch {
+        // better-sqlite3 absent or graph error — non-fatal
+    }
+    if (graphExpandedResults.length > 0) {
+        results = (0, rrf_1.rrfMerge)(results, graphExpandedResults);
+    }
+    // Track recall misses (non-fatal)
+    if (results.length === 0) {
+        try {
+            appendRecallMiss(repoRoot, query);
+        }
+        catch {
+            /* non-fatal */
+        }
+    }
     if (options.format === 'json') {
         if (!options.silent) {
             process.stdout.write(JSON.stringify({ results, symbolResults }, null, 2) + '\n');
         }
+        // Study hint from previous session's suggestions
+        printStudyHint(repoRoot, options.silent ?? false);
         return;
     }
     if (!options.silent) {
@@ -180,5 +266,7 @@ async function recallCommand(query, options) {
             fs.writeFileSync(memoryPath, stripped + '\n\n' + nav, 'utf-8');
         }
     }
+    // Study hint from previous session's suggestions
+    printStudyHint(repoRoot, options.silent ?? false);
 }
 //# sourceMappingURL=recall.js.map

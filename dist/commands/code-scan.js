@@ -39,6 +39,7 @@ const path = __importStar(require("path"));
 const store_1 = require("../core/store");
 const code_scanner_1 = require("../core/code-scanner");
 const code_index_1 = require("../engines/code-index");
+const memory_graph_1 = require("../engines/memory-graph");
 const SKIP_DIRS = [
     'node_modules',
     '.git',
@@ -173,6 +174,13 @@ async function codeScanCommand(scanPath, options) {
         indexed++;
     }
     const stats = idx.getStats();
+    // Build memory-node graph after symbol index is populated
+    try {
+        await (0, memory_graph_1.buildMemoryGraph)(idx.db, repoRoot);
+    }
+    catch {
+        // non-fatal — graph is rebuilt on next run
+    }
     idx.close();
     console.log(`Indexed: ${indexed} files  Skipped (unchanged): ${skipped}`);
     console.log(`Symbols: ${stats.symbols}  Edges: ${stats.edges}`);
