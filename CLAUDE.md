@@ -71,11 +71,15 @@ src/
     decay-engine.ts   # Recency scoring with 180-day decay window
     queue-processor.ts  # Drains .pending/*.json → deduplicates → writes memory files
     dedup.ts          # Two-stage dedup: Jaccard (stage 1) + optional LLM batch (stage 2)
+    scene-index.ts    # SceneEntry CRUD + heat tracking for scene_index.json
+    scene-navigation.ts  # Generate/strip scene navigation block in MEMORY.md
+    scene-synthesizer.ts  # Tag-similarity clustering + LLM synthesis per cluster
   commands/           # One file per CLI subcommand
     onboarding.tsx    # Interactive React/Ink setup wizard
-    recall.ts         # Search + write results to MEMORY.md
+    recall.ts         # Search + write results to MEMORY.md; appends scene navigation
     capture.ts        # LLM-powered extraction → writes to .pending/, calls processQueue
     process-queue.ts  # memo process-queue command; --background spawns detached child
+    distill.ts        # memo distill --to personal|workspace|scenes
     workspace.ts      # Workspace remote config, sync, publish
     ...
   engines/
