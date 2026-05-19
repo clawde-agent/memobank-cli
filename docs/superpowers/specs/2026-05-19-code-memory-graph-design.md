@@ -1,14 +1,14 @@
 # Spec: Code-Memory Graph & Self-Iterating Skills
 
 **Date:** 2026-05-19
-**Status:** Draft
+**Status:** Draft v2
 **Scope:** memobank-cli + memobank-skill
 
 ---
 
 ## 1. Problem
 
-memobank's recall is single-dimensional: a query returns ranked memories or ranked code symbols, but the two streams are not structurally connected. A memory about `processQueue` and the symbol `processQueue` have no explicit edge between them. Likewise, memories have no edges to each other beyond tag co-occurrence — there is no `supersedes`, `related_to`, or `contradicts` relationship.
+memobank's recall is single-dimensional: a query returns ranked memories or ranked code symbols, but the two streams are not structurally connected. A memory about `processQueue` and the symbol `processQueue` have no explicit edge between them. Likewise, memories have no edges to each other beyond tag co-occurrence — there is no `related_to` or `contradicts` relationship.
 
 The self-improvement loop (`memo study` → CLAUDE.md) exists but is entirely manual. Nothing signals when a lesson has earned promotion, and nothing tracks when the skill's own recall protocol is failing.
 
@@ -30,15 +30,16 @@ The self-improvement loop (`memo study` → CLAUDE.md) exists but is entirely ma
 - No entity/relationship graph (Zep pattern) — code-domain graph only
 - No automatic SKILL.md edits — suggestions output only, human confirms
 - No automatic CLAUDE.md injection — signal only, human runs `memo study <name>`
+- No `supersedes` edges — when dedup rejects a duplicate, no node is written, so no valid edge source exists (YAGNI)
 
 ---
 
 ## 4. Design Principles Applied
 
-- **DRY**: All edge sources reuse existing modules (`embedding.ts`, `dedup.ts`, `code-index.ts` FTS5, `lifecycle-manager.ts` access logs)
-- **KISS**: SQLite recursive CTEs for graph traversal — zero new dependencies, proven pattern (Obsidian, Datasette)
-- **YAGNI**: Depth limit of 2, max 20 scenes, no embedding required (Jaccard fallback)
-- **SOTA**: Embedding cosine similarity for semantic clustering when available; RRF reranking (already implemented in `rrf.ts`) for merged graph results
+- **DRY**: All edge sources reuse existing modules (`embedding.ts`, `dedup.ts`, FTS5 from `code-index.ts`, `lifecycle-manager.ts` access logs). `memory_nodes` is a separate table from `symbols` because they have different schemas: symbols carry AST-level fields (kind, signature, line, PR score); memory nodes carry semantic fields (type, tags, status, embedding). Sharing a table would require nullable columns and discriminator logic that violates KISS.
+- **KISS**: SQLite recursive CTEs for graph traversal — zero new dependencies, proven pattern (Obsidian, Datasette). Memory graph logic extracted to `src/engines/memory-graph.ts` to keep `code-index.ts` focused on code symbols.
+- **YAGNI**: Depth limit of 2, no embedding required (Jaccard fallback), no `supersedes` edges.
+- **SOTA**: Embedding cosine similarity for semantic clustering when available; RRF reranking via existing `rrf.ts`; visited-set guard in recursive CTE to prevent cycle explosion.
 
 ---
 
@@ -47,70 +48,90 @@ The self-improvement loop (`memo study` → CLAUDE.md) exists but is entirely ma
 ### 5.1 Feature A: Code-Memory Graph
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    code-index.db (SQLite)                    │
-│                                                             │
-│  symbols ──── edges ────► memory_nodes ──── memory_edges   │
-│  (existing)   (existing)  (new)             (new)          │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                      code-index.db (SQLite)                      │
+│                                                                  │
+│  symbols ──── edges ────► memory_nodes ──── memory_edges        │
+│  (existing)   (existing)  (new, memory-graph.ts)  (new)         │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-**Three edge types:**
+**Two edge types** (supersedes removed — see Non-Goals):
 
-| Edge         | Source → Target | Created by                     | Algorithm                                                             |
-| ------------ | --------------- | ------------------------------ | --------------------------------------------------------------------- |
-| `mentions`   | symbol → memory | `queue-processor.ts` on write  | FTS5 symbol name lookup in memory content                             |
-| `related_to` | memory → memory | `code-index.ts` during index   | cosine sim ≥ 0.8 (Jaccard fallback if no embedding)                   |
-| `supersedes` | memory → memory | `queue-processor.ts` via dedup | existing `dedup.ts` DUPLICATE verdict → write edge instead of discard |
+| Edge         | Source → Target | Created by                                                                               | Algorithm                                                       |
+| ------------ | --------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `mentions`   | symbol → memory | `memory-graph.ts` `incrementalEdgeUpdate()` on write; `buildMemoryGraph()` on full index | FTS5 symbol name lookup in memory content                       |
+| `related_to` | memory → memory | `memory-graph.ts` `incrementalEdgeUpdate()` on write; `buildMemoryGraph()` on full index | cosine sim ≥ 0.8 (Jaccard tag overlap fallback if no embedding) |
 
 ### 5.2 Feature B: Self-Iterating Skills
 
 **B1 — CLAUDE.md auto-signal**
 
+`memo study --auto` runs as a standalone command, surfaced at session start via `recallCommand` (not in the Stop hook, to avoid reading incomplete queue state):
+
 ```
-Stop hook (extended):
-  memo capture --auto
-  memo process-queue --background
-  memo study --auto --silent        ← new
+recallCommand (end of recall flow) → check study-suggestions.json
+  → if pending candidates: print "💡 memo study <name> — recalled N times"
+
+memo study --auto --silent (called from Stop hook after process-queue completes):
+  ├─ loadAccessLogs()
+  ├─ filter: type=lesson, access_count ≥ 3, status=active
+  ├─ filter: last_study_suggested absent or > 7 days ago
+  └─ write study-suggestions.json + update last_study_suggested
 ```
 
-`memo study --auto` checks access logs for lessons with `access_count ≥ 3`, filters by 7-day cooldown, writes candidates to `.memobank/meta/study-suggestions.json`. Printed at next interactive session start, not during background hook.
+**Stop hook order (safe sequencing):**
+
+```bash
+memo capture --auto && memo process-queue && memo study --auto --silent
+```
+
+`process-queue` runs synchronously (no `--background`). The `--background` flag is only used when the hook must not block — here we need completion before reading access logs.
+
+> **Note for SKILL.md:** The existing Stop hook uses `--background` for speed. This spec changes it to synchronous for correctness. The added latency is the lifecycle scan (~100ms), acceptable at session end.
 
 **B2 — SKILL.md feedback**
 
 ```
 memo skill-feedback   (manual, not in Stop hook)
-  ├─ reads .memobank/meta/recall-misses.json
-  ├─ reads access logs for zero-recall memories
-  ├─ reads memory_edges for isolated nodes (no edges)
-  └─ LLM synthesis → prints suggested SKILL.md additions
-     (no file writes without user confirmation)
+  ├─ read recall-misses.json (queries with 0 results, written by recallCommand)
+  ├─ read access logs → memories never recalled
+  ├─ query memory_edges → isolated memory nodes (degree = 0)
+  ├─ if ANTHROPIC_API_KEY set:
+  │     LLM prompt → suggested SKILL.md trigger words / description patches
+  └─ else: print raw statistics only (no LLM required)
 ```
 
 ---
 
 ## 6. Data Model
 
+### New module: `src/engines/memory-graph.ts`
+
+Owns all memory graph logic. `code-index.ts` calls `buildMemoryGraph()` during `memo index-code`. `queue-processor.ts` calls `incrementalEdgeUpdate()` after each `writeMemory()`.
+
 ### New tables in `code-index.db`
 
 ```sql
+-- Memory nodes (separate from symbols: different schema, different entity type)
 CREATE TABLE IF NOT EXISTS memory_nodes (
-  id           TEXT PRIMARY KEY,
-  file_path    TEXT NOT NULL,
+  id           TEXT PRIMARY KEY,   -- memory slug (frontmatter name)
+  file_path    TEXT NOT NULL,      -- absolute path to .md file
   type         TEXT NOT NULL,      -- lesson|decision|workflow|architecture
   tags         TEXT NOT NULL,      -- JSON array
-  status       TEXT NOT NULL,
+  status       TEXT NOT NULL,      -- active|needs-review|deprecated
   embedding    BLOB,               -- float32[], NULL if no embedding configured
-  content_hash TEXT NOT NULL,
+  content_hash TEXT NOT NULL,      -- SHA256 via hashFile(), for incremental skip
   updated_at   TEXT NOT NULL
 );
 
+-- Unified edge table for symbol→memory and memory→memory edges
 CREATE TABLE IF NOT EXISTS memory_edges (
   source_id    TEXT NOT NULL,
   target_id    TEXT NOT NULL,
   source_type  TEXT NOT NULL,      -- 'symbol' | 'memory'
-  target_type  TEXT NOT NULL,
-  edge_type    TEXT NOT NULL,      -- 'mentions' | 'related_to' | 'supersedes'
+  target_type  TEXT NOT NULL,      -- always 'memory'
+  edge_type    TEXT NOT NULL,      -- 'mentions' | 'related_to'
   weight       REAL DEFAULT 1.0,
   created_at   TEXT NOT NULL,
   PRIMARY KEY (source_id, target_id, edge_type)
@@ -120,128 +141,141 @@ CREATE INDEX IF NOT EXISTS idx_memory_edges_source ON memory_edges(source_id);
 CREATE INDEX IF NOT EXISTS idx_memory_edges_target ON memory_edges(target_id);
 ```
 
-### New field in access log (`lifecycle-manager.ts`)
+### Extended AccessLog interface (`lifecycle-manager.ts`)
 
 ```typescript
 interface AccessLog {
-  // existing fields ...
-  last_study_suggested?: string; // ISO date, for 7-day cooldown
+  // existing fields (access_count, last_accessed, status, etc.) ...
+  last_study_suggested?: string; // ISO date — 7-day cooldown guard
 }
 ```
 
 ### New metadata files
 
-| File                                    | Purpose                                |
-| --------------------------------------- | -------------------------------------- |
-| `.memobank/meta/study-suggestions.json` | Pending CLAUDE.md promotion candidates |
-| `.memobank/meta/recall-misses.json`     | Queries that returned 0 results        |
+| File                                    | Purpose                                                            |
+| --------------------------------------- | ------------------------------------------------------------------ |
+| `.memobank/meta/study-suggestions.json` | Pending CLAUDE.md promotion candidates (written by `study --auto`) |
+| `.memobank/meta/recall-misses.json`     | Queries that returned 0 results (appended by `recallCommand`)      |
 
 ---
 
 ## 7. Implementation Flow
 
-### 7.1 Index build (`code-index.ts`)
+### 7.1 New module: `memory-graph.ts` (extracted from code-index scope)
+
+```
+buildMemoryGraph(db, memoDir, embeddingConfig?)
+  ├─ scan .memobank/*.md
+  ├─ for each file:
+  │     compute content_hash (reuse hashFile())
+  │     skip if hash matches existing memory_nodes row
+  │     upsert memory_nodes
+  │     if embedding configured: generate vector → store BLOB
+  ├─ FTS5 query existing symbols table → mentions edges
+  └─ pairwise memory similarity → related_to edges
+       (cosine sim if embeddings present, Jaccard tag overlap otherwise)
+
+incrementalEdgeUpdate(db, newMemory, embeddingConfig?)
+  ├─ upsert memory_nodes for newMemory
+  ├─ FTS5 symbol lookup in newMemory.content → upsert mentions edges
+  └─ similarity vs existing memory_nodes → upsert related_to edges
+```
+
+### 7.2 Index build (`code-index.ts` — minimal change)
 
 ```
 memo index-code
-  ├─ existing: scan src/ → symbols + code edges
-  └─ new: scan .memobank/*.md
-        ├─ compute content_hash (SHA256, reuse hashFile())
-        ├─ skip if hash unchanged (incremental)
-        ├─ upsert memory_nodes
-        ├─ if embedding configured: generate vector, store BLOB
-        ├─ FTS5 query: find symbol names in memory content → mentions edges
-        └─ pairwise similarity across memory_nodes → related_to edges
-           (cosine if embeddings present, Jaccard tag overlap otherwise)
+  ├─ existing: scan src/ → symbols + code edges  (unchanged)
+  └─ new: call buildMemoryGraph(db, memoDir, config.embedding)
 ```
 
-### 7.2 Write-time edge update (`queue-processor.ts`)
+### 7.3 Write-time edge update (`queue-processor.ts`)
 
 ```
 processQueue → writeMemory(newMemory)
-  └─ new: incrementalEdgeUpdate(newMemory)
-        ├─ FTS5 symbol lookup → upsert mentions edges
-        ├─ similarity against existing memory_nodes → upsert related_to edges
-        └─ if dedup verdict was DUPLICATE: write supersedes edge
-           (dedup.ts returns verdict; queue-processor acts on it)
+  └─ new: if code-index.db exists → incrementalEdgeUpdate(db, newMemory)
+           else: skip silently (graph is optional)
 ```
 
-### 7.3 Graph-aware recall (`recall.ts`)
+### 7.4 Graph-aware recall (`recall.ts`)
 
 ```
 memo recall "query" --code
-  ├─ existing path A: text/vector memory search → ranked memories
-  ├─ existing path B: FTS5 symbol search → ranked symbols
-  └─ new path C: graph expansion (depth ≤ 2)
-        ├─ from hit memories → traverse related_to + mentions edges
-        ├─ from hit symbols → traverse mentions edges (reverse)
-        └─ deduplicate expanded set
+  ├─ path A: text/vector memory search → ranked memories  (existing)
+  ├─ path B: FTS5 symbol search → ranked symbols           (existing)
+  └─ path C: graph expansion (depth ≤ 2, cycle-safe)      (new)
+        ├─ seed: union of hit memory IDs + hit symbol IDs from A+B
+        ├─ traverse memory_edges with visited-set guard
+        └─ collect expanded memory IDs
   → merge A + B + C via RRF (reuse rrf.ts)
   → write MEMORY.md (existing flow)
+  → if study-suggestions.json has pending entries: print hint
 ```
 
-**Graph traversal query:**
+**Graph traversal query (cycle-safe):**
 
 ```sql
-WITH RECURSIVE graph(id, node_type, depth) AS (
-  SELECT :seed_id, :seed_type, 0
+WITH RECURSIVE graph(id, node_type, depth, visited) AS (
+  SELECT :seed_id, :seed_type, 0, '|' || :seed_id || '|'
   UNION ALL
-  SELECT e.target_id, e.target_type, g.depth + 1
+  SELECT e.target_id, e.target_type, g.depth + 1,
+         g.visited || e.target_id || '|'
   FROM memory_edges e
   JOIN graph g ON e.source_id = g.id
   WHERE g.depth < 2
+    AND g.visited NOT LIKE '%|' || e.target_id || '|%'
 )
 SELECT DISTINCT id, node_type FROM graph;
 ```
 
-### 7.4 CLAUDE.md auto-signal (`study.ts` + `lifecycle-manager.ts`)
+The `visited` string accumulator prevents re-expansion of already-visited nodes, avoiding exponential row explosion on cyclic edges.
+
+### 7.5 CLAUDE.md auto-signal (`study.ts` + `lifecycle-manager.ts`)
 
 ```
 memo study --auto [--silent]
-  ├─ loadAccessLogs()
+  ├─ loadAccessLogs()                           (existing)
   ├─ filter: type=lesson, access_count ≥ 3, status=active
-  ├─ filter: last_study_suggested absent or > 7 days ago
-  ├─ if candidates found:
-  │     --silent: write study-suggestions.json
-  │     interactive: print "💡 memo study <name> — recalled N times"
-  └─ update last_study_suggested in access log
+  ├─ filter: last_study_suggested absent OR > 7 days ago
+  ├─ write .memobank/meta/study-suggestions.json
+  └─ update last_study_suggested in access log  (new field)
 ```
 
-### 7.5 SKILL.md feedback (`skill-feedback.ts`)
+### 7.6 SKILL.md feedback (`skill-feedback.ts`)
 
 ```
 memo skill-feedback
-  ├─ read recall-misses.json (queries with 0 results)
-  ├─ read access logs → memories never recalled
-  ├─ query memory_edges → isolated memory nodes (no edges)
-  ├─ if ANTHROPIC_API_KEY set:
-  │     LLM prompt → suggested SKILL.md trigger words / description patches
-  └─ else: print raw statistics only
+  ├─ read recall-misses.json
+  ├─ access logs → find memories with access_count = 0
+  ├─ memory_edges → find memory_nodes with no edges (LEFT JOIN, NULL target)
+  ├─ if ANTHROPIC_API_KEY: LLM → print suggested SKILL.md patches
+  └─ else: print raw counts only
 ```
 
 ---
 
 ## 8. Error Handling
 
-| Scenario                   | Behaviour                                                                           |
-| -------------------------- | ----------------------------------------------------------------------------------- |
-| `code-index.db` absent     | graph expansion skipped; recall falls back to existing dual-track mode              |
-| No embedding configured    | `related_to` edges use Jaccard tag overlap; no error                                |
-| `ANTHROPIC_API_KEY` absent | `skill-feedback` prints statistics only; `study --auto` still works (no LLM needed) |
-| SQLite lock conflict       | reuse existing `acquireLock()` in `lifecycle-manager.ts`                            |
-| Content hash unchanged     | node + edge rebuild skipped (incremental)                                           |
-| Graph CTE exceeds depth 2  | hard limit in SQL; bounded at O(n²) nodes                                           |
+| Scenario                             | Behaviour                                                                          |
+| ------------------------------------ | ---------------------------------------------------------------------------------- |
+| `code-index.db` absent               | graph expansion skipped; recall uses existing dual-track mode unchanged            |
+| No embedding configured              | `related_to` edges use Jaccard tag overlap; no error or warning                    |
+| `ANTHROPIC_API_KEY` absent           | `skill-feedback` prints statistics only; `study --auto` works without LLM          |
+| SQLite lock conflict                 | reuse existing `acquireLock()` in `lifecycle-manager.ts`                           |
+| Content hash unchanged               | node + edge rebuild skipped (incremental, reuses `hashFile()`)                     |
+| Graph CTE visited string             | bounded by node count; for realistic memory sets (< 10K nodes) negligible overhead |
+| `process-queue` failure in Stop hook | `&&` chain halts; `study --auto` not called — access logs remain consistent        |
 
 ---
 
 ## 9. Testing Strategy
 
-| Test file                      | Coverage                                                             |
-| ------------------------------ | -------------------------------------------------------------------- |
-| `tests/memory-graph.test.ts`   | `memory_nodes` upsert, edge creation, CTE traversal, hash-based skip |
-| `tests/graph-recall.test.ts`   | graph expansion, RRF merge, depth limit enforcement                  |
-| `tests/study-auto.test.ts`     | access_count threshold, 7-day cooldown, `--silent` JSON output       |
-| `tests/skill-feedback.test.ts` | recall-misses tracking, isolated node detection, LLM mock            |
+| Test file                      | Coverage                                                                                                            |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `tests/memory-graph.test.ts`   | `memory_nodes` upsert, `mentions` + `related_to` edge creation, hash-based skip, **cycle detection in CTE**         |
+| `tests/graph-recall.test.ts`   | graph expansion, RRF merge, depth limit, **regression: existing dual-track recall unchanged when no code-index.db** |
+| `tests/study-auto.test.ts`     | access_count threshold, 7-day cooldown, `--silent` JSON output, `last_study_suggested` update                       |
+| `tests/skill-feedback.test.ts` | recall-misses tracking, isolated node detection, LLM mock                                                           |
 
 Not tested: LLM output quality, embedding vector accuracy (provider responsibility).
 
@@ -249,25 +283,27 @@ Not tested: LLM output quality, embedding vector accuracy (provider responsibili
 
 ## 10. Affected Files
 
-| File                             | Change type                                                     |
-| -------------------------------- | --------------------------------------------------------------- |
-| `src/engines/code-index.ts`      | Extend: memory_nodes table, memory scan, edge build (~80 lines) |
-| `src/core/queue-processor.ts`    | Extend: incrementalEdgeUpdate after write (~40 lines)           |
-| `src/commands/recall.ts`         | Extend: graph expansion + RRF merge (~60 lines)                 |
-| `src/core/lifecycle-manager.ts`  | Extend: `last_study_suggested` field (~30 lines)                |
-| `src/commands/study.ts`          | Extend: `--auto` flag (~25 lines)                               |
-| `src/commands/skill-feedback.ts` | New file (~120 lines)                                           |
-| `src/cli.ts`                     | Register `skill-feedback` command                               |
-| `SKILL.md` (memobank-skill)      | Add `memo study --auto --silent` to Stop hook                   |
+| File                             | Change type                                                                      |
+| -------------------------------- | -------------------------------------------------------------------------------- |
+| `src/engines/memory-graph.ts`    | **New file** — `buildMemoryGraph()`, `incrementalEdgeUpdate()` (~150 lines)      |
+| `src/engines/code-index.ts`      | Extend: call `buildMemoryGraph()`, create new tables (~30 lines)                 |
+| `src/core/queue-processor.ts`    | Extend: call `incrementalEdgeUpdate()` after write (~15 lines)                   |
+| `src/commands/recall.ts`         | Extend: graph expansion + RRF merge + study-suggestions hint (~60 lines)         |
+| `src/core/lifecycle-manager.ts`  | Extend: `last_study_suggested` field in AccessLog (~15 lines)                    |
+| `src/commands/study.ts`          | Extend: `--auto` flag, write suggestions JSON (~30 lines)                        |
+| `src/commands/skill-feedback.ts` | **New file** (~120 lines)                                                        |
+| `src/cli.ts`                     | Register `skill-feedback` command (~5 lines)                                     |
+| `SKILL.md` (memobank-skill)      | Change Stop hook: `--background` → synchronous; add `memo study --auto --silent` |
 
-**Estimated total: ~370 lines changed/added. No new npm dependencies.**
+**Estimated total: ~425 lines changed/added. No new npm dependencies.**
 
 ---
 
 ## 11. Rollout Sequencing
 
-1. **Schema migration** (`code-index.ts`) — foundation for everything else
-2. **Write-time edges** (`queue-processor.ts`) — starts building the graph passively
-3. **Graph recall** (`recall.ts`) — first user-visible improvement
-4. **CLAUDE.md auto-signal** (`study.ts`, `lifecycle-manager.ts`) — quick win, independent of graph
-5. **SKILL.md feedback** (`skill-feedback.ts`) — depends on recall-misses data accumulating over time
+1. **`memory-graph.ts` + schema** — new module + two new tables; no existing behaviour changed
+2. **`code-index.ts` integration** — `memo index-code` calls `buildMemoryGraph()`; passively builds graph
+3. **`queue-processor.ts` integration** — write-time edge updates; graph grows with each capture
+4. **`recall.ts` graph expansion** — first user-visible improvement; falls back gracefully if DB absent
+5. **CLAUDE.md auto-signal** (`study.ts` + `lifecycle-manager.ts`) — independent of graph; can ship in parallel with step 2
+6. **`skill-feedback.ts`** — needs recall-misses data to accumulate; ship last
