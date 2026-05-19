@@ -194,9 +194,11 @@ program
   .option('--if <condition>', 'Condition string (skips interactive prompt)')
   .option('--list', 'List available lessons to study')
   .option('--repo <path>', 'Memobank repository path')
+  .option('--auto', 'batch mode: scan access logs and write study-suggestions.json')
+  .option('--silent', 'suppress console output (use with --auto)')
   .action(async (lessonName, options) => {
     try {
-      await studyCommand(lessonName, options);
+      await studyCommand(lessonName, { ...options, auto: options.auto, silent: options.silent });
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`);
       process.exit(1);
