@@ -1,7 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import { loadFile, writeMemory, resolveProjectId } from './store';
 import { deduplicate } from './dedup';
+import { incrementalEdgeUpdate } from '../engines/memory-graph';
 import type { PendingEntry } from './store';
 import type { MemoryFile } from '../types';
 
@@ -56,13 +58,41 @@ export async function processQueue(memoBankDir: string): Promise<void> {
     for (const candidate of toWrite) {
       const created = new Date().toISOString();
       // `created` is not in PendingCandidate — injected at write time
-      writeMemory(memoBankDir, {
+      const writtenPath = writeMemory(memoBankDir, {
         ...candidate,
         created,
         project: entry.projectId,
       });
       // Add to existing so subsequent pending files see newly written memories
       existing.push({ ...candidate, path: '', created, status: 'experimental' });
+
+      // Graph edge update — non-fatal, only when code-index.db exists
+      const dbPath = path.join(memoBankDir, 'meta', 'code-index.db');
+      if (fs.existsSync(dbPath)) {
+        const fileContent = fs.readFileSync(writtenPath, 'utf-8');
+        const memInput = {
+          id: candidate.name,
+          file_path: writtenPath,
+          content: (candidate as { content?: string }).content ?? '',
+          type: candidate.type,
+          tags: candidate.tags,
+          status: (candidate as { status?: string }).status ?? 'experimental',
+          content_hash: crypto.createHash('sha256').update(fileContent, 'utf-8').digest('hex'),
+          updated_at: created,
+        };
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const Database = require('better-sqlite3');
+          const db = new Database(dbPath) as { close(): void };
+          try {
+            await incrementalEdgeUpdate(db, memInput);
+          } finally {
+            db.close();
+          }
+        } catch (err) {
+          console.warn('graph edge update failed:', (err as Error).message);
+        }
+      }
     }
 
     fs.unlinkSync(filePath);
