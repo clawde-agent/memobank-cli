@@ -128,6 +128,11 @@ Claude Code's auto-memory is personal and machine-local by default. memobank add
 - Cursor, Codex, Gemini CLI, Qwen Code — hooks installed via `memo onboarding`
 - Import from Claude Code, Gemini, and Qwen: `memo import --claude`
 
+**Distillation**
+
+- `memo distill --to personal/workspace` — promotes project memories up the tier hierarchy
+- `memo distill --to scenes` — clusters memories by tag similarity and calls LLM once per cluster to write narrative `.memobank/scenes/<topic-YYYY-MM>.md` files; scene navigation is injected into MEMORY.md on every `memo recall`
+
 **Team workflows**
 
 - Workspace tier: cross-repo knowledge synced via separate Git remote
@@ -251,16 +256,19 @@ If the same filename exists in multiple tiers, the higher-priority tier's versio
 
 ### Memory Operations
 
-| Command                           | Description                                                          |
-| --------------------------------- | -------------------------------------------------------------------- |
-| `memo recall <query>`             | Search all tiers and write results to MEMORY.md                      |
-| `memo recall <query> --code`      | Dual-track: search memories + code symbols in parallel               |
-| `memo recall --refs <symbol>`     | Show all callers of a symbol from the code index                     |
-| `memo search <query>`             | Debug search without modifying MEMORY.md                             |
-| `memo write <type>`               | Create a new memory (interactive or non-interactive)                 |
-| `memo capture`                    | Extract learnings from session text via LLM, writes to pending queue |
-| `memo process-queue`              | Drain the pending queue — deduplicates and writes to memory files    |
-| `memo process-queue --background` | Same, but spawns a detached background process (used by Stop hook)   |
+| Command                           | Description                                                                     |
+| --------------------------------- | ------------------------------------------------------------------------------- |
+| `memo recall <query>`             | Search all tiers and write results to MEMORY.md                                 |
+| `memo recall <query> --code`      | Dual-track: search memories + code symbols in parallel                          |
+| `memo recall --refs <symbol>`     | Show all callers of a symbol from the code index                                |
+| `memo search <query>`             | Debug search without modifying MEMORY.md                                        |
+| `memo write <type>`               | Create a new memory (interactive or non-interactive)                            |
+| `memo capture`                    | Extract learnings from session text via LLM, writes to pending queue            |
+| `memo process-queue`              | Drain the pending queue — deduplicates and writes to memory files               |
+| `memo process-queue --background` | Same, but spawns a detached background process (used by Stop hook)              |
+| `memo distill --to personal`      | Distill project memories into personal tier                                     |
+| `memo distill --to workspace`     | Distill project memories into workspace tier                                    |
+| `memo distill --to scenes`        | Cluster memories by tag similarity and synthesize narrative scene files via LLM |
 
 ### Workspace Commands
 
