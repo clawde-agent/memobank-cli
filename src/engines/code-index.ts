@@ -1,5 +1,6 @@
 import * as path from 'path';
 import type { CodeSymbol, CodeEdge, SymbolResult } from '../types';
+import { ensureGraphSchema } from './memory-graph';
 
 interface SymbolRow {
   name: string;
@@ -95,9 +96,11 @@ export class CodeIndex {
   private db: any;
 
   constructor(dbPath: string) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const Database = require('better-sqlite3');
     this.db = new Database(dbPath);
     this.db.exec(SCHEMA);
+    ensureGraphSchema(this.db);
   }
 
   static isAvailable(): boolean {

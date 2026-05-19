@@ -81,6 +81,17 @@ export interface ExtractionResult {
   content: string;
 }
 
+export interface MemoryNodeInput {
+  id: string; // frontmatter `name` field (slug)
+  file_path: string; // absolute path written by writeMemory()
+  content: string; // raw Markdown body (for FTS5 symbol lookup)
+  type: string; // lesson|decision|workflow|architecture
+  tags: string[]; // frontmatter tags array
+  status: string; // active|needs-review|deprecated|experimental
+  content_hash: string; // SHA256 of file content, for incremental skip
+  updated_at: string; // ISO timestamp
+}
+
 export type SymbolKind = 'function' | 'class' | 'interface' | 'type' | 'const' | 'method';
 export type EdgeKind = 'calls' | 'imports' | 'inherits';
 export type IndexedLanguage =
