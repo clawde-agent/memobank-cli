@@ -3,6 +3,7 @@ import * as path from 'path';
 import { findRepoRoot, writeMemory } from '../core/store';
 import { scanFile, detectLanguage, SUPPORTED_EXTENSIONS } from '../core/code-scanner';
 import { CodeIndex } from '../engines/code-index';
+import { buildMemoryGraph } from '../engines/memory-graph';
 import type { CodeScanOptions, IndexedLanguage } from '../types';
 
 const SKIP_DIRS = [
@@ -162,6 +163,14 @@ export async function codeScanCommand(
   }
 
   const stats = idx.getStats();
+
+  // Build memory-node graph after symbol index is populated
+  try {
+    await buildMemoryGraph((idx as any).db, repoRoot);
+  } catch {
+    // non-fatal — graph is rebuilt on next run
+  }
+
   idx.close();
 
   console.log(`Indexed: ${indexed} files  Skipped (unchanged): ${skipped}`);
