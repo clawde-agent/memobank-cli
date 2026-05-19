@@ -1,5 +1,5 @@
 export interface DistillOptions {
-    to: 'workspace' | 'personal';
+    to: 'workspace' | 'personal' | 'scenes';
     repo?: string;
     silent?: boolean;
 }
