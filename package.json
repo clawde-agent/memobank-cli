@@ -69,7 +69,7 @@
     "@typescript-eslint/eslint-plugin": "^8.57.2",
     "@typescript-eslint/parser": "^8.57.2",
     "ajv": "^8.18.0",
-    "better-sqlite3": "^9.4.0",
+    "better-sqlite3": "^12.10.0",
     "eslint": "^10.1.0",
     "husky": "^9.1.7",
     "jest": "^30.3.0",
@@ -83,7 +83,7 @@
   "optionalDependencies": {
     "@lancedb/core": "^0.15.0",
     "@lancedb/lancedb": "^0.27.1",
-    "better-sqlite3": "^9.4.0",
+    "better-sqlite3": "^12.10.0",
     "openai": "^6.33.0",
     "tree-sitter": "^0.25.0",
     "tree-sitter-c-sharp": "^0.23.5",
