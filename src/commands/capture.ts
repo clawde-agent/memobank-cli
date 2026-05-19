@@ -78,7 +78,23 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
         .join('\n\n');
 
       const sanitized = sanitize(sessionText);
-      const extracted = await extract(sanitized, process.env.ANTHROPIC_API_KEY);
+
+      // Append git working state so LLM can detect mid-task sessions and write a checkpoint
+      let contextForExtraction = sanitized;
+      try {
+        const { execSync } = await import('child_process');
+        const gitStatus = execSync('git status --short', { cwd, encoding: 'utf-8' }).trim();
+        if (gitStatus) {
+          const gitDiff = execSync('git diff --stat HEAD', { cwd, encoding: 'utf-8' }).trim();
+          const ts = new Date().toISOString();
+          contextForExtraction +=
+            `\n\n[GIT STATE ${ts}]\n${gitStatus}` + (gitDiff ? `\n${gitDiff}` : '');
+        }
+      } catch {
+        /* not a git repo or git unavailable — skip */
+      }
+
+      const extracted = await extract(contextForExtraction, process.env.ANTHROPIC_API_KEY);
 
       if (extracted.length === 0) {
         log(`No memories extracted from session ${sessionId}`);
