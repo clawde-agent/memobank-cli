@@ -105,6 +105,7 @@ const INJECTION_PATTERNS = [
     /disregard\b.{0,30}\b(instructions|rules)/i,
     /you are now (?!going|about|ready)/i,
     /(?:ignore|forget|override)\b.{0,20}\b(previous|above|prior)/i,
+    // Chinese: "ignore [all/previous] instructions/rules", "disregard instructions/rules/limits"
     /忽略(?:所有|之前|以上|先前)?(?:的)?(?:指令|规则)/,
     /无视(?:所有|之前|以上)?(?:的)?(?:指令|规则|限制)/,
 ];

@@ -14,7 +14,7 @@ export function generateSceneNavigation(memoDir: string, entries: SceneEntry[]):
   for (const e of sorted) {
     const fullPath = path.join(scenesDir, e.filename);
     lines.push(`### Path: ${fullPath}`);
-    lines.push(`**热度**: ${e.heat} 🔥 | **更新**: ${e.updated}`);
+    lines.push(`**Heat**: ${e.heat} 🔥 | **Updated**: ${e.updated}`);
     lines.push(`Summary: ${e.summary}`);
     lines.push('');
   }
