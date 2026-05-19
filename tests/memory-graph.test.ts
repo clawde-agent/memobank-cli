@@ -180,7 +180,7 @@ describe('incrementalEdgeUpdate', () => {
     db.exec('DROP TABLE IF EXISTS symbols_fts');
     // createMentionsEdges catches its own error internally, so this should not throw
     const mem = makeMemoryInput({ content: 'processQueue causes issues' });
-    await expect(incrementalEdgeUpdate(db, mem)).resolves.not.toThrow();
+    await expect(incrementalEdgeUpdate(db, mem)).resolves.toBeUndefined();
     // Node must be present even though mentions edges could not be created
     const row = db.prepare('SELECT id FROM memory_nodes WHERE id = ?').get(mem.id);
     expect(row).toBeDefined();
