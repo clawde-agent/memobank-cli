@@ -296,9 +296,13 @@ describe('CTE cycle guard', () => {
     ).run();
 
     const expanded = graphExpand(db, [{ id: 'sym-foo', node_type: 'symbol' }]);
+    const expandedIds = expanded.map((r) => r.id);
     // Must include both reachable memory nodes; must NOT include the symbol itself
-    expect(expanded).toContain('mem-1');
-    expect(expanded).toContain('mem-2');
-    expect(expanded).not.toContain('sym-foo');
+    expect(expandedIds).toContain('mem-1');
+    expect(expandedIds).toContain('mem-2');
+    expect(expandedIds).not.toContain('sym-foo');
+    // mem-1 is depth 1 (direct from symbol), mem-2 is depth 2 (via mem-1)
+    expect(expanded.find((r) => r.id === 'mem-1')?.minDepth).toBe(1);
+    expect(expanded.find((r) => r.id === 'mem-2')?.minDepth).toBe(2);
   });
 });

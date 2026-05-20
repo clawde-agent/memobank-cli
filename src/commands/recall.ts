@@ -103,7 +103,7 @@ function printStudyHint(repoRoot: string, silent: boolean): void {
     if (suggestions.length === 0) return;
     process.stdout.write('\n');
     for (const s of suggestions.slice(0, 3)) {
-      process.stdout.write(`memo study ${s.name} — recalled ${s.access_count} times\n`);
+      process.stdout.write(`💡 memo study ${s.name} — recalled ${s.access_count} times\n`);
     }
   } catch {
     // corrupt or unreadable — skip silently
@@ -217,14 +217,16 @@ export async function recallCommand(query: string, options: RecallOptions): Prom
             node_type: 'symbol',
           })),
         ];
-        const expandedIds = graphExpand(db, seeds);
+        const expandedNodes = graphExpand(db, seeds);
         const alreadyIn = new Set(results.map((r) => r.memory.name));
         const allMemories = loadAll(repoRoot);
-        graphExpandedResults = expandedIds
-          .filter((id) => !alreadyIn.has(id))
-          .map((id) => allMemories.find((m) => m.name === id))
-          .filter((m): m is NonNullable<typeof m> => m !== undefined)
-          .map((m) => ({ memory: m, score: 0.1 }));
+        graphExpandedResults = expandedNodes
+          .filter(({ id }) => !alreadyIn.has(id))
+          .map(({ id, minDepth }) => {
+            const m = allMemories.find((mem) => mem.name === id);
+            return m ? { memory: m, score: minDepth === 1 ? 0.2 : 0.1 } : null;
+          })
+          .filter((r): r is NonNullable<typeof r> => r !== null);
       } finally {
         db.close();
       }
