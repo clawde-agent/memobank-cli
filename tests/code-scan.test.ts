@@ -4,9 +4,20 @@ import * as path from 'path';
 import { codeScanCommand } from '../src/commands/code-scan';
 import { CodeIndex } from '../src/engines/code-index';
 
+// Verify tree-sitter + TypeScript grammar are fully functional (native bindings compiled).
+// Just require('tree-sitter') can succeed even when the native addon is broken.
 const treeSitterAvailable = (() => {
   try {
-    require('tree-sitter');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const ParserMod = require('tree-sitter') as
+      | { default?: new () => unknown }
+      | (new () => unknown);
+    const ParserCtor =
+      (ParserMod as { default?: new () => unknown }).default ?? (ParserMod as new () => unknown);
+    const parser = new ParserCtor() as { setLanguage: (l: unknown) => void };
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const tsGrammar = (require('tree-sitter-typescript') as { typescript: unknown }).typescript;
+    parser.setLanguage(tsGrammar);
     return true;
   } catch {
     return false;
