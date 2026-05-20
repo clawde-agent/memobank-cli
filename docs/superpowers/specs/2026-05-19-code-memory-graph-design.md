@@ -1,7 +1,7 @@
 # Spec: Code-Memory Graph & Self-Iterating Skills
 
 **Date:** 2026-05-19
-**Status:** Draft v4
+**Status:** Draft v5 (post-implementation audit)
 **Scope:** memobank-cli + memobank-skill
 
 ---
@@ -58,10 +58,10 @@ The self-improvement loop (`memo study` → CLAUDE.md) exists but is entirely ma
 
 **Two edge types** (supersedes removed — see Non-Goals):
 
-| Edge         | Source → Target | Created by                                                                               | Algorithm                                                       |
-| ------------ | --------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `mentions`   | symbol → memory | `memory-graph.ts` `incrementalEdgeUpdate()` on write; `buildMemoryGraph()` on full index | FTS5 symbol name lookup in memory content                       |
-| `related_to` | memory → memory | `memory-graph.ts` `incrementalEdgeUpdate()` on write; `buildMemoryGraph()` on full index | cosine sim ≥ 0.8 (Jaccard tag overlap fallback if no embedding) |
+| Edge         | Source → Target | Created by                                                                               | Algorithm                                                                                                               |
+| ------------ | --------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `mentions`   | symbol → memory | `memory-graph.ts` `incrementalEdgeUpdate()` on write; `buildMemoryGraph()` on full index | FTS5 symbol name lookup in memory content                                                                               |
+| `related_to` | memory ↔ memory | `memory-graph.ts` `incrementalEdgeUpdate()` on write; `buildMemoryGraph()` on full index | cosine sim ≥ 0.8 (Jaccard tag overlap > 0 fallback if no embedding); **edges are symmetric — A→B and B→A both written** |
 
 **Edge type invariants** (enforced in schema via CHECK constraints — see §6):
 
@@ -171,6 +171,9 @@ CREATE TABLE IF NOT EXISTS memory_edges (
 
 CREATE INDEX IF NOT EXISTS idx_memory_edges_source ON memory_edges(source_id, source_type);
 CREATE INDEX IF NOT EXISTS idx_memory_edges_target ON memory_edges(target_id);
+CREATE INDEX IF NOT EXISTS idx_memory_nodes_file_path ON memory_nodes(file_path);
+-- file_path index required: buildMemoryGraph incremental skip queries by file_path;
+-- without this index the hash check is O(n) per file → O(n²) for full build.
 ```
 
 **Slug uniqueness**: Enforced at write time by `dedup.ts` Stage 1 (exact slug match → skip). `buildMemoryGraph` upserts by `id`; if the same slug appears twice with different content, the later upsert wins — acceptable because dedup prevents this in normal operation.
@@ -186,10 +189,10 @@ interface AccessLog {
 
 ### New metadata files
 
-| File                                    | Purpose                                                            | Schema                                                                                                                                                              |
-| --------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.memobank/meta/study-suggestions.json` | Pending CLAUDE.md promotion candidates (written by `study --auto`) | `Array<{ name: string; access_count: number; suggested_at: string }>`                                                                                               |
-| `.memobank/meta/recall-misses.json`     | Queries that returned 0 results (appended by `recallCommand`)      | `Array<{ query: string; timestamp: string; result_count: number }>` — only 0-result queries are appended; `result_count` is included for future low-result tracking |
+| File                                    | Purpose                                                            | Schema                                                                                                                                                                                                                                                             |
+| --------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.memobank/meta/study-suggestions.json` | Pending CLAUDE.md promotion candidates (written by `study --auto`) | `Array<{ name: string; access_count: number; suggested_at: string }>`                                                                                                                                                                                              |
+| `.memobank/meta/recall-misses.json`     | Queries with fewer than 2 results (appended by `recallCommand`)    | `Array<{ query: string; timestamp: string; result_count: number }>` — threshold is `results.length < 2` (0 or 1 result); `result_count` stores the actual count. With default `top_k=5`, returning ≤1 result represents ≤20% capacity — treated as a near-failure. |
 
 ---
 
@@ -207,20 +210,24 @@ buildMemoryGraph(db, memoDir, embeddingConfig?)
   │     upsert memory_nodes
   │     if embedding configured: generate vector → store BLOB
   ├─ FTS5 query existing symbols table → mentions edges
-  └─ related_to edges (scale-aware):
+  │     (word filter: length ≥ 5 — eliminates common short words like "get", "set", "map")
+  └─ related_to edges (scale-aware, **symmetric**):
        if embeddings: cosine sim ≥ 0.8 between all pairs
-       else: Jaccard tag overlap ≥ 0.3, restricted to memories
-             sharing at least 1 tag, capped at top-50 candidates
+       else: Jaccard tag overlap > 0 (any shared tag), restricted to memories
+             sharing at least 1 tag via SQL pre-filter, capped at top-50 candidates
              per memory by tag overlap score
+       for each candidate: write BOTH A→B and B→A edges
 
 incrementalEdgeUpdate(db, memory: MemoryNodeInput, embeddingConfig?)
-  ├─ upsert memory_nodes for memory (uses memory.content_hash for skip check)
+  ├─ upsert memory_nodes for memory (uses memory.content_hash for skip check via id)
   ├─ FTS5 symbol lookup in memory.content → upsert mentions edges
-  └─ similarity vs existing memory_nodes → upsert related_to edges
+  └─ similarity vs existing memory_nodes → upsert related_to edges (symmetric)
        (same scale-aware logic as buildMemoryGraph)
 ```
 
-**Scale bound for `related_to` edges**: With tag pre-filtering and a hard cap of 50 candidates, pairwise Jaccard is O(50) per new memory regardless of total memory count. In the degenerate case where many memories share a common high-frequency tag (e.g. `lesson`), the top-50 cap prevents O(n²) blow-up. Memories with no tags get no `related_to` edges.
+**Scale bound for `related_to` edges**: With tag pre-filtering and a hard cap of 50 candidates, pairwise Jaccard is O(50) per new memory regardless of total memory count. Symmetric writes double edge count but remain well within SQLite limits for realistic memory sets (< 10K). The top-50 cap prevents O(n²) blow-up for high-frequency tags. Memories with no tags get no `related_to` edges.
+
+**`mentions` edge noise filter**: Content words shorter than 5 characters are excluded from FTS5 queries. This eliminates common short identifiers (`get`, `set`, `map`, `run`, `log`) that would otherwise match unrelated symbols.
 
 ### 7.2 Index build (`code-index.ts` — minimal change)
 
@@ -253,7 +260,8 @@ memo recall "query" --code
   └─ path C: graph expansion (depth ≤ 2, cycle-safe)      (new)
         ├─ seeds: A results + B results, each carrying their node_type
         ├─ for each seed: run CTE with (:seed_id, :seed_type)
-        └─ collect expanded memory IDs
+        ├─ collect expanded nodes as Array<{ id, minDepth }>
+        └─ depth-aware scoring: minDepth=1 → score 0.2; minDepth=2 → score 0.1
   → merge A + B + C via RRF (reuse rrf.ts)
   → write MEMORY.md (existing flow)
   → if study-suggestions.json readable and has entries: print hint
@@ -282,7 +290,7 @@ WITH RECURSIVE graph(id, node_type, depth, visited) AS (
   WHERE g.depth < 2
     AND g.visited NOT LIKE '%|' || e.target_id || '|%'
 )
-SELECT DISTINCT id, node_type FROM graph;
+SELECT id, MIN(depth) AS min_depth FROM graph WHERE node_type = 'memory' GROUP BY id;
 ```
 
 ### 7.5 CLAUDE.md auto-signal (`study.ts` + `lifecycle-manager.ts`)
@@ -302,7 +310,8 @@ memo study --auto [--silent]
 memo skill-feedback
   ├─ read recall-misses.json
   ├─ access logs → find memories with access_count = 0
-  ├─ memory_edges → find memory_nodes with no edges (LEFT JOIN, NULL target)
+  ├─ memory_edges → find memory_nodes with degree=0 (no incoming AND no outgoing edges;
+  │     LEFT JOIN both me_in ON target_id and me_out ON source_id WHERE source_type='memory')
   ├─ if ANTHROPIC_API_KEY: LLM → print suggested SKILL.md patches
   └─ else: print raw counts only
 ```
@@ -329,12 +338,12 @@ memo skill-feedback
 
 ## 9. Testing Strategy
 
-| Test file                      | Coverage                                                                                                                                                                                                                                                                   |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/memory-graph.test.ts`   | `memory_nodes` upsert, `mentions` + `related_to` edge creation, hash-based skip, **cycle detection in CTE**, source_type isolation in CTE JOIN, top-50 cap enforcement, **partial-write failure: node upserted but edge insertion throws — next index-code repairs edges** |
-| `tests/graph-recall.test.ts`   | graph expansion, RRF merge, depth limit, **regression: existing dual-track recall unchanged when no code-index.db**, seed node_type tagging                                                                                                                                |
-| `tests/study-auto.test.ts`     | access_count threshold, 7-day cooldown, `--silent` JSON output, `last_study_suggested` update, access log flush before study reads                                                                                                                                         |
-| `tests/skill-feedback.test.ts` | recall-misses tracking, isolated node detection, LLM mock, absent-file graceful skip                                                                                                                                                                                       |
+| Test file                      | Coverage                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/memory-graph.test.ts`   | `memory_nodes` upsert, `mentions` + `related_to` edge creation, hash-based skip, **cycle detection in CTE**, source_type isolation in CTE JOIN, top-50 cap enforcement, **partial-write failure: node upserted but edge insertion throws — next index-code repairs edges**, **`related_to` symmetry: B→A created when A→B is created**, `graphExpand` returns `{id, minDepth}` with correct depth values |
+| `tests/graph-recall.test.ts`   | graph expansion, RRF merge, depth limit, **regression: existing dual-track recall unchanged when no code-index.db**, seed node_type tagging, **recall-misses written for result_count < 2 with actual count**                                                                                                                                                                                            |
+| `tests/study-auto.test.ts`     | access_count threshold, 7-day cooldown, `--silent` JSON output, `last_study_suggested` update, access log flush before study reads                                                                                                                                                                                                                                                                       |
+| `tests/skill-feedback.test.ts` | recall-misses tracking, isolated node detection, LLM mock, absent-file graceful skip                                                                                                                                                                                                                                                                                                                     |
 
 Not tested: LLM output quality, embedding vector accuracy (provider responsibility).
 
