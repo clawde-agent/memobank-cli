@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-05-20
+
+### Added
+
+- **`memo index-code` now builds the memory graph** — `buildMemoryGraph()` is called after each code scan, populating `memory_nodes` and `memory_edges` tables so graph-expanded recall is available immediately after indexing.
+
+### Fixed
+
+- **Graph quality — symmetric `related_to` edges** — when memory A is related to memory B, both A→B and B→A edges are now written so early-written memories are discoverable from later ones.
+- **Graph quality — `related_to` Jaccard threshold** — relaxed from 0.3 to any shared tag (>0); the SQL pre-filter already ensures shared-tag candidates, so the 0.3 gate was an unintended second filter dropping valid pairs.
+- **Graph quality — depth-aware RRF scoring** — `graphExpand` now returns `{id, minDepth}`; depth-1 neighbours score 0.2 vs 0.1 for depth-2 in the RRF merge.
+- **Graph quality — `mentions` word-length filter** — raised from >2 to ≥5 characters, reducing false-positive edges from common short identifiers (`get`, `set`, `map`).
+- **Graph quality — isolated-node detection** — `memo skill-feedback` now checks both incoming and outgoing edges; the previous LEFT JOIN only checked `target_id`, missing outbound-only isolated nodes.
+- **Graph quality — `recall-misses.json` threshold** — changed from `=0` to `< 2` results; near-failures (1 result returned from a top_k=5 query) are now tracked with the actual result count.
+- **Graph quality — `file_path` index on `memory_nodes`** — added to eliminate O(n²) table scan in the incremental hash-check loop of `buildMemoryGraph`.
+
 ## [0.11.0] - 2026-05-20
 
 ### Added
