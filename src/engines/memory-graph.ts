@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS memory_edges (
 
 CREATE INDEX IF NOT EXISTS idx_memory_edges_source ON memory_edges(source_id, source_type);
 CREATE INDEX IF NOT EXISTS idx_memory_edges_target ON memory_edges(target_id);
+CREATE INDEX IF NOT EXISTS idx_memory_nodes_file_path ON memory_nodes(file_path);
 `;
 
 export function ensureGraphSchema(db: any): void {
@@ -136,7 +137,8 @@ function createRelatedToEdges(db: any, mem: MemoryNodeInput): void {
   );
   const now = new Date().toISOString();
   for (const candidate of scored) {
-    ins.run(mem.id, candidate.id, candidate.score, now);
+    ins.run(mem.id, candidate.id, candidate.score, now); // A→B
+    ins.run(candidate.id, mem.id, candidate.score, now); // B→A (symmetric)
   }
 }
 

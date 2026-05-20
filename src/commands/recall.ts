@@ -77,7 +77,7 @@ export async function selectEngine(
   }
 }
 
-function appendRecallMiss(repoRoot: string, query: string): void {
+function appendRecallMiss(repoRoot: string, query: string, resultCount: number): void {
   const missesPath = path.join(repoRoot, 'meta', 'recall-misses.json');
   let misses: Array<{ query: string; timestamp: string; result_count: number }> = [];
   try {
@@ -87,7 +87,7 @@ function appendRecallMiss(repoRoot: string, query: string): void {
   } catch {
     misses = [];
   }
-  misses.push({ query, timestamp: new Date().toISOString(), result_count: 0 });
+  misses.push({ query, timestamp: new Date().toISOString(), result_count: resultCount });
   fs.writeFileSync(missesPath, JSON.stringify(misses, null, 2), 'utf-8');
 }
 
@@ -239,10 +239,10 @@ export async function recallCommand(query: string, options: RecallOptions): Prom
     results = rrfMerge(results, graphExpandedResults);
   }
 
-  // Track recall misses (non-fatal)
-  if (results.length === 0) {
+  // Track recall misses: 0 or 1 result is a near-failure (top_k default is 5)
+  if (results.length < 2) {
     try {
-      appendRecallMiss(repoRoot, query);
+      appendRecallMiss(repoRoot, query, results.length);
     } catch {
       /* non-fatal */
     }
