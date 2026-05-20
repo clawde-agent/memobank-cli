@@ -38,7 +38,11 @@ describe('CodeIndex', () => {
   });
 
   it('initializes schema without error', () => {
-    expect(() => new CodeIndex(path.join(tmpDir, 'code-index2.db'))).not.toThrow();
+    let idx2: CodeIndex | undefined;
+    expect(() => {
+      idx2 = new CodeIndex(path.join(tmpDir, 'code-index2.db'));
+    }).not.toThrow();
+    idx2?.close();
   });
 
   it('creates memory_nodes and memory_edges tables', () => {

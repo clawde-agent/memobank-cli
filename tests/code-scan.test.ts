@@ -4,6 +4,15 @@ import * as path from 'path';
 import { codeScanCommand } from '../src/commands/code-scan';
 import { CodeIndex } from '../src/engines/code-index';
 
+const treeSitterAvailable = (() => {
+  try {
+    require('tree-sitter');
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
 function makeTempRepo(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-codescan-'));
   fs.mkdirSync(path.join(dir, 'meta'), { recursive: true });
@@ -11,7 +20,9 @@ function makeTempRepo(): string {
   return dir;
 }
 
-describe('codeScanCommand', () => {
+const describeScan = treeSitterAvailable ? describe : describe.skip;
+
+describeScan('codeScanCommand', () => {
   it('creates code-index.db after scanning a directory with TS files', async () => {
     const repoRoot = makeTempRepo();
     const srcDir = path.join(repoRoot, 'src-fixture');

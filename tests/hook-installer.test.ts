@@ -27,6 +27,7 @@ describe('installPostCommitHook', () => {
   });
 
   it('makes the hook file executable', () => {
+    if (process.platform === 'win32') return; // Windows does not support Unix execute bits
     const repo = makeFakeRepo();
     installPostCommitHook(repo);
     const hookPath = path.join(repo, '.git', 'hooks', 'post-commit');

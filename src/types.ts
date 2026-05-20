@@ -1,5 +1,13 @@
 export type MemoryType = 'lesson' | 'decision' | 'workflow' | 'architecture';
 export type Engine = 'text' | 'lancedb';
+export type LlmProvider = 'anthropic' | 'openai' | 'ollama' | 'gemini' | 'openrouter';
+
+export interface LlmConfig {
+  provider: LlmProvider;
+  model: string;
+  base_url?: string; // override endpoint (openai-compat providers)
+  api_key_env?: string; // override env var name
+}
 export type Confidence = 'low' | 'medium' | 'high';
 export type MemoryScope = 'personal' | 'project' | 'workspace';
 export type Status = 'experimental' | 'active' | 'needs-review' | 'deprecated';
