@@ -47,8 +47,9 @@ export async function skillFeedbackCommand(repoRoot: string): Promise<void> {
           const rows = db
             .prepare(
               `SELECT COUNT(*) AS n FROM memory_nodes mn
-               LEFT JOIN memory_edges me ON mn.id = me.target_id
-               WHERE me.target_id IS NULL`
+               LEFT JOIN memory_edges me_in  ON mn.id = me_in.target_id
+               LEFT JOIN memory_edges me_out ON mn.id = me_out.source_id AND me_out.source_type = 'memory'
+               WHERE me_in.target_id IS NULL AND me_out.source_id IS NULL`
             )
             .get() as { n: number };
           isolatedCount = rows.n;

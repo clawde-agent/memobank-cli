@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS memory_edges (
 
 CREATE INDEX IF NOT EXISTS idx_memory_edges_source ON memory_edges(source_id, source_type);
 CREATE INDEX IF NOT EXISTS idx_memory_edges_target ON memory_edges(target_id);
+CREATE INDEX IF NOT EXISTS idx_memory_nodes_file_path ON memory_nodes(file_path);
 `;
 
 export function ensureGraphSchema(db: any): void {
@@ -75,7 +76,7 @@ function createMentionsEdges(db: any, mem: MemoryNodeInput): void {
   const words = mem.content
     .split(/\s+/)
     .map((w) => w.replace(/[^a-zA-Z0-9_]/g, ''))
-    .filter((w) => w.length > 2);
+    .filter((w) => w.length >= 5);
   if (words.length === 0) return;
 
   const ftsQuery = words.join(' OR ');
@@ -136,9 +137,8 @@ function createRelatedToEdges(db: any, mem: MemoryNodeInput): void {
   );
   const now = new Date().toISOString();
   for (const candidate of scored) {
-    if (candidate.score >= 0.3) {
-      ins.run(mem.id, candidate.id, candidate.score, now);
-    }
+    ins.run(mem.id, candidate.id, candidate.score, now); // A→B
+    ins.run(candidate.id, mem.id, candidate.score, now); // B→A (symmetric)
   }
 }
 
@@ -205,10 +205,13 @@ export async function buildMemoryGraph(db: any, memoDir: string): Promise<void> 
   }
 }
 
-export function graphExpand(db: any, seeds: Array<{ id: string; node_type: string }>): string[] {
+export function graphExpand(
+  db: any,
+  seeds: Array<{ id: string; node_type: string }>
+): Array<{ id: string; minDepth: number }> {
   ensureGraphSchema(db);
 
-  const expandedIds = new Set<string>();
+  const expanded = new Map<string, number>(); // id → minDepth across all seeds
   const cte = db.prepare(`
     WITH RECURSIVE graph(id, node_type, depth, visited) AS (
       SELECT ?, ?, 0, '|' || ? || '|'
@@ -220,14 +223,20 @@ export function graphExpand(db: any, seeds: Array<{ id: string; node_type: strin
       WHERE g.depth < 2
         AND g.visited NOT LIKE '%|' || e.target_id || '|%'
     )
-    SELECT DISTINCT id, node_type FROM graph WHERE node_type = 'memory'
+    SELECT id, MIN(depth) AS min_depth FROM graph WHERE node_type = 'memory' GROUP BY id
   `);
 
   for (const seed of seeds) {
-    const rows = cte.all(seed.id, seed.node_type, seed.id) as { id: string }[];
+    const rows = cte.all(seed.id, seed.node_type, seed.id) as {
+      id: string;
+      min_depth: number;
+    }[];
     for (const row of rows) {
-      expandedIds.add(row.id);
+      const existing = expanded.get(row.id);
+      if (existing === undefined || row.min_depth < existing) {
+        expanded.set(row.id, row.min_depth);
+      }
     }
   }
-  return [...expandedIds];
+  return [...expanded.entries()].map(([id, minDepth]) => ({ id, minDepth }));
 }

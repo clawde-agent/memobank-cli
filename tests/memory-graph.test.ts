@@ -140,6 +140,30 @@ describe('incrementalEdgeUpdate', () => {
     expect(edge.source_type).toBe('memory');
   });
 
+  it('related_to edges are symmetric (B→A created when A→B is created)', async () => {
+    const db = (idx as any).db;
+    db.prepare(
+      `INSERT INTO memory_nodes (id, file_path, type, tags, status, content_hash, updated_at)
+       VALUES ('existing', '/tmp/existing.md', 'lesson', '["queue"]', 'active', 'xyz', '2026-01-01')`
+    ).run();
+    const mem = makeMemoryInput({ id: 'new-mem', tags: ['queue'] });
+    await incrementalEdgeUpdate(db, mem);
+    // Forward: new-mem → existing
+    const fwd = db
+      .prepare(
+        "SELECT * FROM memory_edges WHERE source_id = 'new-mem' AND target_id = 'existing' AND edge_type = 'related_to'"
+      )
+      .get();
+    expect(fwd).toBeDefined();
+    // Reverse: existing → new-mem
+    const rev = db
+      .prepare(
+        "SELECT * FROM memory_edges WHERE source_id = 'existing' AND target_id = 'new-mem' AND edge_type = 'related_to'"
+      )
+      .get();
+    expect(rev).toBeDefined();
+  });
+
   it('does not create related_to edge when no shared tags', async () => {
     const db = (idx as any).db;
     db.prepare(
@@ -296,9 +320,13 @@ describe('CTE cycle guard', () => {
     ).run();
 
     const expanded = graphExpand(db, [{ id: 'sym-foo', node_type: 'symbol' }]);
+    const expandedIds = expanded.map((r) => r.id);
     // Must include both reachable memory nodes; must NOT include the symbol itself
-    expect(expanded).toContain('mem-1');
-    expect(expanded).toContain('mem-2');
-    expect(expanded).not.toContain('sym-foo');
+    expect(expandedIds).toContain('mem-1');
+    expect(expandedIds).toContain('mem-2');
+    expect(expandedIds).not.toContain('sym-foo');
+    // mem-1 is depth 1 (direct from symbol), mem-2 is depth 2 (via mem-1)
+    expect(expanded.find((r) => r.id === 'mem-1')?.minDepth).toBe(1);
+    expect(expanded.find((r) => r.id === 'mem-2')?.minDepth).toBe(2);
   });
 });
