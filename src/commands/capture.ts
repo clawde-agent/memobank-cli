@@ -78,7 +78,53 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
         .join('\n\n');
 
       const sanitized = sanitize(sessionText);
-      const extracted = await extract(sanitized, process.env.ANTHROPIC_API_KEY);
+
+      // Collect git working state (used both for LLM context and no-LLM fallback)
+      let gitStatus = '';
+      let gitBranch = '';
+      let gitLastCommit = '';
+      let contextForExtraction = sanitized;
+      try {
+        const { execSync } = await import('child_process');
+        gitStatus = execSync('git status --short', { cwd, encoding: 'utf-8' }).trim();
+        if (gitStatus) {
+          gitBranch = execSync('git branch --show-current', { cwd, encoding: 'utf-8' }).trim();
+          gitLastCommit = execSync('git log --oneline -1', { cwd, encoding: 'utf-8' }).trim();
+          const gitDiff = execSync('git diff --stat HEAD', { cwd, encoding: 'utf-8' }).trim();
+          const ts = new Date().toISOString();
+          contextForExtraction +=
+            `\n\n[GIT STATE ${ts}]\n${gitStatus}` + (gitDiff ? `\n${gitDiff}` : '');
+        }
+      } catch {
+        /* not a git repo or git unavailable — skip */
+      }
+
+      const extracted = await extract(contextForExtraction, process.env.ANTHROPIC_API_KEY);
+
+      // No-LLM checkpoint fallback: git shows in-progress work but no API key configured
+      if (extracted.length === 0 && gitStatus && !process.env.ANTHROPIC_API_KEY) {
+        const date = new Date().toISOString().slice(0, 10);
+        const entry: PendingEntry = {
+          id: `CHK-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          timestamp: new Date().toISOString(),
+          projectId: resolveProjectId(repoRoot),
+          candidates: [
+            {
+              name: `session-checkpoint-${date}`,
+              type: 'workflow',
+              description: `Resume point: ${gitBranch || 'uncommitted changes'}`,
+              tags: ['checkpoint', 'wip'],
+              confidence: 'high',
+              content: `## Task\n${gitBranch || '(unknown — check git log)'}\n\n## Last Commit\n${gitLastCommit || '(none)'}\n\n## Next\n(fill in what remains)\n\n## Files\n${gitStatus}`,
+            },
+          ],
+        };
+        writePending(repoRoot, entry);
+        await processQueue(repoRoot);
+        log(`Wrote fallback checkpoint for session ${sessionId}`);
+        await markSessionProcessed(metaDir, sessionId);
+        continue;
+      }
 
       if (extracted.length === 0) {
         log(`No memories extracted from session ${sessionId}`);

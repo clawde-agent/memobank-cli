@@ -26,6 +26,7 @@ export interface AccessLog {
   recallQueries: string[]; // Recent queries that recalled this memory
   epochAccessCount: number; // recalls since current team_epoch
   team_epoch: string; // ISO timestamp of current epoch start
+  last_study_suggested?: string; // ISO date — 7-day cooldown guard
 }
 
 /**

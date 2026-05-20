@@ -111,11 +111,12 @@ Claude Code's auto-memory is personal and machine-local by default. memobank add
 **Code Symbol Index** _(optional, requires `npm install memobank-cli --include=optional`)_
 
 - `memo index-code [path]` — parses your codebase with tree-sitter and stores symbols in `.memobank/meta/code-index.db`
-- `memo recall "query" --code` — dual-track recall: searches memories and code symbols in parallel, results score-normalized and merged
+- `memo recall "query" --code` — dual-track recall: searches memories and code symbols in parallel, results score-normalized and merged; also traverses the memory graph for related memories (Path C, RRF-merged)
 - `memo recall --refs <symbol>` — show all callers of a function from the call-graph
 - Supports TypeScript, JavaScript, Python, Go, Rust, YAML, C# (more via the same extension pattern)
 - Incremental: unchanged files are skipped via SHA256 hash cache
 - `--summarize` writes a `project-architecture-snapshot` memory after indexing
+- **Code-Memory Graph** — `memo index-code` builds `mentions` edges (symbol → memory via FTS5) and `related_to` edges (memory → memory via tag overlap) stored in `code-index.db`. Graph expansion in recall surfaces memories adjacent to matching symbols up to depth 2.
 
 **Safety**
 
@@ -293,6 +294,8 @@ If the same filename exists in multiple tiers, the higher-priority tier's versio
 | `memo lifecycle`               | View memory lifecycle report                               |
 | `memo lifecycle --scan`        | Run full status sweep (downgrades stale memories)          |
 | `memo lifecycle --reset-epoch` | Reset epoch for team handoff (new team starts fresh decay) |
+| `memo study --auto`            | Write study suggestions for frequently-recalled memories   |
+| `memo skill-feedback`          | Report recall misses, isolated graph nodes, never-recalled |
 | `memo correct <path>`          | Record a memory correction                                 |
 | `memo scan`                    | Scan for secrets before pushing                            |
 

@@ -7,6 +7,15 @@ import { deduplicate } from '../src/core/dedup';
 jest.mock('../src/core/dedup');
 const mockDeduplicate = deduplicate as jest.MockedFunction<typeof deduplicate>;
 
+jest.mock('../src/engines/memory-graph', () => ({
+  incrementalEdgeUpdate: jest.fn().mockResolvedValue(undefined),
+  ensureGraphSchema: jest.fn(),
+  buildMemoryGraph: jest.fn(),
+  graphExpand: jest.fn().mockReturnValue([]),
+}));
+import { incrementalEdgeUpdate } from '../src/engines/memory-graph';
+const mockIncremental = incrementalEdgeUpdate as jest.MockedFunction<typeof incrementalEdgeUpdate>;
+
 // Default: use real deduplicate logic so existing tests continue to pass
 beforeEach(() => {
   const actual = jest.requireActual<typeof import('../src/core/dedup')>('../src/core/dedup');
@@ -276,6 +285,87 @@ describe('processQueue — dedup integration', () => {
     expect(mockDeduplicate).toHaveBeenCalledTimes(2);
     const secondCallExisting = mockDeduplicate.mock.calls[1]![1];
     expect(secondCallExisting.some((m: { name: string }) => m.name === 'shared-lesson')).toBe(true);
+    fs.rmSync(repo, { recursive: true });
+  });
+});
+
+describe('processQueue — graph integration', () => {
+  beforeEach(() => mockIncremental.mockClear());
+
+  it('calls incrementalEdgeUpdate after writing a memory when code-index.db exists', async () => {
+    const repo = makeTempRepo();
+    // Create fake code-index.db so the guard passes
+    fs.mkdirSync(path.join(repo, 'meta'), { recursive: true });
+    fs.writeFileSync(path.join(repo, 'meta', 'code-index.db'), '');
+    writePendingFile(repo, {
+      id: 'LRN-graph',
+      timestamp: '2026-03-26T00:00:00.000Z',
+      projectId: 'test-project',
+      candidates: [
+        {
+          name: 'graph-lesson',
+          type: 'lesson',
+          description: 'test',
+          tags: ['test'],
+          confidence: 'high',
+          content: 'body',
+        },
+      ],
+    });
+    await processQueue(repo);
+    expect(mockIncremental).toHaveBeenCalledTimes(1);
+    const [, memInput] = mockIncremental.mock.calls[0]!;
+    expect(memInput.id).toBe('graph-lesson');
+    expect(memInput.content).toBe('body');
+    expect(typeof memInput.content_hash).toBe('string');
+    fs.rmSync(repo, { recursive: true });
+  });
+
+  it('skips incrementalEdgeUpdate when code-index.db absent', async () => {
+    const repo = makeTempRepo();
+    writePendingFile(repo, {
+      id: 'LRN-nograph',
+      timestamp: '2026-03-26T00:00:00.000Z',
+      projectId: 'test-project',
+      candidates: [
+        {
+          name: 'no-graph-lesson',
+          type: 'lesson',
+          description: 'test',
+          tags: [],
+          confidence: 'high',
+          content: 'body',
+        },
+      ],
+    });
+    await processQueue(repo);
+    expect(mockIncremental).not.toHaveBeenCalled();
+    fs.rmSync(repo, { recursive: true });
+  });
+
+  it('does not fail processQueue when incrementalEdgeUpdate throws', async () => {
+    const repo = makeTempRepo();
+    fs.mkdirSync(path.join(repo, 'meta'), { recursive: true });
+    fs.writeFileSync(path.join(repo, 'meta', 'code-index.db'), '');
+    mockIncremental.mockRejectedValueOnce(new Error('graph write failed'));
+    writePendingFile(repo, {
+      id: 'LRN-errtest',
+      timestamp: '2026-03-26T00:00:00.000Z',
+      projectId: 'test-project',
+      candidates: [
+        {
+          name: 'err-lesson',
+          type: 'lesson',
+          description: 'test',
+          tags: [],
+          confidence: 'high',
+          content: 'body',
+        },
+      ],
+    });
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    await expect(processQueue(repo)).resolves.toBeUndefined();
+    warnSpy.mockRestore();
     fs.rmSync(repo, { recursive: true });
   });
 });

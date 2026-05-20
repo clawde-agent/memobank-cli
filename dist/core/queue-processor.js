@@ -36,8 +36,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.processQueue = processQueue;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const crypto = __importStar(require("crypto"));
 const store_1 = require("./store");
 const dedup_1 = require("./dedup");
+const memory_graph_1 = require("../engines/memory-graph");
 async function processQueue(memoBankDir) {
     const pendingDir = path.join(memoBankDir, '.pending');
     if (!fs.existsSync(pendingDir)) {
@@ -84,13 +86,42 @@ async function processQueue(memoBankDir) {
         for (const candidate of toWrite) {
             const created = new Date().toISOString();
             // `created` is not in PendingCandidate — injected at write time
-            (0, store_1.writeMemory)(memoBankDir, {
+            const writtenPath = (0, store_1.writeMemory)(memoBankDir, {
                 ...candidate,
                 created,
                 project: entry.projectId,
             });
             // Add to existing so subsequent pending files see newly written memories
             existing.push({ ...candidate, path: '', created, status: 'experimental' });
+            // Graph edge update — non-fatal, only when code-index.db exists
+            const dbPath = path.join(memoBankDir, 'meta', 'code-index.db');
+            if (fs.existsSync(dbPath)) {
+                const fileContent = fs.readFileSync(writtenPath, 'utf-8');
+                const memInput = {
+                    id: candidate.name,
+                    file_path: writtenPath,
+                    content: candidate.content ?? '',
+                    type: candidate.type,
+                    tags: candidate.tags,
+                    status: candidate.status ?? 'experimental',
+                    content_hash: crypto.createHash('sha256').update(fileContent, 'utf-8').digest('hex'),
+                    updated_at: created,
+                };
+                try {
+                    // eslint-disable-next-line @typescript-eslint/no-require-imports
+                    const Database = require('better-sqlite3');
+                    const db = new Database(dbPath);
+                    try {
+                        await (0, memory_graph_1.incrementalEdgeUpdate)(db, memInput);
+                    }
+                    finally {
+                        db.close();
+                    }
+                }
+                catch (err) {
+                    console.warn('graph edge update failed:', err.message);
+                }
+            }
         }
         fs.unlinkSync(filePath);
     }

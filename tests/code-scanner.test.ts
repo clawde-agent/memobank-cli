@@ -3,6 +3,18 @@ import * as os from 'os';
 import * as path from 'path';
 import { scanFile, detectLanguage, SUPPORTED_EXTENSIONS } from '../src/core/code-scanner';
 
+const treeSitterAvailable = (() => {
+  try {
+    require('tree-sitter');
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+// Skip all scanFile tests when tree-sitter native bindings are not installed
+const describeScan = treeSitterAvailable ? describe : describe.skip;
+
 function makeTmpFile(ext: string, content: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-scanner-'));
   const file = path.join(dir, `test${ext}`);
@@ -28,7 +40,7 @@ describe('detectLanguage', () => {
   });
 });
 
-describe('scanFile — TypeScript', () => {
+describeScan('scanFile — TypeScript', () => {
   it('extracts exported function with signature and docstring', () => {
     const src = `
 /**
@@ -101,7 +113,7 @@ export function main(): void {
   });
 });
 
-describe('scanFile — python', () => {
+describeScan('scanFile — python', () => {
   function tmpPy(code: string): string {
     const f = path.join(os.tmpdir(), `memo_test_${Date.now()}.py`);
     fs.writeFileSync(f, code);
@@ -133,7 +145,7 @@ describe('scanFile — python', () => {
   });
 });
 
-describe('scanFile — go', () => {
+describeScan('scanFile — go', () => {
   function tmpGo(code: string): string {
     const f = path.join(os.tmpdir(), `memo_test_${Date.now()}.go`);
     fs.writeFileSync(f, code);
@@ -166,7 +178,7 @@ describe('scanFile — go', () => {
   });
 });
 
-describe('scanFile — rust', () => {
+describeScan('scanFile — rust', () => {
   function tmpRs(code: string): string {
     const f = path.join(os.tmpdir(), `memo_test_${Date.now()}.rs`);
     fs.writeFileSync(f, code);
@@ -201,7 +213,7 @@ describe('scanFile — rust', () => {
   });
 });
 
-describe('scanFile — csharp', () => {
+describeScan('scanFile — csharp', () => {
   function tmpCs(code: string): string {
     const f = path.join(os.tmpdir(), `memo_test_${Date.now()}.cs`);
     fs.writeFileSync(f, code);
@@ -228,7 +240,7 @@ describe('scanFile — csharp', () => {
   });
 });
 
-describe('scanFile — import edges', () => {
+describeScan('scanFile — import edges', () => {
   function tmpTs(code: string): string {
     const f = path.join(os.tmpdir(), `memo_test_${Date.now()}.ts`);
     fs.writeFileSync(f, code);

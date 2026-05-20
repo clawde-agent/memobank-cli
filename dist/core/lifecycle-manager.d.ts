@@ -18,6 +18,7 @@ export interface AccessLog {
     recallQueries: string[];
     epochAccessCount: number;
     team_epoch: string;
+    last_study_suggested?: string;
 }
 /**
  * Tier-based archival configuration (distinct from status-transition LifecycleConfig in types.ts)

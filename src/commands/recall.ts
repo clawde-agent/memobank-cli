@@ -5,7 +5,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { findRepoRoot } from '../core/store';
+import { findRepoRoot, loadAll } from '../core/store';
 import { readSceneIndex } from '../core/scene-index';
 import { generateSceneNavigation, stripSceneNavigation } from '../core/scene-navigation';
 import { loadConfig } from '../config';
@@ -13,7 +13,9 @@ import { recall, writeRecallResults } from '../core/retriever';
 import { TextEngine } from '../engines/text-engine';
 import { HybridEngine } from '../engines/hybrid-engine';
 import { EmbeddingGenerator } from '../core/embedding';
-import type { MemoryScope } from '../types';
+import { graphExpand } from '../engines/memory-graph';
+import { rrfMerge } from '../core/rrf';
+import type { MemoryScope, RecallResult } from '../types';
 import type { EmbeddingConfig } from '../core/embedding';
 import type { EngineAdapter } from '../engines/engine-adapter';
 
@@ -72,6 +74,39 @@ export async function selectEngine(
         : `  Check: ${provider.toUpperCase()}_API_KEY is set`;
     const warning = `⚠  Vector search unavailable (${msg})\n${hint}\n  Falling back to text search.`;
     return { engine: new TextEngine(), warning };
+  }
+}
+
+function appendRecallMiss(repoRoot: string, query: string): void {
+  const missesPath = path.join(repoRoot, 'meta', 'recall-misses.json');
+  let misses: Array<{ query: string; timestamp: string; result_count: number }> = [];
+  try {
+    if (fs.existsSync(missesPath)) {
+      misses = JSON.parse(fs.readFileSync(missesPath, 'utf-8')) as typeof misses;
+    }
+  } catch {
+    misses = [];
+  }
+  misses.push({ query, timestamp: new Date().toISOString(), result_count: 0 });
+  fs.writeFileSync(missesPath, JSON.stringify(misses, null, 2), 'utf-8');
+}
+
+function printStudyHint(repoRoot: string, silent: boolean): void {
+  if (silent) return;
+  const suggestionsPath = path.join(repoRoot, 'meta', 'study-suggestions.json');
+  try {
+    if (!fs.existsSync(suggestionsPath)) return;
+    const suggestions = JSON.parse(fs.readFileSync(suggestionsPath, 'utf-8')) as Array<{
+      name: string;
+      access_count: number;
+    }>;
+    if (suggestions.length === 0) return;
+    process.stdout.write('\n');
+    for (const s of suggestions.slice(0, 3)) {
+      process.stdout.write(`memo study ${s.name} — recalled ${s.access_count} times\n`);
+    }
+  } catch {
+    // corrupt or unreadable — skip silently
   }
 }
 
@@ -150,7 +185,7 @@ export async function recallCommand(query: string, options: RecallOptions): Prom
     process.stderr.write('\n' + warning + '\n\n');
   }
 
-  const { results, markdown, symbolResults } = await recall(
+  const recallOutput = await recall(
     query,
     repoRoot,
     config,
@@ -159,11 +194,64 @@ export async function recallCommand(query: string, options: RecallOptions): Prom
     explain,
     options.code ?? 'auto'
   );
+  let results = recallOutput.results;
+  const { markdown, symbolResults } = recallOutput;
+
+  // Path C: graph expansion (depth ≤ 2) — additive, non-fatal
+  let graphExpandedResults: RecallResult[] = [];
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { CodeIndex } = require('../engines/code-index') as {
+      CodeIndex: { getDbPath(r: string): string };
+    };
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Database = require('better-sqlite3') as new (p: string) => { close(): void };
+    const dbPath = CodeIndex.getDbPath(repoRoot);
+    if (fs.existsSync(dbPath)) {
+      const db = new Database(dbPath);
+      try {
+        const seeds: Array<{ id: string; node_type: string }> = [
+          ...results.map((r) => ({ id: r.memory.name, node_type: 'memory' })),
+          ...(symbolResults ?? []).map((s: { symbol: { name: string } }) => ({
+            id: s.symbol.name,
+            node_type: 'symbol',
+          })),
+        ];
+        const expandedIds = graphExpand(db, seeds);
+        const alreadyIn = new Set(results.map((r) => r.memory.name));
+        const allMemories = loadAll(repoRoot);
+        graphExpandedResults = expandedIds
+          .filter((id) => !alreadyIn.has(id))
+          .map((id) => allMemories.find((m) => m.name === id))
+          .filter((m): m is NonNullable<typeof m> => m !== undefined)
+          .map((m) => ({ memory: m, score: 0.1 }));
+      } finally {
+        db.close();
+      }
+    }
+  } catch {
+    // better-sqlite3 absent or graph error — non-fatal
+  }
+
+  if (graphExpandedResults.length > 0) {
+    results = rrfMerge(results, graphExpandedResults);
+  }
+
+  // Track recall misses (non-fatal)
+  if (results.length === 0) {
+    try {
+      appendRecallMiss(repoRoot, query);
+    } catch {
+      /* non-fatal */
+    }
+  }
 
   if (options.format === 'json') {
     if (!options.silent) {
       process.stdout.write(JSON.stringify({ results, symbolResults }, null, 2) + '\n');
     }
+    // Study hint from previous session's suggestions
+    printStudyHint(repoRoot, options.silent ?? false);
     return;
   }
 
@@ -189,4 +277,7 @@ export async function recallCommand(query: string, options: RecallOptions): Prom
       fs.writeFileSync(memoryPath, stripped + '\n\n' + nav, 'utf-8');
     }
   }
+
+  // Study hint from previous session's suggestions
+  printStudyHint(repoRoot, options.silent ?? false);
 }

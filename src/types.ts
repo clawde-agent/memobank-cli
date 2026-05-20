@@ -1,5 +1,13 @@
 export type MemoryType = 'lesson' | 'decision' | 'workflow' | 'architecture';
 export type Engine = 'text' | 'lancedb';
+export type LlmProvider = 'anthropic' | 'openai' | 'ollama' | 'gemini' | 'openrouter';
+
+export interface LlmConfig {
+  provider: LlmProvider;
+  model: string;
+  base_url?: string; // override endpoint (openai-compat providers)
+  api_key_env?: string; // override env var name
+}
 export type Confidence = 'low' | 'medium' | 'high';
 export type MemoryScope = 'personal' | 'project' | 'workspace';
 export type Status = 'experimental' | 'active' | 'needs-review' | 'deprecated';
@@ -79,6 +87,17 @@ export interface ExtractionResult {
   tags: string[];
   confidence: Confidence;
   content: string;
+}
+
+export interface MemoryNodeInput {
+  id: string; // frontmatter `name` field (slug)
+  file_path: string; // absolute path written by writeMemory()
+  content: string; // raw Markdown body (for FTS5 symbol lookup)
+  type: string; // lesson|decision|workflow|architecture
+  tags: string[]; // frontmatter tags array
+  status: string; // active|needs-review|deprecated|experimental
+  content_hash: string; // SHA256 of file content, for incremental skip
+  updated_at: string; // ISO timestamp
 }
 
 export type SymbolKind = 'function' | 'class' | 'interface' | 'type' | 'const' | 'method';
