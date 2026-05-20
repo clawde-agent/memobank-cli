@@ -12,12 +12,12 @@ AI agents forget everything between sessions.
 Static files like CLAUDE.md go stale and require manual upkeep.
 Cloud memory APIs add external services your team doesn't own or control.
 
-**memobank gives AI agents persistent, structured memory that lives in your Git repo** —
+**memobank gives AI agents persistent, structured memory that lives in your Git repo:**
 versioned alongside code, reviewed as PRs, and loaded automatically at session start.
 
 - **Personal** — private lessons and preferences, never committed
 - **Team** — shared knowledge that travels with the codebase
-- **Workspace** — cross-repo patterns, synced via a separate Git remote
+- **Workspace** — cross-repo patterns, business decisions, BA/PO context, and non-code project knowledge, synced via a separate Git remote (any wiki or docs repo works)
 
 Works with Claude Code, Cursor, Codex, Gemini CLI, and Qwen Code.
 Zero external services required.
@@ -46,13 +46,13 @@ git add .memobank/
 git commit -m "init team memory"
 ```
 
-Claude Code loads the first 200 lines of `.memobank/MEMORY.md` at every session start — no plugins, no configuration beyond `memo onboarding`.
+Claude Code loads the first 200 lines of `.memobank/MEMORY.md` at every session start. No plugins or extra configuration needed beyond `memo onboarding`.
 
 ---
 
 ## How it works
 
-memobank uses three memory tiers — like `git config` levels, each with a different scope:
+memobank uses three memory tiers, like `git config` levels, each with a different scope:
 
 | Tier      | Location                                | Committed?      | Scope                 |
 | --------- | --------------------------------------- | --------------- | --------------------- |
@@ -65,7 +65,7 @@ The project directory name (default `.memobank`) can be customized during `memo 
 
 When you run `memo recall`, memobank searches all active tiers and writes the top results to `.memobank/MEMORY.md`. Claude Code loads that file at the start of every session.
 
-Memories are plain markdown with a small YAML header — readable, diffable, and reviewable in PRs:
+Memories are plain markdown with a small YAML header: readable, diffable, reviewable in PRs:
 
 ```markdown
 ---
@@ -82,11 +82,11 @@ We switched from npm to pnpm in March 2026. Faster installs, better monorepo sup
 
 ## Why not just use CLAUDE.md?
 
-CLAUDE.md is great for static rules you write once. memobank handles knowledge that accumulates over time — lessons learned, decisions made, patterns discovered. The two are complementary: CLAUDE.md for "always do X", memobank for "we learned Y".
+CLAUDE.md is great for static rules you write once. memobank handles knowledge that accumulates: lessons learned, decisions made, patterns discovered. The two are complementary: CLAUDE.md for "always do X", memobank for "we learned Y".
 
 ## Why not a cloud memory API?
 
-Tools like mem0 or Zep store memories in external services. memobank stores them in your Git repo — no API keys, no vendor lock-in, no data leaving your machine. Memory health is visible in `git diff`. Reviews happen in PRs.
+Tools like mem0 or Zep store memories in external services. memobank stores them in your Git repo. No API keys, no vendor lock-in, no data leaves your machine. Memory health is visible in `git diff`. Reviews happen in PRs.
 
 ## Why not Claude Code's built-in auto-memory?
 
@@ -116,7 +116,7 @@ Claude Code's auto-memory is personal and machine-local by default. memobank add
 - Supports TypeScript, JavaScript, Python, Go, Rust, YAML, C# (more via the same extension pattern)
 - Incremental: unchanged files are skipped via SHA256 hash cache
 - `--summarize` writes a `project-architecture-snapshot` memory after indexing
-- **Code-Memory Graph** — `memo index-code` builds `mentions` edges (symbol → memory via FTS5) and `related_to` edges (memory → memory via tag overlap) stored in `code-index.db`. Graph expansion in recall surfaces memories adjacent to matching symbols up to depth 2.
+- Code-memory graph: `memo index-code` builds `mentions` edges (symbol → memory via FTS5) and `related_to` edges (memory → memory via tag overlap) stored in `code-index.db`. Recall traverses the graph up to depth 2 to surface adjacent memories.
 
 **Safety**
 
@@ -144,7 +144,7 @@ Claude Code's auto-memory is personal and machine-local by default. memobank add
 
 ## 🗂️ Three-Tier Memory Model
 
-Memobank organizes memory into three tiers, each with a distinct scope and use case. The tier determines where files are stored and who can access them — not how they are structured (all tiers share the same file format).
+Memobank organizes memory into three tiers, each with a distinct scope. The tier determines where files are stored and who can access them, not how they are structured (all tiers share the same file format).
 
 ### Tier 1 — Personal (Private)
 
@@ -155,7 +155,7 @@ Memobank organizes memory into three tiers, each with a distinct scope and use c
 | **Who sees it**      | Only you, on this machine     |
 | **Activate**         | `memo init --global`          |
 
-**Use when:** You want to keep private notes about a project — experiments that didn't pan out, personal shortcuts, machine-specific env quirks. This tier never touches the repo and is never shared.
+**Use when:** You want to keep private notes about a project: experiments that didn't pan out, personal shortcuts, machine-specific env quirks. This tier never touches the repo and is never shared.
 
 ```
 ~/.memobank/my-project/
@@ -207,7 +207,7 @@ your-project/
 | **Who sees it**      | Entire organization, across all repos                    |
 | **Activate**         | `memo workspace init <remote-url>`                       |
 
-**Use when:** You have knowledge that spans multiple repos or services — inter-service contracts, company-wide architecture patterns, platform team decisions. Any existing Git repo can serve as the workspace remote; updates flow through standard PRs.
+**Use when:** You have knowledge that spans multiple repos or services, or belongs to the project but not the codebase: inter-service contracts, company-wide architecture patterns, platform team decisions, business decisions made by a PO or PM, BA requirements analysis, stakeholder agreements, compliance constraints, or any non-code project context. Any existing Git repo (including a wiki or docs repo) can serve as the workspace remote; updates flow through standard PRs.
 
 ```
 Organization knowledge (cross-repo):
@@ -224,6 +224,9 @@ Organization knowledge (cross-repo):
 - "Redis connection pooling pattern for all services" → **workspace**
 - "We switched to Postgres in this repo" → **project**
 - "Our data platform team maintains Postgres, contact @data-infra for schema changes" → **workspace**
+- "PO decided to deprioritise feature X for this quarter" → **workspace**
+- "BA agreed with stakeholders: payments flow must handle partial refunds" → **workspace**
+- "Legal requires GDPR deletion within 30 days across all services" → **workspace**
 
 ---
 
@@ -545,7 +548,7 @@ Memobank automatically sanitizes secrets before publishing to workspace:
 - ✅ AWS credentials
 - ✅ GitHub/GitLab tokens
 
-`memo workspace publish` runs the same scanner and aborts if secrets are found — no automatic stripping, you must redact manually.
+`memo workspace publish` runs the same scanner and aborts if secrets are found. There is no automatic stripping; you redact manually.
 
 ---
 
