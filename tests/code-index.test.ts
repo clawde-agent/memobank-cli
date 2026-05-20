@@ -38,7 +38,20 @@ describe('CodeIndex', () => {
   });
 
   it('initializes schema without error', () => {
-    expect(() => new CodeIndex(path.join(tmpDir, 'code-index2.db'))).not.toThrow();
+    let idx2: CodeIndex | undefined;
+    expect(() => {
+      idx2 = new CodeIndex(path.join(tmpDir, 'code-index2.db'));
+    }).not.toThrow();
+    idx2?.close();
+  });
+
+  it('creates memory_nodes and memory_edges tables', () => {
+    const tables = (index as any).db
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('memory_nodes','memory_edges') ORDER BY name"
+      )
+      .all() as { name: string }[];
+    expect(tables.map((t) => t.name)).toEqual(['memory_edges', 'memory_nodes']);
   });
 
   it('creates memory_nodes and memory_edges tables', () => {
