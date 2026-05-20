@@ -17,7 +17,7 @@ versioned alongside code, reviewed as PRs, and loaded automatically at session s
 
 - **Personal** — private lessons and preferences, never committed
 - **Team** — shared knowledge that travels with the codebase
-- **Workspace** — cross-repo patterns, synced via a separate Git remote
+- **Workspace** — cross-repo patterns, business decisions, BA/PO context, and non-code project knowledge, synced via a separate Git remote (any wiki or docs repo works)
 
 Works with Claude Code, Cursor, Codex, Gemini CLI, and Qwen Code.
 Zero external services required.
@@ -207,7 +207,7 @@ your-project/
 | **Who sees it**      | Entire organization, across all repos                    |
 | **Activate**         | `memo workspace init <remote-url>`                       |
 
-**Use when:** You have knowledge that spans multiple repos or services — inter-service contracts, company-wide architecture patterns, platform team decisions. Any existing Git repo can serve as the workspace remote; updates flow through standard PRs.
+**Use when:** You have knowledge that spans multiple repos or services, or that belongs to the project but not the codebase — inter-service contracts, company-wide architecture patterns, platform team decisions, business decisions made by a PO or PM, BA requirements analysis, stakeholder agreements, compliance constraints, or any non-code project context. Any existing Git repo (including a wiki or docs repo) can serve as the workspace remote; updates flow through standard PRs.
 
 ```
 Organization knowledge (cross-repo):
@@ -224,6 +224,9 @@ Organization knowledge (cross-repo):
 - "Redis connection pooling pattern for all services" → **workspace**
 - "We switched to Postgres in this repo" → **project**
 - "Our data platform team maintains Postgres, contact @data-infra for schema changes" → **workspace**
+- "PO decided to deprioritise feature X for this quarter" → **workspace**
+- "BA agreed with stakeholders: payments flow must handle partial refunds" → **workspace**
+- "Legal requires GDPR deletion within 30 days across all services" → **workspace**
 
 ---
 
