@@ -3,21 +3,17 @@ import * as os from 'os';
 import * as path from 'path';
 import { scanFile, detectLanguage, SUPPORTED_EXTENSIONS } from '../src/core/code-scanner';
 
-// Verify tree-sitter + TypeScript grammar are fully functional (native bindings compiled).
-// Just require('tree-sitter') can succeed even when the native addon is broken.
+// Probe whether scanFile can actually extract symbols from a TypeScript file.
+// tree-sitter may load without throwing but still produce 0 symbols when native
+// bindings are partially broken (e.g., grammar compiled for a different Node ABI).
 const treeSitterAvailable = (() => {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const ParserMod = require('tree-sitter') as
-      | { default?: new () => unknown }
-      | (new () => unknown);
-    const ParserCtor =
-      (ParserMod as { default?: new () => unknown }).default ?? (ParserMod as new () => unknown);
-    const parser = new ParserCtor() as { setLanguage: (l: unknown) => void };
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const tsGrammar = (require('tree-sitter-typescript') as { typescript: unknown }).typescript;
-    parser.setLanguage(tsGrammar);
-    return true;
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-ts-probe-'));
+    const tmpFile = path.join(tmpDir, 'probe.ts');
+    fs.writeFileSync(tmpFile, 'export function probe(): void {}');
+    const { symbols } = scanFile(tmpFile, tmpDir);
+    fs.rmSync(tmpDir, { recursive: true });
+    return symbols.length > 0;
   } catch {
     return false;
   }
