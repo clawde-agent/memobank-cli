@@ -90,7 +90,7 @@ const path = __importStar(require("path"));
             return;
         dir = parent;
     }
-}());
+})();
 const program = new commander_1.Command();
 // Get version from package.json
 const packageJsonPath = path.join(__dirname, '..', 'package.json');
