@@ -91,7 +91,7 @@ async function selectEngine(engineName, repoRoot, embedConfig) {
         return { engine: new text_engine_1.TextEngine(), warning };
     }
 }
-function appendRecallMiss(repoRoot, query) {
+function appendRecallMiss(repoRoot, query, resultCount) {
     const missesPath = path.join(repoRoot, 'meta', 'recall-misses.json');
     let misses = [];
     try {
@@ -102,7 +102,7 @@ function appendRecallMiss(repoRoot, query) {
     catch {
         misses = [];
     }
-    misses.push({ query, timestamp: new Date().toISOString(), result_count: 0 });
+    misses.push({ query, timestamp: new Date().toISOString(), result_count: resultCount });
     fs.writeFileSync(missesPath, JSON.stringify(misses, null, 2), 'utf-8');
 }
 function printStudyHint(repoRoot, silent) {
@@ -117,7 +117,7 @@ function printStudyHint(repoRoot, silent) {
             return;
         process.stdout.write('\n');
         for (const s of suggestions.slice(0, 3)) {
-            process.stdout.write(`memo study ${s.name} — recalled ${s.access_count} times\n`);
+            process.stdout.write(`💡 memo study ${s.name} — recalled ${s.access_count} times\n`);
         }
     }
     catch {
@@ -211,14 +211,16 @@ async function recallCommand(query, options) {
                         node_type: 'symbol',
                     })),
                 ];
-                const expandedIds = (0, memory_graph_1.graphExpand)(db, seeds);
+                const expandedNodes = (0, memory_graph_1.graphExpand)(db, seeds);
                 const alreadyIn = new Set(results.map((r) => r.memory.name));
                 const allMemories = (0, store_1.loadAll)(repoRoot);
-                graphExpandedResults = expandedIds
-                    .filter((id) => !alreadyIn.has(id))
-                    .map((id) => allMemories.find((m) => m.name === id))
-                    .filter((m) => m !== undefined)
-                    .map((m) => ({ memory: m, score: 0.1 }));
+                graphExpandedResults = expandedNodes
+                    .filter(({ id }) => !alreadyIn.has(id))
+                    .map(({ id, minDepth }) => {
+                    const m = allMemories.find((mem) => mem.name === id);
+                    return m ? { memory: m, score: minDepth === 1 ? 0.2 : 0.1 } : null;
+                })
+                    .filter((r) => r !== null);
             }
             finally {
                 db.close();
@@ -231,10 +233,10 @@ async function recallCommand(query, options) {
     if (graphExpandedResults.length > 0) {
         results = (0, rrf_1.rrfMerge)(results, graphExpandedResults);
     }
-    // Track recall misses (non-fatal)
-    if (results.length === 0) {
+    // Track recall misses: 0 or 1 result is a near-failure (top_k default is 5)
+    if (results.length < 2) {
         try {
-            appendRecallMiss(repoRoot, query);
+            appendRecallMiss(repoRoot, query, results.length);
         }
         catch {
             /* non-fatal */

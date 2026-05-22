@@ -7,6 +7,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { extract } from '../core/smart-extractor';
+import { captureConfigFromMemoConfig, createCaptureProvider } from '../core/capture-provider';
 import { sanitize } from '../core/sanitizer';
 import { findRepoRoot, resolveProjectId, writePending } from '../core/store';
 import { processQueue } from '../core/queue-processor';
@@ -99,10 +100,15 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
         /* not a git repo or git unavailable — skip */
       }
 
-      const extracted = await extract(contextForExtraction, process.env.ANTHROPIC_API_KEY);
+      const captureConfig = captureConfigFromMemoConfig(config);
+      const captureProvider = captureConfig ? createCaptureProvider(captureConfig) : null;
+      const extracted = captureProvider
+        ? await captureProvider.extract(contextForExtraction)
+        : await extract(contextForExtraction, process.env.ANTHROPIC_API_KEY);
 
       // No-LLM checkpoint fallback: git shows in-progress work but no API key configured
-      if (extracted.length === 0 && gitStatus && !process.env.ANTHROPIC_API_KEY) {
+      const hasLlm = Boolean(captureProvider || process.env.ANTHROPIC_API_KEY);
+      if (extracted.length === 0 && gitStatus && !hasLlm) {
         const date = new Date().toISOString().slice(0, 10);
         const entry: PendingEntry = {
           id: `CHK-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -200,8 +206,12 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
   // 2. Sanitize
   const sanitized = sanitize(sessionText);
 
-  // 3. Extract memories via LLM
-  const extracted = await extract(sanitized, process.env.ANTHROPIC_API_KEY);
+  // 3. Extract memories via LLM (provider config takes precedence; falls back to smart-extractor)
+  const captureConfig = captureConfigFromMemoConfig(config);
+  const captureProvider = captureConfig ? createCaptureProvider(captureConfig) : null;
+  const extracted = captureProvider
+    ? await captureProvider.extract(sanitized)
+    : await extract(sanitized, process.env.ANTHROPIC_API_KEY);
 
   if (extracted.length === 0) {
     console.log('No memories extracted from session');

@@ -20,6 +20,8 @@ import { installCursor } from '../platforms/cursor';
 import { workspaceInit } from './workspace';
 import { codeScanCommand } from './code-scan';
 import { detectProjectName, detectPlatforms, type PlatformItem } from '../core/platform-detector';
+import { fetchAvailableModels } from '../core/capture-provider';
+import type { CaptureProviderName } from '../core/capture-provider';
 
 type MultiSelectItem = PlatformItem;
 
@@ -58,12 +60,33 @@ function getDetectedPlatforms(items: MultiSelectItem[]): string[] {
   return items.filter(i => i.hint?.includes('✓')).map(i => i.value);
 }
 
-type Step = 'project-name' | 'project-dir' | 'platforms' | 'auto-memory-check' | 'workspace-remote' | 'search-engine' | 'embedding-provider' | 'ollama-url' | 'ollama-model' | 'openai-key' | 'jina-key' | 'reranker' | 'reranker-provider' | 'reranker-key' | 'done';
+type Step =
+  | 'project-name'
+  | 'project-dir'
+  | 'capture-provider'
+  | 'capture-key'
+  | 'capture-base-url'
+  | 'capture-model'
+  | 'platforms'
+  | 'auto-memory-check'
+  | 'workspace-remote'
+  | 'search-engine'
+  | 'embedding-provider'
+  | 'ollama-url'
+  | 'ollama-model'
+  | 'embedding-key'
+  | 'reranker'
+  | 'reranker-provider'
+  | 'reranker-key'
+  | 'done';
 
 interface OnboardingState {
   step: Step;
   projectName: string;
   projectDir: string;
+  captureProvider: string;
+  captureModel: string;
+  captureBaseUrl: string;
   platforms: string[];
   enableAutoMemory: boolean;
   workspaceRemote: string;
@@ -71,10 +94,9 @@ interface OnboardingState {
   embeddingProvider: string;
   embeddingUrl: string;
   embeddingModel: string;
-  embeddingApiKey: string;
   enableReranker: boolean;
   rerankerProvider: string;
-  rerankerApiKey: string;
+  collectedKeys: Record<string, string>;
 }
 
 async function runSetup(state: OnboardingState, gitRoot: string): Promise<{ lines: string[]; autoMemoryWarning: boolean }> {
@@ -84,6 +106,22 @@ async function runSetup(state: OnboardingState, gitRoot: string): Promise<{ line
 
   // 1. Init config
   initConfig(repoRoot, state.projectName);
+
+  // 1a. Write capture config if a provider was selected
+  if (state.captureProvider) {
+    const DEFAULT_CAPTURE_MODEL: Record<string, string> = {
+      anthropic: 'claude-haiku-4-5', openai: 'gpt-4o-mini',
+      gemini: 'gemini-2.0-flash', openrouter: 'openai/gpt-4o-mini', ollama: 'llama3.2',
+    };
+    const config = loadConfig(repoRoot);
+    config.capture = {
+      provider: state.captureProvider as import('../types').CaptureProviderName,
+      model: state.captureModel || DEFAULT_CAPTURE_MODEL[state.captureProvider] || 'unknown',
+      ...(state.captureBaseUrl ? { base_url: state.captureBaseUrl } : {}),
+    };
+    writeConfig(repoRoot, config);
+    summaryLines.push(`Capture: ${state.captureProvider} / ${state.captureModel || '(default model)'}`);
+  }
 
   // 2. Create directory structure
   const TYPES = ['lesson', 'decision', 'workflow', 'architecture'];
@@ -144,29 +182,10 @@ async function runSetup(state: OnboardingState, gitRoot: string): Promise<{ line
       config.embedding.provider = 'openai';
       config.embedding.model = 'text-embedding-3-small';
       config.embedding.dimensions = 1536;
-      // Save API key to env file (not config.yaml for security)
-      if (state.embeddingApiKey.trim()) {
-        const envPath = path.join(repoRoot, '.env');
-        const envLine = `OPENAI_API_KEY=${state.embeddingApiKey.trim()}\n`;
-        const existing = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : '';
-        if (!existing.includes('OPENAI_API_KEY=')) {
-          fs.writeFileSync(envPath, existing + envLine, 'utf-8');
-          summaryLines.push(`OpenAI API key saved to ${envPath}`);
-        }
-      }
     } else if (state.embeddingProvider === 'jina') {
       config.embedding.provider = 'jina';
       config.embedding.model = 'jina-embeddings-v3';
       config.embedding.dimensions = 1024;
-      if (state.embeddingApiKey.trim()) {
-        const envPath = path.join(repoRoot, '.env');
-        const envLine = `JINA_API_KEY=${state.embeddingApiKey.trim()}\n`;
-        const existing = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : '';
-        if (!existing.includes('JINA_API_KEY=')) {
-          fs.writeFileSync(envPath, existing + envLine, 'utf-8');
-          summaryLines.push(`Jina API key saved to ${envPath}`);
-        }
-      }
     }
     writeConfig(repoRoot, config);
   }
@@ -178,20 +197,31 @@ async function runSetup(state: OnboardingState, gitRoot: string): Promise<{ line
       provider: state.rerankerProvider as 'jina' | 'cohere',
     };
     writeConfig(repoRoot, config);
-    const keyVar = state.rerankerProvider === 'jina' ? 'JINA_API_KEY' : 'COHERE_API_KEY';
-    if (state.rerankerApiKey.trim()) {
-      const envPath = path.join(repoRoot, '.env');
-      const envLine = `${keyVar}=${state.rerankerApiKey.trim()}\n`;
-      const existing = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : '';
-      if (!existing.includes(`${keyVar}=`)) {
-        fs.writeFileSync(envPath, existing + envLine, 'utf-8');
-        summaryLines.push(`✓ Reranker: ${state.rerankerProvider} (${keyVar} saved to .env)`);
-      } else {
-        summaryLines.push(`✓ Reranker: ${state.rerankerProvider} (${keyVar} already in .env)`);
-      }
-    } else {
-      summaryLines.push(`Reranker: ${state.rerankerProvider} (set ${keyVar} env var)`);
-    }
+    summaryLines.push(`Reranker: ${state.rerankerProvider}`);
+  }
+
+  // Write all collected API keys to .memobank/.env in one pass
+  const allKeys = state.collectedKeys;
+  if (Object.keys(allKeys).length > 0) {
+    const today = new Date().toISOString().split('T')[0];
+    const envPath = path.join(repoRoot, '.env');
+    const header = `# memobank API keys — do not commit\n# Generated by memo onboarding on ${today}\n\n`;
+    const envLines = Object.entries(allKeys)
+      .map(([k, v]) => `${k}=${v}`)
+      .join('\n');
+    fs.writeFileSync(envPath, header + envLines + '\n', 'utf-8');
+    summaryLines.push(`API keys (${Object.keys(allKeys).join(', ')}) saved to ${envPath}`);
+  }
+
+  // Ensure .env is gitignored inside .memobank/
+  const gitignorePath = path.join(repoRoot, '.gitignore');
+  const existingGitignore = fs.existsSync(gitignorePath) ? fs.readFileSync(gitignorePath, 'utf-8') : '';
+  if (!existingGitignore.includes('.env')) {
+    fs.writeFileSync(
+      gitignorePath,
+      existingGitignore + (existingGitignore.endsWith('\n') ? '' : '\n') + '.env\n',
+      'utf-8'
+    );
   }
 
   // Auto-run code indexing so recall --code works immediately after setup.
@@ -300,11 +330,32 @@ export async function onboardingCommand(): Promise<void> {
     );
   }
 
+  const FALLBACK_MODELS: Record<string, string[]> = {
+    anthropic:  ['claude-haiku-4-5', 'claude-sonnet-4-5', 'claude-opus-4-5'],
+    openai:     ['gpt-4o-mini', 'gpt-4o', 'o3-mini'],
+    gemini:     ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'],
+    openrouter: ['openai/gpt-4o-mini', 'anthropic/claude-3-5-haiku', 'google/gemini-2.0-flash'],
+    ollama:     ['llama3.2', 'llama3.1', 'mistral', 'phi4'],
+  };
+
+  async function fetchModelsForOnboarding(
+    provider: string,
+    apiKey?: string,
+    baseUrl?: string
+  ): Promise<SelectItem[]> {
+    const models = await fetchAvailableModels(provider as CaptureProviderName, apiKey, baseUrl);
+    const list = models.length > 0 ? models : (FALLBACK_MODELS[provider] ?? []);
+    return list.map((m) => ({ label: m, value: m }));
+  }
+
   function OnboardingApp() {
     const [state, setState] = useState<OnboardingState>({
       step: 'project-name',
       projectName: defaultName,
       projectDir: '.memobank',
+      captureProvider: '',
+      captureModel: '',
+      captureBaseUrl: '',
       platforms: detectedPlatforms,
       enableAutoMemory: true,
       workspaceRemote: '',
@@ -312,19 +363,20 @@ export async function onboardingCommand(): Promise<void> {
       embeddingProvider: '',
       embeddingUrl: 'http://localhost:11434',
       embeddingModel: 'mxbai-embed-large',
-      embeddingApiKey: '',
       enableReranker: false,
       rerankerProvider: '',
-      rerankerApiKey: '',
+      collectedKeys: {},
     });
     const [nameInput, setNameInput] = useState(defaultName);
     const [projectDirInput, setProjectDirInput] = useState('.memobank');
+    const [captureKeyInput, setCaptureKeyInput] = useState('');
+    const [captureBaseUrlInput, setCaptureBaseUrlInput] = useState('');
+    const [captureModelItems, setCaptureModelItems] = useState<SelectItem[]>([]);
     const [workspaceInput, setWorkspaceInput] = useState('');
     const [ollamaUrlInput, setOllamaUrlInput] = useState('http://localhost:11434');
     const [ollamaModelInput, setOllamaModelInput] = useState('mxbai-embed-large');
-    const [openaiKeyInput, setOpenaiKeyInput] = useState('');
+    const [embeddingKeyInput, setEmbeddingKeyInput] = useState('');
     const [rerankerKeyInput, setRerankerKeyInput] = useState('');
-    const [jinaKeyInput, setJinaKeyInput] = useState('');
     const [done, setDone] = useState(false);
     const [summary, setSummary] = useState<string[]>([]);
     const [autoMemoryWarning, setAutoMemoryWarning] = useState(false);
@@ -370,9 +422,110 @@ export async function onboardingCommand(): Promise<void> {
           onChange: setProjectDirInput,
           onSubmit: (value: string) => {
             const dir = (value || '.memobank').replace(/^\/+|\/+$/g, '');
-            setState(s => ({ ...s, step: 'platforms', projectDir: dir }));
+            setState(s => ({ ...s, step: 'capture-provider', projectDir: dir }));
           },
         }),
+      ) : null,
+
+      state.step === 'capture-provider' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, { bold: true }, 'Capture LLM provider'),
+        React.createElement(Text, { dimColor: true }, '  Powers AI memory extraction after each session'),
+        React.createElement(SelectInput, {
+          items: [
+            { label: 'Anthropic (Claude)', value: 'anthropic' },
+            { label: 'OpenAI', value: 'openai' },
+            { label: 'OpenRouter (access 200+ models)', value: 'openrouter' },
+            { label: 'Ollama (local, no API key)', value: 'ollama' },
+            { label: 'Gemini (Google)', value: 'gemini' },
+          ],
+          onSelect: (item: { label: string; value: unknown }) => {
+            const provider = String(item.value);
+            setState(s => ({
+              ...s,
+              captureProvider: provider,
+              step: provider === 'ollama' ? 'capture-base-url' : 'capture-key',
+            }));
+          },
+        }),
+      ) : null,
+
+      state.step === 'capture-key' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, { bold: true }, `${state.captureProvider} API key`),
+        React.createElement(Text, { dimColor: true }, '  Saved to .memobank/.env (not committed)'),
+        React.createElement(TextInput, {
+          value: captureKeyInput,
+          onChange: setCaptureKeyInput,
+          onSubmit: async (value: string) => {
+            const key = value.trim();
+            if (!key) return;
+            const envKey =
+              state.captureProvider === 'anthropic'  ? 'ANTHROPIC_API_KEY' :
+              state.captureProvider === 'openrouter' ? 'OPENROUTER_API_KEY' :
+              state.captureProvider === 'gemini'     ? 'GEMINI_API_KEY' :
+              'OPENAI_API_KEY';
+            if (state.captureProvider === 'openrouter') {
+              setState(s => ({
+                ...s,
+                step: 'capture-base-url',
+                collectedKeys: { ...s.collectedKeys, [envKey]: key },
+              }));
+              return;
+            }
+            const models = await fetchModelsForOnboarding(state.captureProvider, key);
+            setCaptureModelItems(models);
+            setState(s => ({
+              ...s,
+              step: 'capture-model',
+              collectedKeys: { ...s.collectedKeys, [envKey]: key },
+            }));
+          },
+        }),
+      ) : null,
+
+      state.step === 'capture-base-url' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, { bold: true }, 'Base URL'),
+        React.createElement(Text, { dimColor: true },
+          state.captureProvider === 'ollama'
+            ? '  Ollama endpoint (default: http://localhost:11434/v1)'
+            : '  OpenRouter endpoint (default: https://openrouter.ai/api/v1)'
+        ),
+        React.createElement(TextInput, {
+          value: captureBaseUrlInput ||
+            (state.captureProvider === 'ollama' ? 'http://localhost:11434/v1' : 'https://openrouter.ai/api/v1'),
+          onChange: setCaptureBaseUrlInput,
+          onSubmit: async (value: string) => {
+            const baseUrl = value.trim() ||
+              (state.captureProvider === 'ollama' ? 'http://localhost:11434/v1' : 'https://openrouter.ai/api/v1');
+            const apiKey = state.captureProvider === 'openrouter'
+              ? state.collectedKeys['OPENROUTER_API_KEY']
+              : undefined;
+            const models = await fetchModelsForOnboarding(state.captureProvider, apiKey, baseUrl);
+            setCaptureModelItems(models);
+            setState(s => ({ ...s, step: 'capture-model', captureBaseUrl: baseUrl }));
+          },
+        }),
+      ) : null,
+
+      state.step === 'capture-model' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, { bold: true }, 'Select capture model'),
+        captureModelItems.length > 0
+          ? React.createElement(SelectInput, {
+              items: captureModelItems,
+              onSelect: (item: { label: string; value: unknown }) => {
+                setState(s => ({ ...s, captureModel: String(item.value), step: 'platforms' }));
+              },
+            })
+          : React.createElement(Box, { flexDirection: 'column' },
+              React.createElement(Text, { dimColor: true }, '  (type model name and press Enter)'),
+              React.createElement(TextInput, {
+                value: '',
+                onChange: () => {},
+                onSubmit: (value: string) => {
+                  const model = value.trim() || (FALLBACK_MODELS[state.captureProvider]?.[0] ?? '');
+                  setState(s => ({ ...s, captureModel: model, step: 'platforms' }));
+                },
+              }),
+            ),
       ) : null,
 
       state.step === 'platforms' ? React.createElement(InlineMultiSelect, {
@@ -447,13 +600,13 @@ export async function onboardingCommand(): Promise<void> {
           ],
           onSelect: (item: { label: string; value: unknown }) => {
             const provider = String(item.value);
-            if (provider === 'ollama') {
-              setState(s => ({ ...s, step: 'ollama-url', embeddingProvider: provider }));
-            } else if (provider === 'openai') {
-              setState(s => ({ ...s, step: 'openai-key', embeddingProvider: provider }));
-            } else {
-              setState(s => ({ ...s, step: 'jina-key', embeddingProvider: provider }));
-            }
+            const envKey = provider === 'openai' ? 'OPENAI_API_KEY' : 'JINA_API_KEY';
+            const alreadyHaveKey = provider !== 'ollama' && Boolean(state.collectedKeys[envKey]);
+            setState(s => ({
+              ...s,
+              embeddingProvider: provider,
+              step: provider === 'ollama' ? 'ollama-url' : alreadyHaveKey ? 'reranker' : 'embedding-key',
+            }));
           },
         }),
       ) : null,
@@ -482,26 +635,22 @@ export async function onboardingCommand(): Promise<void> {
         }),
       ) : null,
 
-      state.step === 'openai-key' ? React.createElement(Box, { flexDirection: 'column' },
-        React.createElement(Text, null, 'OpenAI API key:'),
-        React.createElement(Text, { dimColor: true }, '  (will be saved to .env — press Enter to skip and set OPENAI_API_KEY manually)'),
+      state.step === 'embedding-key' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, { bold: true },
+          `${state.embeddingProvider === 'openai' ? 'OpenAI' : 'Jina AI'} API key (for embeddings)`
+        ),
+        React.createElement(Text, { dimColor: true }, '  Saved to .memobank/.env — press Enter to skip'),
         React.createElement(TextInput, {
-          value: openaiKeyInput,
-          onChange: setOpenaiKeyInput,
+          value: embeddingKeyInput,
+          onChange: setEmbeddingKeyInput,
           onSubmit: (value: string) => {
-            setState(s => ({ ...s, step: 'reranker', embeddingApiKey: value }));
-          },
-        }),
-      ) : null,
-
-      state.step === 'jina-key' ? React.createElement(Box, { flexDirection: 'column' },
-        React.createElement(Text, null, 'Jina API key:'),
-        React.createElement(Text, { dimColor: true }, '  (will be saved to .env — press Enter to skip and set JINA_API_KEY manually)'),
-        React.createElement(TextInput, {
-          value: jinaKeyInput,
-          onChange: setJinaKeyInput,
-          onSubmit: (value: string) => {
-            setState(s => ({ ...s, step: 'reranker', embeddingApiKey: value }));
+            const key = value.trim();
+            const envKey = state.embeddingProvider === 'openai' ? 'OPENAI_API_KEY' : 'JINA_API_KEY';
+            setState(s => ({
+              ...s,
+              step: 'reranker',
+              collectedKeys: key ? { ...s.collectedKeys, [envKey]: key } : s.collectedKeys,
+            }));
           },
         }),
       ) : null,
@@ -543,21 +692,45 @@ export async function onboardingCommand(): Promise<void> {
             { label: 'Cohere', value: 'cohere' },
           ],
           onSelect: (item: { label: string; value: unknown }) => {
-            setState(s => ({ ...s, step: 'reranker-key', enableReranker: true, rerankerProvider: String(item.value) }));
+            const provider = String(item.value);
+            const keyVar = provider === 'jina' ? 'JINA_API_KEY' : 'COHERE_API_KEY';
+            const alreadyHaveKey = Boolean(state.collectedKeys[keyVar]);
+            if (alreadyHaveKey) {
+              if (setupRunning.current) return;
+              setupRunning.current = true;
+              const finalState = { ...state, step: 'done' as Step, enableReranker: true, rerankerProvider: provider };
+              setState(finalState);
+              runSetup(finalState, gitRoot).then(({ lines, autoMemoryWarning: warn }) => {
+                setSummary(lines);
+                setAutoMemoryWarning(warn);
+                setDone(true);
+              }).catch((err: Error) => {
+                setSummary([`Setup failed: ${err.message}`]);
+                setDone(true);
+              });
+            } else {
+              setState(s => ({ ...s, step: 'reranker-key', enableReranker: true, rerankerProvider: provider }));
+            }
           },
         }),
       ) : null,
 
       state.step === 'reranker-key' ? React.createElement(Box, { flexDirection: 'column' },
         React.createElement(Text, { bold: true }, `${state.rerankerProvider === 'jina' ? 'JINA_API_KEY' : 'COHERE_API_KEY'}:`),
-        React.createElement(Text, { dimColor: true }, '  Paste your API key (leave empty to set later via env var)'),
+        React.createElement(Text, { dimColor: true }, '  Saved to .memobank/.env — press Enter to skip'),
         React.createElement(TextInput, {
           value: rerankerKeyInput,
           onChange: setRerankerKeyInput,
           onSubmit: (value: string) => {
             if (setupRunning.current) return;
             setupRunning.current = true;
-            const finalState = { ...state, step: 'done' as Step, rerankerApiKey: value.trim() };
+            const key = value.trim();
+            const keyVar = state.rerankerProvider === 'jina' ? 'JINA_API_KEY' : 'COHERE_API_KEY';
+            const finalState = {
+              ...state,
+              step: 'done' as Step,
+              collectedKeys: key ? { ...state.collectedKeys, [keyVar]: key } : state.collectedKeys,
+            };
             setState(finalState);
             runSetup(finalState, gitRoot).then(({ lines, autoMemoryWarning: warn }) => {
               setSummary(lines);
