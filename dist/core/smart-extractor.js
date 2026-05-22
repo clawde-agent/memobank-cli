@@ -39,6 +39,26 @@ LOW / SKIP — never extract:
 - Questions without concrete answers
 - Greetings, acknowledgments, meta-discussion about the AI
 
+## Checkpoint rule
+
+If the session text ends with a '[GIT STATE <timestamp>]' block showing uncommitted changes AND the conversation appears mid-task (work unfinished, next steps mentioned, or open questions), extract EXACTLY ONE additional memory:
+- type: "workflow"
+- name: "session-checkpoint-<date from timestamp, YYYY-MM-DD>"
+- tags: ["checkpoint", "wip"]
+- confidence: "high"
+- description: "Resume point: <one-line task description>"
+- content: markdown with these sections:
+  ## Task
+  <what was being worked on>
+  ## Done
+  <bullet list of completed steps visible in the conversation>
+  ## Next
+  <bullet list of remaining steps or the next concrete action>
+  ## Files
+  <list of modified files from the GIT STATE block>
+
+Do NOT extract a checkpoint if: the session looks complete (clean ending, all tasks done), or if there are no uncommitted changes in the GIT STATE block.
+
 Rules:
 - Each memory MUST be self-contained: understandable without the conversation context
 - No fixed limit — extract as many HIGH and MEDIUM memories as warranted

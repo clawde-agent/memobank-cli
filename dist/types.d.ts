@@ -1,5 +1,19 @@
 export type MemoryType = 'lesson' | 'decision' | 'workflow' | 'architecture';
 export type Engine = 'text' | 'lancedb';
+export type LlmProvider = 'anthropic' | 'openai' | 'ollama' | 'gemini' | 'openrouter';
+export type CaptureProviderName = 'anthropic' | 'openai' | 'gemini' | 'openrouter' | 'ollama';
+export interface CaptureConfig {
+    provider: CaptureProviderName;
+    model: string;
+    apiKey?: string;
+    baseUrl?: string;
+}
+export interface LlmConfig {
+    provider: LlmProvider;
+    model: string;
+    base_url?: string;
+    api_key_env?: string;
+}
 export type Confidence = 'low' | 'medium' | 'high';
 export type MemoryScope = 'personal' | 'project' | 'workspace';
 export type Status = 'experimental' | 'active' | 'needs-review' | 'deprecated';
@@ -69,6 +83,11 @@ export interface MemoConfig {
     };
     lifecycle?: LifecycleConfig;
     workspace?: WorkspaceConfig;
+    capture?: {
+        provider: CaptureProviderName;
+        model: string;
+        base_url?: string;
+    };
     reranker?: {
         enabled: boolean;
         provider: 'jina' | 'cohere';

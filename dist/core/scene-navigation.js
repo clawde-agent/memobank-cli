@@ -45,7 +45,7 @@ function generateSceneNavigation(memoDir, entries) {
     const scenesDir = path.join(memoDir, 'scenes');
     const lines = [NAV_START, '', '## Scene Navigation', ''];
     for (const e of sorted) {
-        const fullPath = path.join(scenesDir, e.filename);
+        const fullPath = path.join(scenesDir, e.filename).split(path.sep).join('/');
         lines.push(`### Path: ${fullPath}`);
         lines.push(`**Heat**: ${e.heat} 🔥 | **Updated**: ${e.updated}`);
         lines.push(`Summary: ${e.summary}`);

@@ -42,6 +42,7 @@ exports.capture = capture;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const smart_extractor_1 = require("../core/smart-extractor");
+const capture_provider_1 = require("../core/capture-provider");
 const sanitizer_1 = require("../core/sanitizer");
 const store_1 = require("../core/store");
 const queue_processor_1 = require("../core/queue-processor");
@@ -91,7 +92,56 @@ async function capture(options = {}) {
                 .map((t) => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.text}`)
                 .join('\n\n');
             const sanitized = (0, sanitizer_1.sanitize)(sessionText);
-            const extracted = await (0, smart_extractor_1.extract)(sanitized, process.env.ANTHROPIC_API_KEY);
+            // Collect git working state (used both for LLM context and no-LLM fallback)
+            let gitStatus = '';
+            let gitBranch = '';
+            let gitLastCommit = '';
+            let contextForExtraction = sanitized;
+            try {
+                const { execSync } = await Promise.resolve().then(() => __importStar(require('child_process')));
+                gitStatus = execSync('git status --short', { cwd, encoding: 'utf-8' }).trim();
+                if (gitStatus) {
+                    gitBranch = execSync('git branch --show-current', { cwd, encoding: 'utf-8' }).trim();
+                    gitLastCommit = execSync('git log --oneline -1', { cwd, encoding: 'utf-8' }).trim();
+                    const gitDiff = execSync('git diff --stat HEAD', { cwd, encoding: 'utf-8' }).trim();
+                    const ts = new Date().toISOString();
+                    contextForExtraction +=
+                        `\n\n[GIT STATE ${ts}]\n${gitStatus}` + (gitDiff ? `\n${gitDiff}` : '');
+                }
+            }
+            catch {
+                /* not a git repo or git unavailable — skip */
+            }
+            const captureConfig = (0, capture_provider_1.captureConfigFromMemoConfig)(config);
+            const captureProvider = captureConfig ? (0, capture_provider_1.createCaptureProvider)(captureConfig) : null;
+            const extracted = captureProvider
+                ? await captureProvider.extract(contextForExtraction)
+                : await (0, smart_extractor_1.extract)(contextForExtraction, process.env.ANTHROPIC_API_KEY);
+            // No-LLM checkpoint fallback: git shows in-progress work but no API key configured
+            const hasLlm = Boolean(captureProvider || process.env.ANTHROPIC_API_KEY);
+            if (extracted.length === 0 && gitStatus && !hasLlm) {
+                const date = new Date().toISOString().slice(0, 10);
+                const entry = {
+                    id: `CHK-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                    timestamp: new Date().toISOString(),
+                    projectId: (0, store_1.resolveProjectId)(repoRoot),
+                    candidates: [
+                        {
+                            name: `session-checkpoint-${date}`,
+                            type: 'workflow',
+                            description: `Resume point: ${gitBranch || 'uncommitted changes'}`,
+                            tags: ['checkpoint', 'wip'],
+                            confidence: 'high',
+                            content: `## Task\n${gitBranch || '(unknown — check git log)'}\n\n## Last Commit\n${gitLastCommit || '(none)'}\n\n## Next\n(fill in what remains)\n\n## Files\n${gitStatus}`,
+                        },
+                    ],
+                };
+                (0, store_1.writePending)(repoRoot, entry);
+                await (0, queue_processor_1.processQueue)(repoRoot);
+                log(`Wrote fallback checkpoint for session ${sessionId}`);
+                await markSessionProcessed(metaDir, sessionId);
+                continue;
+            }
             if (extracted.length === 0) {
                 log(`No memories extracted from session ${sessionId}`);
                 await markSessionProcessed(metaDir, sessionId);
@@ -159,8 +209,12 @@ async function capture(options = {}) {
     }
     // 2. Sanitize
     const sanitized = (0, sanitizer_1.sanitize)(sessionText);
-    // 3. Extract memories via LLM
-    const extracted = await (0, smart_extractor_1.extract)(sanitized, process.env.ANTHROPIC_API_KEY);
+    // 3. Extract memories via LLM (provider config takes precedence; falls back to smart-extractor)
+    const captureConfig = (0, capture_provider_1.captureConfigFromMemoConfig)(config);
+    const captureProvider = captureConfig ? (0, capture_provider_1.createCaptureProvider)(captureConfig) : null;
+    const extracted = captureProvider
+        ? await captureProvider.extract(sanitized)
+        : await (0, smart_extractor_1.extract)(sanitized, process.env.ANTHROPIC_API_KEY);
     if (extracted.length === 0) {
         console.log('No memories extracted from session');
         return;

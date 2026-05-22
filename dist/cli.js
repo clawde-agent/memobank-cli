@@ -63,6 +63,34 @@ const store_1 = require("./core/store");
 const config_1 = require("./config");
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+// Load API keys from .memobank/.env before any command runs.
+// Walks up from cwd to find the project's .memobank/.env file.
+(function loadMemoEnv() {
+    let dir = process.cwd();
+    for (let i = 0; i < 12; i++) {
+        const envPath = path.join(dir, '.memobank', '.env');
+        if (fs.existsSync(envPath)) {
+            for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
+                const trimmed = line.trim();
+                if (!trimmed || trimmed.startsWith('#'))
+                    continue;
+                const eq = trimmed.indexOf('=');
+                if (eq === -1)
+                    continue;
+                const key = trimmed.slice(0, eq).trim();
+                const val = trimmed.slice(eq + 1).trim();
+                if (key && val && !process.env[key]) {
+                    process.env[key] = val;
+                }
+            }
+            return;
+        }
+        const parent = path.dirname(dir);
+        if (parent === dir)
+            return;
+        dir = parent;
+    }
+}());
 const program = new commander_1.Command();
 // Get version from package.json
 const packageJsonPath = path.join(__dirname, '..', 'package.json');
