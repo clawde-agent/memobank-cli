@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "memobank": {
+      "source": "clawde-agent/memobank-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "182ed36e5da2e4e55ef57761dcae62c3c49151855233fb1c762d3374ef533831"
+    }
+  }
+}

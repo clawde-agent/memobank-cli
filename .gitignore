@@ -1,6 +1,8 @@
 # ======================
 # Build Output
 # ======================
+# dist/ is not committed — CI runs `npm run build` before `npm publish`.
+# package.json `"files": ["dist"]` controls what lands in the npm package.
 dist/
 build/
 *.tsbuildinfo
@@ -29,7 +31,6 @@ meta/code-index.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.npmrc
 .yarn-integrity
 .pnp.*
 .pnp.js
@@ -64,7 +65,6 @@ Desktop.ini
 # ======================
 # IDE / Editors
 # ======================
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -72,12 +72,12 @@ Desktop.ini
 *.sublime-project
 *.sublime-workspace
 *.iml
+# .vscode/ is intentionally not ignored — contributors benefit from shared settings
 
 # ======================
 # Logs
 # ======================
 logs/
-*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -109,17 +109,19 @@ temp/
 test-memobank/
 
 # ======================
-# Memobank pending queue
+# Memobank project memory directory
 # ======================
-.memobank/.pending/
-
+# Each contributor's .memobank/ is private to their local environment.
 .memobank/
-.claude/
-.roam/
-.github/workflows/roam.yml
 
-# memobank
-.memobank/meta/access-log.json
-.memobank/meta/code-index.db
-.memobank/.lancedb/
-.memobank/pending/
+# ======================
+# Claude Code / agent tooling
+# ======================
+.claude/settings.local.json
+.agents/
+# skills-lock.json is tracked (contributor lockfile)
+
+# ======================
+# Local tool indexes
+# ======================
+.roam/
