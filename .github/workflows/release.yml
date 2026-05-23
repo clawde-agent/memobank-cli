@@ -32,7 +32,20 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Check if version already published
+        id: version_check
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "memobank-cli@$VERSION" version > /dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish to npm
+        if: steps.version_check.outputs.exists == 'false'
         run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
