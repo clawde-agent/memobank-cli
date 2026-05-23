@@ -167,6 +167,7 @@ export interface CodeScanOptions {
   repo?: string;
   incremental?: boolean;
   files?: string[];
+  returnOnUnavailable?: boolean; // when true, return silently instead of process.exit(1) if optional deps are absent
 }
 
 export interface RefsOptions {

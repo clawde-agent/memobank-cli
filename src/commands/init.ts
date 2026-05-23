@@ -96,7 +96,11 @@ export async function quickInit(options: QuickInitOptions): Promise<void> {
 
   // Auto-run code indexing so recall --code works immediately after init.
   try {
-    await codeScanCommand(undefined, { summarize: true, repo: memobankRoot });
+    await codeScanCommand(undefined, {
+      summarize: true,
+      returnOnUnavailable: true,
+      repo: memobankRoot,
+    });
   } catch {
     // Non-fatal: tree-sitter may not be installed (optional dep).
     console.log('  Tip: run memo index-code to enable code-aware recall.');

@@ -240,7 +240,7 @@ async function runSetup(state: OnboardingState, gitRoot: string): Promise<{ line
 
   // Auto-run code indexing so recall --code works immediately after setup.
   try {
-    await codeScanCommand(undefined, { summarize: true, repo: repoRoot });
+    await codeScanCommand(undefined, { summarize: true, returnOnUnavailable: true, repo: repoRoot });
     summaryLines.push('✓ Code index built');
   } catch {
     summaryLines.push('  Tip: run memo index-code to enable code-aware recall');

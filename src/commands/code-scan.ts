@@ -79,6 +79,7 @@ export async function codeScanCommand(
   options: CodeScanOptions
 ): Promise<void> {
   if (!CodeIndex.isAvailable()) {
+    if (options.returnOnUnavailable) return;
     console.error(
       '⚠  memo index requires optional dependencies. Run:\n  npm install memobank-cli --include=optional'
     );
@@ -86,6 +87,7 @@ export async function codeScanCommand(
   }
 
   if (!CodeIndex.isParserAvailable()) {
+    if (options.returnOnUnavailable) return;
     console.error(
       '⚠  memo index requires tree-sitter (optional dependency not installed). Run:\n  npm install memobank-cli --include=optional'
     );
