@@ -114,6 +114,7 @@ async function runSetup(state: OnboardingState, gitRoot: string): Promise<{ line
     const DEFAULT_CAPTURE_MODEL: Record<string, string> = {
       anthropic: 'claude-haiku-4-5', openai: 'gpt-4o-mini',
       gemini: 'gemini-2.0-flash', openrouter: 'openai/gpt-4o-mini', ollama: 'llama3.2',
+      llamacpp: 'local-model',
     };
     const config = loadConfig(repoRoot);
     config.capture = {
@@ -184,6 +185,13 @@ async function runSetup(state: OnboardingState, gitRoot: string): Promise<{ line
       } else {
         summaryLines.push(`✓ Ollama connected, model "${ollamaModel}" ready`);
       }
+    } else if (state.embeddingProvider === 'llamacpp') {
+      const rawUrl = (state.embeddingUrl || 'http://localhost:8080').replace(/\/v1\/?$/, '').replace(/\/$/, '');
+      config.embedding.provider = 'llamacpp';
+      config.embedding.base_url = rawUrl + '/v1';
+      config.embedding.model = state.embeddingModel || 'local-model';
+      config.embedding.dimensions = 1024;
+      summaryLines.push(`llama.cpp embedding at ${rawUrl}`);
     } else if (state.embeddingProvider === 'openai') {
       config.embedding.provider = 'openai';
       config.embedding.model = 'text-embedding-3-small';
@@ -342,6 +350,7 @@ export async function onboardingCommand(): Promise<void> {
     gemini:     ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'],
     openrouter: ['openai/gpt-4o-mini', 'anthropic/claude-3-5-haiku', 'google/gemini-2.0-flash'],
     ollama:     ['llama3.2', 'llama3.1', 'mistral', 'phi4'],
+    llamacpp:   ['local-model'],
   };
 
   async function fetchModelsForOnboarding(
@@ -444,14 +453,16 @@ export async function onboardingCommand(): Promise<void> {
             { label: 'OpenAI', value: 'openai' },
             { label: 'OpenRouter (access 200+ models)', value: 'openrouter' },
             { label: 'Ollama (local, no API key)', value: 'ollama' },
+            { label: 'llama.cpp (local, no API key)', value: 'llamacpp' },
             { label: 'Gemini (Google)', value: 'gemini' },
           ],
           onSelect: (item: { label: string; value: unknown }) => {
             const provider = String(item.value);
+            const isLocal = provider === 'ollama' || provider === 'llamacpp';
             setState(s => ({
               ...s,
               captureProvider: provider,
-              step: provider === 'ollama' ? 'capture-base-url' : 'capture-key',
+              step: isLocal ? 'capture-base-url' : 'capture-key',
             }));
           },
         }),
@@ -495,15 +506,23 @@ export async function onboardingCommand(): Promise<void> {
         React.createElement(Text, { dimColor: true },
           state.captureProvider === 'ollama'
             ? '  Ollama endpoint (default: http://localhost:11434/v1)'
+            : state.captureProvider === 'llamacpp'
+            ? '  llama.cpp server endpoint (default: http://localhost:8080/v1)'
             : '  OpenRouter endpoint (default: https://openrouter.ai/api/v1)'
         ),
         React.createElement(TextInput, {
-          value: captureBaseUrlInput ||
-            (state.captureProvider === 'ollama' ? 'http://localhost:11434/v1' : 'https://openrouter.ai/api/v1'),
+          value: captureBaseUrlInput || (
+            state.captureProvider === 'ollama' ? 'http://localhost:11434/v1' :
+            state.captureProvider === 'llamacpp' ? 'http://localhost:8080/v1' :
+            'https://openrouter.ai/api/v1'
+          ),
           onChange: setCaptureBaseUrlInput,
           onSubmit: async (value: string) => {
-            const baseUrl = value.trim() ||
-              (state.captureProvider === 'ollama' ? 'http://localhost:11434/v1' : 'https://openrouter.ai/api/v1');
+            const baseUrl = value.trim() || (
+              state.captureProvider === 'ollama' ? 'http://localhost:11434/v1' :
+              state.captureProvider === 'llamacpp' ? 'http://localhost:8080/v1' :
+              'https://openrouter.ai/api/v1'
+            );
             const apiKey = state.captureProvider === 'openrouter'
               ? state.collectedKeys['OPENROUTER_API_KEY']
               : undefined;
@@ -621,42 +640,60 @@ export async function onboardingCommand(): Promise<void> {
         React.createElement(SelectInput, {
           items: [
             { label: 'Ollama (local, no API key needed)', value: 'ollama' },
+            { label: 'llama.cpp (local, no API key needed)', value: 'llamacpp' },
             { label: 'OpenAI (cloud, requires API key)', value: 'openai' },
             { label: 'Jina AI (cloud, requires API key)', value: 'jina' },
           ],
           onSelect: (item: { label: string; value: unknown }) => {
             const provider = String(item.value);
+            const isLocal = provider === 'ollama' || provider === 'llamacpp';
             const envKey = provider === 'openai' ? 'OPENAI_API_KEY' : 'JINA_API_KEY';
-            const alreadyHaveKey = provider !== 'ollama' && Boolean(state.collectedKeys[envKey]);
+            const alreadyHaveKey = !isLocal && Boolean(state.collectedKeys[envKey]);
             setState(s => ({
               ...s,
               embeddingProvider: provider,
-              step: provider === 'ollama' ? 'ollama-url' : alreadyHaveKey ? 'reranker' : 'embedding-key',
+              step: isLocal ? 'ollama-url' : alreadyHaveKey ? 'reranker' : 'embedding-key',
             }));
           },
         }),
       ) : null,
 
       state.step === 'ollama-url' ? React.createElement(Box, { flexDirection: 'column' },
-        React.createElement(Text, null, 'Ollama base URL:'),
-        React.createElement(Text, { dimColor: true }, '  (default: http://localhost:11434 — press Enter to confirm)'),
+        React.createElement(Text, null,
+          state.embeddingProvider === 'llamacpp' ? 'llama.cpp server base URL:' : 'Ollama base URL:'
+        ),
+        React.createElement(Text, { dimColor: true },
+          state.embeddingProvider === 'llamacpp'
+            ? '  (default: http://localhost:8080 — press Enter to confirm)'
+            : '  (default: http://localhost:11434 — press Enter to confirm)'
+        ),
         React.createElement(TextInput, {
           value: ollamaUrlInput,
           onChange: setOllamaUrlInput,
           onSubmit: (value: string) => {
-            setState(s => ({ ...s, step: 'ollama-model', embeddingUrl: value || 'http://localhost:11434' }));
+            const defaultUrl = state.embeddingProvider === 'llamacpp'
+              ? 'http://localhost:8080'
+              : 'http://localhost:11434';
+            setState(s => ({ ...s, step: 'ollama-model', embeddingUrl: value || defaultUrl }));
           },
         }),
       ) : null,
 
       state.step === 'ollama-model' ? React.createElement(Box, { flexDirection: 'column' },
-        React.createElement(Text, null, 'Ollama embedding model:'),
-        React.createElement(Text, { dimColor: true }, '  (default: mxbai-embed-large — run `ollama pull mxbai-embed-large` to install)'),
+        React.createElement(Text, null,
+          state.embeddingProvider === 'llamacpp' ? 'llama.cpp embedding model name:' : 'Ollama embedding model:'
+        ),
+        React.createElement(Text, { dimColor: true },
+          state.embeddingProvider === 'llamacpp'
+            ? '  Name passed to the API (server uses its loaded model regardless)'
+            : '  (default: mxbai-embed-large — run `ollama pull mxbai-embed-large` to install)'
+        ),
         React.createElement(TextInput, {
           value: ollamaModelInput,
           onChange: setOllamaModelInput,
           onSubmit: (value: string) => {
-            setState(s => ({ ...s, step: 'reranker', embeddingModel: value || 'mxbai-embed-large' }));
+            const defaultModel = state.embeddingProvider === 'llamacpp' ? 'local-model' : 'mxbai-embed-large';
+            setState(s => ({ ...s, step: 'reranker', embeddingModel: value || defaultModel }));
           },
         }),
       ) : null,

@@ -82,6 +82,7 @@ const KEY_ENV: Record<CaptureProviderName, string | undefined> = {
   gemini: 'GEMINI_API_KEY',
   openrouter: 'OPENROUTER_API_KEY',
   ollama: undefined,
+  llamacpp: undefined,
 };
 
 const DEFAULT_MODEL: Record<CaptureProviderName, string> = {
@@ -90,6 +91,7 @@ const DEFAULT_MODEL: Record<CaptureProviderName, string> = {
   openrouter: 'openai/gpt-4o-mini',
   ollama: 'llama3.2',
   gemini: 'gemini-2.0-flash',
+  llamacpp: 'local-model',
 };
 
 export function captureConfigFromMemoConfig(config: MemoConfig): CaptureConfig | null {
@@ -139,6 +141,11 @@ export async function fetchAvailableModels(
       }
       const data = (await res.json()) as { models?: { name: string }[] };
       return (data.models ?? []).map((m: { name: string }) => m.name);
+    }
+
+    if (provider === 'llamacpp') {
+      // llama-server loads a single model at startup; no listing API available.
+      return [];
     }
 
     if (provider === 'gemini') {
@@ -200,7 +207,8 @@ export function createCaptureProvider(config: CaptureConfig): CaptureProvider | 
       }
       case 'openai':
       case 'openrouter':
-      case 'ollama': {
+      case 'ollama':
+      case 'llamacpp': {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { createOpenAICompatProvider } = require('./providers/openai-compat') as {
           createOpenAICompatProvider: (k: string, m: string, b?: string) => CaptureProvider;
