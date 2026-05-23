@@ -112,6 +112,15 @@ export class CodeIndex {
     }
   }
 
+  static isParserAvailable(): boolean {
+    try {
+      require('tree-sitter');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   static getDbPath(repoRoot: string): string {
     return path.join(repoRoot, 'meta', 'code-index.db');
   }

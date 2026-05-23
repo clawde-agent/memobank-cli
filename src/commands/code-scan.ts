@@ -85,6 +85,13 @@ export async function codeScanCommand(
     process.exit(1);
   }
 
+  if (!CodeIndex.isParserAvailable()) {
+    console.error(
+      '⚠  memo index requires tree-sitter (optional dependency not installed). Run:\n  npm install memobank-cli --include=optional'
+    );
+    process.exit(1);
+  }
+
   const cwd = process.cwd();
   const repoRoot = findRepoRoot(cwd, options.repo);
 
