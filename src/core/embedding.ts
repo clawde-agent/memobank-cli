@@ -6,7 +6,7 @@
 
 import { OpenAI } from 'openai';
 
-export type EmbeddingProvider = 'openai' | 'azure' | 'ollama' | 'jina' | 'custom';
+export type EmbeddingProvider = 'openai' | 'azure' | 'ollama' | 'llamacpp' | 'jina' | 'custom';
 
 export interface EmbeddingConfig {
   provider: EmbeddingProvider;
@@ -23,8 +23,10 @@ export class EmbeddingGenerator {
   constructor(config: EmbeddingConfig) {
     this.config = config;
 
-    // Ollama typically uses empty string or 'ollama' as API key
-    const apiKey = config.apiKey || (config.provider === 'ollama' ? 'ollama' : '');
+    // Local providers (Ollama, llama.cpp) don't require a real API key
+    const apiKey =
+      config.apiKey ||
+      (config.provider === 'ollama' || config.provider === 'llamacpp' ? 'local' : '');
 
     this.client = new OpenAI({
       apiKey,
@@ -59,6 +61,8 @@ export class EmbeddingGenerator {
     switch (provider) {
       case 'ollama':
         return 'http://localhost:11434/v1';
+      case 'llamacpp':
+        return 'http://localhost:8080/v1';
       case 'azure':
         return 'https://api.openai.com/v1'; // Azure uses different format
       case 'jina':
@@ -144,8 +148,8 @@ export class EmbeddingGenerator {
 
     // Get API key based on provider
     let apiKey: string | undefined;
-    if (provider === 'ollama') {
-      // Ollama doesn't require an API key
+    if (provider === 'ollama' || provider === 'llamacpp') {
+      // Local providers don't require an API key
       apiKey = undefined;
     } else if (provider === 'jina') {
       apiKey = process.env.JINA_API_KEY;
@@ -184,7 +188,9 @@ export class EmbeddingGenerator {
   private static getDefaultModel(provider: EmbeddingProvider): string {
     switch (provider) {
       case 'ollama':
-        return 'mxbai-embed-large'; // Popular Ollama embedding model
+        return 'mxbai-embed-large';
+      case 'llamacpp':
+        return 'local-model';
       case 'azure':
         return 'text-embedding-ada-002';
       case 'jina':

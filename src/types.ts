@@ -1,7 +1,13 @@
 export type MemoryType = 'lesson' | 'decision' | 'workflow' | 'architecture';
 export type Engine = 'text' | 'lancedb';
-export type LlmProvider = 'anthropic' | 'openai' | 'ollama' | 'gemini' | 'openrouter';
-export type CaptureProviderName = 'anthropic' | 'openai' | 'gemini' | 'openrouter' | 'ollama';
+export type LlmProvider = 'anthropic' | 'openai' | 'ollama' | 'gemini' | 'openrouter' | 'llamacpp';
+export type CaptureProviderName =
+  | 'anthropic'
+  | 'openai'
+  | 'gemini'
+  | 'openrouter'
+  | 'ollama'
+  | 'llamacpp';
 
 export interface CaptureConfig {
   provider: CaptureProviderName;
@@ -56,6 +62,7 @@ export interface WorkspaceConfig {
   auto_sync: boolean;
   branch: string;
   path?: string; // subdirectory within remote repo
+  local_path?: string; // absolute path to local clone (overrides the default ~/.memobank/_workspace/ location)
 }
 
 export interface LifecycleConfig {
@@ -160,6 +167,7 @@ export interface CodeScanOptions {
   repo?: string;
   incremental?: boolean;
   files?: string[];
+  returnOnUnavailable?: boolean; // when true, return silently instead of process.exit(1) if optional deps are absent
 }
 
 export interface RefsOptions {

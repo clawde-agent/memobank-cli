@@ -450,10 +450,11 @@ workspace
   .command('init <remote-url>')
   .description('Connect to a shared workspace memory repository')
   .option('--repo <path>', 'Memobank repository path')
+  .option('--local-path <path>', 'Path to an existing local clone of the workspace repo')
   .action(async (remoteUrl: string, options) => {
     try {
       const repoRoot = findRepoRoot(process.cwd(), options.repo);
-      await workspaceInit(remoteUrl, repoRoot);
+      await workspaceInit(remoteUrl, repoRoot, options.localPath as string | undefined);
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`);
       process.exit(1);

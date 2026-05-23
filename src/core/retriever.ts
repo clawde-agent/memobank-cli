@@ -3,12 +3,11 @@
  * Orchestrates engine search and formats output for MEMORY.md injection
  */
 
-import * as path from 'path';
 import * as fs from 'fs';
 import type { RecallResult, MemoConfig, MemoryScope, SymbolResult } from '../types';
 import type { CodeIndex as CodeIndexType } from '../engines/code-index';
 import type { EngineAdapter } from '../engines/engine-adapter';
-import { loadAll, writeMemoryMd, getGlobalDir, getWorkspaceDir } from './store';
+import { loadAll, writeMemoryMd, getGlobalDir, resolveWorkspaceDir } from './store';
 import { TextEngine } from '../engines/text-engine';
 import { recordAccess, loadAccessLogs, updateStatusOnRecall } from './lifecycle-manager';
 import { rerank } from './reranker';
@@ -44,9 +43,7 @@ export async function recall(
         })()
       : withCode;
   const globalDir = getGlobalDir(config.project.name);
-  const workspaceDir = config.workspace?.enabled
-    ? getWorkspaceDir(path.basename(config.workspace.remote ?? '', '.git'))
-    : undefined;
+  const workspaceDir = config.workspace ? resolveWorkspaceDir(config.workspace) : undefined;
   const memories = loadAll(repoRoot, scope, globalDir, workspaceDir);
   const searchEngine = engine || new TextEngine();
   const accessLogs = loadAccessLogs(repoRoot);

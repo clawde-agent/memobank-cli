@@ -27,6 +27,18 @@ export function getWorkspaceDir(workspaceName: string): string {
   return path.join(osHomeDir(), '.memobank', '_workspace', workspaceName);
 }
 
+/**
+ * Resolve the effective local directory for a configured workspace.
+ * Prefers `local_path` when set; otherwise derives the path from the remote URL basename.
+ */
+export function resolveWorkspaceDir(workspace: { remote: string; local_path?: string }): string {
+  if (workspace.local_path) {
+    return workspace.local_path;
+  }
+  const wsName = path.basename(workspace.remote, '.git') || '_workspace';
+  return path.join(osHomeDir(), '.memobank', '_workspace', wsName);
+}
+
 export function findRepoRoot(cwd: string, repoFlag?: string): string {
   if (repoFlag) {
     return path.resolve(repoFlag);

@@ -6,6 +6,7 @@ import {
   loadAll,
   getGlobalDir,
   getWorkspaceDir,
+  resolveWorkspaceDir,
   resolveProjectId,
 } from '../core/store';
 import { loadConfig } from '../config';
@@ -65,8 +66,9 @@ export async function distillCommand(options: DistillOptions): Promise<void> {
       return;
     }
 
-    const workspaceName = config.project.name;
-    const workspaceDir = getWorkspaceDir(workspaceName);
+    const workspaceDir = config.workspace
+      ? resolveWorkspaceDir(config.workspace)
+      : getWorkspaceDir(config.project.name);
 
     // Load existing workspace memories for idempotency: match by distilled_from
     const existingMap = new Map<string, string>(); // source name → target filename
@@ -124,7 +126,7 @@ export async function distillCommand(options: DistillOptions): Promise<void> {
       repoRoot,
       'all',
       getGlobalDir(projectId),
-      config.workspace ? getWorkspaceDir(config.project.name) : undefined
+      config.workspace ? resolveWorkspaceDir(config.workspace) : undefined
     );
 
     if (all.length === 0) {
