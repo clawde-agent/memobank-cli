@@ -70,6 +70,7 @@ type Step =
   | 'platforms'
   | 'auto-memory-check'
   | 'workspace-remote'
+  | 'workspace-local-path'
   | 'search-engine'
   | 'embedding-provider'
   | 'ollama-url'
@@ -90,6 +91,7 @@ interface OnboardingState {
   platforms: string[];
   enableAutoMemory: boolean;
   workspaceRemote: string;
+  workspaceLocalPath: string;
   searchEngine: string;
   embeddingProvider: string;
   embeddingUrl: string;
@@ -134,8 +136,12 @@ async function runSetup(state: OnboardingState, gitRoot: string): Promise<{ line
   // 3. Initialize workspace remote if provided
   if (state.workspaceRemote.trim()) {
     try {
-      await workspaceInit(state.workspaceRemote.trim(), repoRoot);
-      summaryLines.push(`Workspace: ${state.workspaceRemote.trim()}`);
+      const localPath = state.workspaceLocalPath.trim() || undefined;
+      await workspaceInit(state.workspaceRemote.trim(), repoRoot, localPath);
+      const wsLabel = localPath
+        ? `${state.workspaceRemote.trim()} (local: ${localPath})`
+        : state.workspaceRemote.trim();
+      summaryLines.push(`Workspace: ${wsLabel}`);
     } catch (err) {
       summaryLines.push(`⚠  Workspace init failed: ${(err as Error).message}`);
     }
@@ -359,6 +365,7 @@ export async function onboardingCommand(): Promise<void> {
       platforms: detectedPlatforms,
       enableAutoMemory: true,
       workspaceRemote: '',
+      workspaceLocalPath: '',
       searchEngine: 'text',
       embeddingProvider: '',
       embeddingUrl: 'http://localhost:11434',
@@ -373,6 +380,7 @@ export async function onboardingCommand(): Promise<void> {
     const [captureBaseUrlInput, setCaptureBaseUrlInput] = useState('');
     const [captureModelItems, setCaptureModelItems] = useState<SelectItem[]>([]);
     const [workspaceInput, setWorkspaceInput] = useState('');
+    const [workspaceLocalPathInput, setWorkspaceLocalPathInput] = useState('');
     const [ollamaUrlInput, setOllamaUrlInput] = useState('http://localhost:11434');
     const [ollamaModelInput, setOllamaModelInput] = useState('mxbai-embed-large');
     const [embeddingKeyInput, setEmbeddingKeyInput] = useState('');
@@ -570,7 +578,25 @@ export async function onboardingCommand(): Promise<void> {
           value: workspaceInput,
           onChange: setWorkspaceInput,
           onSubmit: (value: string) => {
-            setState(s => ({ ...s, step: 'search-engine', workspaceRemote: value }));
+            const remote = value.trim();
+            setState(s => ({
+              ...s,
+              workspaceRemote: remote,
+              step: remote ? 'workspace-local-path' : 'search-engine',
+            }));
+          },
+        }),
+      ) : null,
+
+      state.step === 'workspace-local-path' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, { bold: true }, 'Local workspace path'),
+        React.createElement(Text, { dimColor: true }, '  If the repo is already cloned, enter its path (e.g. ~/repos/company-wiki)'),
+        React.createElement(Text, { dimColor: true }, '  Press Enter to clone into the default location (~/.memobank/_workspace/):'),
+        React.createElement(TextInput, {
+          value: workspaceLocalPathInput,
+          onChange: setWorkspaceLocalPathInput,
+          onSubmit: (value: string) => {
+            setState(s => ({ ...s, workspaceLocalPath: value.trim(), step: 'search-engine' }));
           },
         }),
       ) : null,

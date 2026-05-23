@@ -56,6 +56,7 @@ export interface WorkspaceConfig {
   auto_sync: boolean;
   branch: string;
   path?: string; // subdirectory within remote repo
+  local_path?: string; // absolute path to local clone (overrides the default ~/.memobank/_workspace/ location)
 }
 
 export interface LifecycleConfig {

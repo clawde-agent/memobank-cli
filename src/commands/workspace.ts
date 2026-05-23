@@ -11,16 +11,38 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import matter from 'gray-matter';
 import { loadConfig, writeConfig } from '../config';
-import { resolveProjectId } from '../core/store';
+import { resolveProjectId, resolveWorkspaceDir } from '../core/store';
 import { scanFile } from './scan';
 
 const MEMORY_TYPES = ['lesson', 'decision', 'workflow', 'architecture', 'meta'];
 
-export function workspaceInit(remoteUrl: string, repoRoot: string): void {
+export function workspaceInit(remoteUrl: string, repoRoot: string, localPath?: string): void {
   const config = loadConfig(repoRoot);
-  const wsName = path.basename(remoteUrl, '.git');
   const home = process.env.HOME || process.env.USERPROFILE || '';
-  const wsDir = path.join(home, '.memobank', '_workspace', wsName);
+
+  // Resolve the effective local directory
+  let wsDir: string;
+  if (localPath) {
+    wsDir = path.resolve(localPath.replace(/^~/, home));
+  } else {
+    const wsName = path.basename(remoteUrl, '.git');
+    wsDir = path.join(home, '.memobank', '_workspace', wsName);
+  }
+
+  // If the directory is already a git repo, reuse it without cloning
+  if (fs.existsSync(path.join(wsDir, '.git'))) {
+    console.log(`Using existing workspace at ${wsDir}.`);
+    config.workspace = {
+      remote: remoteUrl,
+      auto_sync: false,
+      branch: 'main',
+      path: '.memobank',
+      ...(localPath ? { local_path: wsDir } : {}),
+    };
+    writeConfig(repoRoot, config);
+    console.log(`✓ Workspace configured: ${wsDir}`);
+    return;
+  }
 
   if (fs.existsSync(wsDir)) {
     console.log(`Workspace already initialized at ${wsDir}. Run: memo workspace sync`);
@@ -56,7 +78,13 @@ export function workspaceInit(remoteUrl: string, repoRoot: string): void {
     console.log('✓ Initialized workspace repository.');
   }
 
-  config.workspace = { remote: remoteUrl, auto_sync: false, branch: 'main', path: '.memobank' };
+  config.workspace = {
+    remote: remoteUrl,
+    auto_sync: false,
+    branch: 'main',
+    path: '.memobank',
+    ...(localPath ? { local_path: wsDir } : {}),
+  };
   writeConfig(repoRoot, config);
   console.log(`✓ Workspace remote configured: ${remoteUrl}`);
 }
@@ -68,9 +96,7 @@ export function workspaceSync(repoRoot: string, push = false): void {
     process.exit(1);
   }
 
-  const wsName = path.basename(config.workspace.remote, '.git');
-  const home = process.env.HOME || process.env.USERPROFILE || '';
-  const wsDir = path.join(home, '.memobank', '_workspace', wsName);
+  const wsDir = resolveWorkspaceDir(config.workspace!);
   const branch = config.workspace.branch ?? 'main';
 
   console.log('Pulling from workspace remote...');
@@ -147,11 +173,7 @@ export async function workspacePublish(
   }
 
   const config = loadConfig(repoRoot);
-  const wsName = config.workspace?.remote
-    ? path.basename(config.workspace.remote, '.git')
-    : '_workspace';
-  const home = process.env.HOME || process.env.USERPROFILE || '';
-  const wsDir = wsDirOverride ?? path.join(home, '.memobank', '_workspace', wsName);
+  const wsDir = wsDirOverride ?? resolveWorkspaceDir(config.workspace!);
 
   if (!fs.existsSync(wsDir)) {
     throw new Error(`Workspace not initialized. Run: memo workspace init <remote-url>`);
@@ -184,9 +206,7 @@ export function workspaceStatus(repoRoot: string): void {
     console.log('No workspace configured. Run: memo workspace init <remote-url>');
     return;
   }
-  const wsName = path.basename(config.workspace.remote, '.git');
-  const home = process.env.HOME || process.env.USERPROFILE || '';
-  const wsDir = path.join(home, '.memobank', '_workspace', wsName);
+  const wsDir = resolveWorkspaceDir(config.workspace!);
 
   if (!fs.existsSync(path.join(wsDir, '.git'))) {
     console.log(`Workspace directory not found: ${wsDir}`);
