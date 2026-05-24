@@ -17,6 +17,7 @@ hooks:
       timeout: 60
 user-invocable: true
 allowed-tools: 'Bash(memo *)'
+compatibility: Requires Claude Code with the memo CLI installed (npm install -g memobank-cli) and a project initialized with memo init (.memobank/ directory).
 ---
 
 # memobank — Persistent Memory Protocol
