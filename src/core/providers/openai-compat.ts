@@ -32,7 +32,10 @@ export function createOpenAICompatProvider(
         const data = (await response.json()) as {
           choices?: { message?: { content?: string } }[];
         };
-        const text = data.choices?.[0]?.message?.content ?? '';
+        const rawText = data.choices?.[0]?.message?.content ?? '';
+        // Strip <think>...</think> blocks (Qwen3 and other reasoning models)
+        // before searching for the JSON array to avoid matching brackets inside thinking.
+        const text = rawText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
         const jsonMatch = text.match(/\[[\s\S]*\]/);
         if (!jsonMatch) {
           return [];

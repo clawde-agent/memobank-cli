@@ -17,8 +17,14 @@ async function writeTmpTranscript(lines: object[]): Promise<string> {
 }
 
 describe('deriveProjectId', () => {
-  it('converts absolute path to Claude Code project ID', () => {
+  it('converts Unix absolute path to Claude Code project ID', () => {
     expect(deriveProjectId('/Users/foo/myproject')).toBe('-Users-foo-myproject');
+  });
+
+  it('converts Windows absolute path to Claude Code project ID', () => {
+    expect(deriveProjectId('D:\\Repo\\memobank\\memobank-cli')).toBe(
+      'D--Repo-memobank-memobank-cli'
+    );
   });
 });
 
