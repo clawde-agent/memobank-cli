@@ -5,6 +5,7 @@
  */
 
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 
 /**
@@ -93,55 +94,46 @@ export function installClaudeCode(
     settings.autoMemoryEnabled = true;
   }
 
-  // Remove any legacy memobank Stop hook before re-adding the current one.
+  // Remove any existing memobank Stop hook (capture or process-queue) before re-adding.
+  // This ensures upgrades from the old process-queue-only hook to the combined hook work cleanly.
   const hooks = settings.hooks;
   if (hooks?.Stop) {
-    const stopHooks = hooks.Stop;
-    const filtered = stopHooks.filter((h: HookMatcher) => {
-      // Check for legacy memo capture hooks
-      if (h.hooks && h.hooks.length > 0) {
-        return !h.hooks.some(
-          (cmd: HookCommand) => cmd.type === 'command' && cmd.command?.includes('memo capture')
-        );
-      }
-      return true;
+    hooks.Stop = hooks.Stop.filter((h: HookMatcher) => {
+      if (!h.hooks?.length) return true;
+      return !h.hooks.some(
+        (cmd: HookCommand) =>
+          cmd.type === 'command' &&
+          (cmd.command?.includes('memo capture') || cmd.command?.includes('memo process-queue'))
+      );
     });
-    hooks.Stop = filtered;
-    if (hooks.Stop.length === 0) {
-      delete hooks.Stop;
-    }
-    if (Object.keys(hooks).length === 0) {
-      delete settings.hooks;
-    }
+    if (hooks.Stop.length === 0) delete hooks.Stop;
+    if (Object.keys(hooks).length === 0) delete settings.hooks;
   }
 
-  // Add process-queue Stop hook (merge, no duplicates)
-  const STOP_HOOK = 'memo process-queue --background';
-  if (!settings.hooks) {
-    settings.hooks = {};
-  }
+  // Stop hook: capture transcripts then drain the pending queue.
+  // Use powershell on Windows (PS 5.1 doesn't support && operator).
+  const isWindows = os.platform() === 'win32';
+  const STOP_HOOK_CMD = isWindows
+    ? 'powershell -c "memo capture --auto --silent; memo process-queue --background"'
+    : 'memo capture --auto --silent; memo process-queue --background 2>/dev/null || true';
+
+  if (!settings.hooks) settings.hooks = {};
   const hookMap = settings.hooks;
-  const currentStop: HookMatcher[] = hookMap.Stop ?? [];
-  const hasStopHook = currentStop.some((h: HookMatcher) =>
-    h.hooks?.some((cmd: HookCommand) => cmd.type === 'command' && cmd.command === STOP_HOOK)
-  );
-  if (!hasStopHook) {
-    hookMap.Stop = [
-      ...currentStop,
-      {
-        matcher: '',
-        hooks: [
-          {
-            type: 'command',
-            command: STOP_HOOK,
-            timeout: 5000,
-            async: true,
-            statusMessage: 'Saving memories...',
-          },
-        ],
-      },
-    ];
-  }
+  hookMap.Stop = [
+    ...(hookMap.Stop ?? []),
+    {
+      matcher: '',
+      hooks: [
+        {
+          type: 'command',
+          command: STOP_HOOK_CMD,
+          timeout: 60,
+          async: true,
+          statusMessage: 'Saving memories...',
+        },
+      ],
+    },
+  ];
 
   // Write settings
   try {
