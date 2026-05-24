@@ -1,15 +1,14 @@
 ---
 name: memobank
 description: >
-  Persistent memory protocol for AI coding sessions using memobank CLI.
-  Recalls past decisions, lessons, and workflows before starting any task.
-  Writes memories immediately when: a non-obvious bug is fixed, an architecture
-  decision is made, a repeatable process is discovered, or codebase structure
-  is mapped. Distills and promotes memories across tiers over time.
-  Use when: starting any coding task, after fixing a bug, after making a
-  tech or design decision, before switching project context, or when a recalled
-  memory turns out to be wrong. NOT for: projects without a .memobank/
-  directory or memo CLI installed.
+  Recalls and persists coding knowledge across sessions using the memo CLI.
+  Writes memories when a non-obvious bug is fixed, an architecture decision
+  is made, a repeatable process is discovered, or codebase structure is mapped.
+  Distills and promotes memories across tiers over time.
+  Use when: the user's first message involves code or files, after fixing
+  a non-obvious bug, after making a tech or design decision, before switching
+  project context, or when a recalled memory turns out to be wrong.
+  NOT for: projects without a .memobank/ directory or memo CLI installed.
 hooks:
   Stop:
     - command: 'memo capture --auto --silent 2>/dev/null; memo process-queue --background 2>/dev/null || true'
@@ -46,25 +45,12 @@ memo map                          # instant inventory: types, tags, recent addit
 memo recall "<topic>" --code      # memories + linked code symbols + scene navigation
 ```
 
-Read MEMORY.md after recall. The `--code` flag auto-detects whether a code index exists — always safe to use. Scene navigation (if present) surfaces synthesized project narratives at the bottom of MEMORY.md.
+Read MEMORY.md after recall.
 
 ## Before /compact
 
-When the context window is filling up or the user triggers /compact, capture the session first:
-
 ```bash
 memo capture --auto --silent; memo process-queue
-```
-
-This extracts insights from the current transcript and writes them to `.memobank/` before the context is truncated. The Stop hook runs this automatically at session end — run it manually before compacting mid-session.
-
-## Recall — always before coding
-
-```bash
-memo recall "query"                    # search memories → writes MEMORY.md
-memo recall "query" --code             # memories + code symbols + graph (recommended)
-memo recall "query" --scope project    # project tier only
-memo recall "query" --explain          # show score breakdown per result
 ```
 
 ## Write — templates by type
