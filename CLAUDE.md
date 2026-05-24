@@ -9,7 +9,7 @@ npm run build          # compile TypeScript → dist/
 npm run dev            # run CLI with ts-node (no build needed)
 npm test               # Jest (requires Node 18+, uses --experimental-vm-modules)
 npm run test:watch     # watch mode
-npm run test:coverage  # with coverage report (50% threshold)
+npm run test:coverage  # with coverage report (branches 30%, functions/lines/statements 45%)
 npm run lint           # ESLint
 npm run lint:fix       # auto-fix lint issues
 npm run typecheck      # tsc --noEmit (strict mode)
@@ -126,3 +126,17 @@ docs/                 # Extended guides (lifecycle, onboarding, memory value)
 - Run: `memo recall "<topic>" --code` before writing any code
 - Read MEMORY.md after recall to pick up past decisions
 </important>
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues (`clawde-agent/memobank-cli`); use the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: `needs-triage` / `needs-info` / `ready-for-agent` / `ready-for-human` / `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context repo: one `CONTEXT.md` + `docs/adr/` at the root. See `docs/agents/domain.md`.

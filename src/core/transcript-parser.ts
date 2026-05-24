@@ -11,7 +11,9 @@ export interface Turn {
 }
 
 export function deriveProjectId(absoluteCwd: string): string {
-  return absoluteCwd.replace(/\//g, '-');
+  // Replace all path separators (/ \) and Windows drive colon (:) with dashes
+  // to match Claude Code's project folder naming: D:\Repo\foo → D--Repo-foo
+  return absoluteCwd.replace(/[/\\:]/g, '-');
 }
 
 export function getTranscriptDir(cwd: string): string {
