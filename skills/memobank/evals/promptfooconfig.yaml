@@ -1,0 +1,161 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: memobank skill — behavioral trigger evaluations (local Qwen via llamacpp)
+
+# Provider options (uncomment the one you want to use):
+#
+# Option A — llamacpp HTTP server at localhost:8080 (default)
+#   Start with: llama-server -m <model.gguf> --port 8080
+#
+# Option B — pi CLI exec provider (no server needed)
+#   Requires: provider-pi.js + pi installed on PATH
+#   Switch by replacing the provider block with:
+#     - id: file://provider-pi.js
+#       label: pi-local
+#
+# Option C — Ollama HTTP server at localhost:11434
+#   Start with: ollama serve
+#   Switch apiBaseUrl and model name accordingly
+
+providers:
+  - id: openai:chat:Qwen3.6-35B-A3B-UD-Q5_K_M.gguf
+    label: qwen-local
+    config:
+      apiBaseUrl: http://localhost:8080/v1
+      apiKey: local
+      temperature: 0
+      max_tokens: 1024
+
+prompts:
+  - file://prompts/skill-behavior.json
+
+defaultTest:
+  options:
+    # Use the same local model for llm-rubric grading
+    provider:
+      id: openai:chat:Qwen3.6-35B-A3B-UD-Q5_K_M.gguf
+      config:
+        apiBaseUrl: http://localhost:8080/v1
+        apiKey: local
+  assert:
+    - type: latency
+      threshold: 120000 # 2 min — local model is slow
+
+tests:
+  - description: '01 session-start: runs recall before any code action'
+    threshold: 0.5
+    vars:
+      scenario: >-
+        I need to refactor the queue processor to fix a deduplication bug.
+        The Jaccard similarity threshold isn't filtering close-enough duplicates.
+    assert:
+      - type: icontains
+        value: memo recall
+        weight: 3
+        metric: triggers-recall
+      - type: icontains
+        value: memo map
+        weight: 1
+        metric: triggers-map
+      - type: llm-rubric
+        value: >-
+          The response describes running memo map and/or memo recall with --code
+          BEFORE any file exploration, grep, or code editing. The recall step is
+          the first action taken, not something done after starting to look at code.
+        weight: 2
+        metric: recall-ordering
+
+  - description: '02 bug-fix-lesson: writes lesson immediately after non-obvious fix'
+    threshold: 0.5
+    vars:
+      scenario: >-
+        [MID-SESSION — session recall was already run at the start of this conversation]
+        I just diagnosed and fixed a non-obvious bug: the Stop hook on Windows was silently
+        broken because PowerShell 5.1 does not support the && operator. When memo capture
+        failed, process-queue never ran, so no memories were being saved on Windows.
+        The fix was switching from && to ; so process-queue always runs regardless of
+        capture's exit code. The change is committed. Write a lesson memory now.
+    assert:
+      - type: icontains
+        value: memo write lesson
+        weight: 3
+        metric: writes-lesson
+      - type: llm-rubric
+        value: >-
+          The response immediately writes a lesson memory using memo write lesson
+          without deferring or asking for confirmation. The lesson --name is a
+          kebab-case slug describing the Windows/PowerShell && operator bug. The
+          --content includes Problem, Root Cause, and Solution sections. The
+          lesson is written as the only action described.
+        weight: 2
+        metric: lesson-quality
+
+  - description: '03 pre-compact: captures session state before /compact'
+    threshold: 0.5
+    vars:
+      scenario: /compact
+    assert:
+      - type: icontains
+        value: memo capture
+        weight: 3
+        metric: triggers-capture
+      - type: icontains
+        value: memo process-queue
+        weight: 2
+        metric: drains-queue
+      - type: llm-rubric
+        value: >-
+          The response runs memo capture --auto --silent and memo process-queue
+          BEFORE the compact executes. It does not skip the capture step on the
+          assumption that the Stop hook will handle it, because the compact would
+          erase the current session context before the hook fires.
+        weight: 2
+        metric: capture-before-compact
+
+  - description: '04 stale-memory: corrects contradicted recalled memory immediately'
+    threshold: 0.5
+    vars:
+      scenario: >-
+        [MID-SESSION — session recall was already run at the start of this conversation]
+        MEMORY.md shows a recalled entry at .memobank/lesson/distill-personal-tier.md
+        saying "--to personal is not implemented; use memo migrate --tier personal as
+        a workaround". But reading the current src/commands/distill.ts confirms that
+        --to personal has been implemented since v0.10.0. The recalled memory is stale
+        and incorrect. Correct it now.
+    assert:
+      - type: icontains
+        value: memo correct
+        weight: 3
+        metric: corrects-memory
+      - type: llm-rubric
+        value: >-
+          The response immediately runs memo correct .memobank/lesson/distill-personal-tier.md
+          (or a similar path) to record the correction. It does not just tell the user
+          the memory is wrong — it executes memo correct as the immediate next action
+          with the file path provided in the scenario.
+        weight: 2
+        metric: correction-immediacy
+
+  - description: '05 architecture-decision: writes decision before implementing change'
+    threshold: 0.5
+    vars:
+      scenario: >-
+        [MID-SESSION — session recall was already run at the start of this conversation]
+        Architecture decision confirmed after discussion: use text-engine as the default
+        search engine instead of lancedb. Rationale: zero external dependencies beats
+        vector similarity for most users — lancedb stays opt-in via config. We have NOT
+        yet changed any code. Record this decision as a memory now, before touching config.
+    assert:
+      - type: icontains
+        value: memo write decision
+        weight: 3
+        metric: writes-decision
+      - type: llm-rubric
+        value: >-
+          The response immediately writes a decision memory using memo write decision
+          as the first action, before any code changes. The --content includes at
+          least: why the decision was made (context or rationale), what was decided,
+          and what the impact or trade-offs are (may be called Alternatives, Consequences,
+          Impact, or Rationale — section names are flexible). The memory is written
+          now, not after implementation.
+        weight: 2
+        metric: decision-before-impl
