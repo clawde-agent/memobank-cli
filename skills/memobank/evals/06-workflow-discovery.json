@@ -1,0 +1,18 @@
+{
+  "skills": ["memobank"],
+  "query": "We just finished setting up LanceDB vector search from scratch. The steps were: npm install @lancedb/lancedb, set engine: lancedb in .memobank/config.yaml, run memo init --engine lancedb, then verify with memo recall \"embeddings\" --limit 5. Nothing is in the docs about this sequence. Capture this process so we never have to rediscover it.",
+  "context": "MID-SESSION. Session recall already ran at start. User just completed a non-obvious multi-step setup process. No bug was fixed and no architecture choice was made — a repeatable procedure was discovered.",
+  "expected_behavior": [
+    "Claude runs `memo write workflow` (not lesson or decision)",
+    "The --name is a kebab-case slug describing the LanceDB setup process (e.g. 'lancedb-vector-search-setup')",
+    "The --description is a single sentence stating what process this captures",
+    "The --content includes the ordered steps with exact commands",
+    "The --tags include at least one of: 'lancedb', 'setup', 'vector-search', 'engine'",
+    "The memory is written at end-of-task as described in the trigger table"
+  ],
+  "must_not": [
+    "Claude runs memo write lesson — this is a process, not a bug fix",
+    "Claude runs memo write decision — no choice between alternatives was made",
+    "Claude skips writing the memory because 'the steps are in the conversation'"
+  ]
+}

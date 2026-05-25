@@ -7,13 +7,11 @@ import {
   getGlobalDir,
   getProjectDir,
   getWorkspaceDir,
-  loadAll,
-  loadFile,
   resolveProjectId,
-  writePending,
-  writeMemory,
   assertRepoRootMatchesCwd,
-} from '../src/core/store';
+} from '../src/core/dir-resolver';
+import { loadAll, loadFile } from '../src/core/memory-loader';
+import { writePending, writeMemory } from '../src/core/store';
 import { CodeIndex } from '../src/engines/code-index';
 
 function makeTempRepo(): string {

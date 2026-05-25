@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { processQueue } from '../src/core/queue-processor';
-import { loadFile } from '../src/core/store';
+import { loadFile } from '../src/core/memory-loader';
 import { deduplicate } from '../src/core/dedup';
 jest.mock('../src/core/dedup');
 const mockDeduplicate = deduplicate as jest.MockedFunction<typeof deduplicate>;

@@ -1,13 +1,30 @@
 export type MemoryType = 'lesson' | 'decision' | 'workflow' | 'architecture';
 export type Engine = 'text' | 'lancedb';
-export type LlmProvider = 'anthropic' | 'openai' | 'ollama' | 'gemini' | 'openrouter' | 'llamacpp';
+export type LlmProvider =
+  | 'anthropic'
+  | 'openai'
+  | 'ollama'
+  | 'gemini'
+  | 'openrouter'
+  | 'llamacpp'
+  | 'omlx';
+export type EmbeddingProvider =
+  | 'openai'
+  | 'azure'
+  | 'ollama'
+  | 'llamacpp'
+  | 'jina'
+  | 'custom'
+  | 'omlx';
+export type RerankerProvider = 'jina' | 'cohere' | 'omlx';
 export type CaptureProviderName =
   | 'anthropic'
   | 'openai'
   | 'gemini'
   | 'openrouter'
   | 'ollama'
-  | 'llamacpp';
+  | 'llamacpp'
+  | 'omlx';
 
 export interface CaptureConfig {
   provider: CaptureProviderName;
@@ -94,9 +111,10 @@ export interface MemoConfig {
   };
   reranker?: {
     enabled: boolean;
-    provider: 'jina' | 'cohere';
+    provider: RerankerProvider;
     model?: string;
     top_n?: number;
+    base_url?: string;
   };
 }
 

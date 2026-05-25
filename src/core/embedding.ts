@@ -6,7 +6,9 @@
 
 import { OpenAI } from 'openai';
 
-export type EmbeddingProvider = 'openai' | 'azure' | 'ollama' | 'llamacpp' | 'jina' | 'custom';
+import type { EmbeddingProvider } from '../types';
+export type { EmbeddingProvider };
+import { EMBEDDING_REGISTRY, lookupDimensions } from './providers/embedding-registry';
 
 export interface EmbeddingConfig {
   provider: EmbeddingProvider;
@@ -38,38 +40,15 @@ export class EmbeddingGenerator {
     return this.config.dimensions;
   }
 
-  /**
-   * Normalize base URL: use provided URL (ensuring /v1 suffix for OpenAI-compatible APIs),
-   * or fall back to provider default.
-   */
   private normalizeBaseUrl(baseUrl: string | undefined, provider: EmbeddingProvider): string {
-    if (!baseUrl) {
-      return this.getDefaultBaseUrl(provider);
-    }
-    // OpenAI-compatible providers (ollama, jina, custom) need a /v1 path.
-    // If the user omitted it, append automatically.
+    const fallback =
+      EMBEDDING_REGISTRY.get(provider)?.defaultBaseUrl ?? 'https://api.openai.com/v1';
+    if (!baseUrl) return fallback;
+    // OpenAI-compatible providers need a /v1 path; append if omitted.
     if (!baseUrl.endsWith('/v1') && !baseUrl.includes('/v1/')) {
       return baseUrl.replace(/\/$/, '') + '/v1';
     }
     return baseUrl;
-  }
-
-  /**
-   * Get default base URL for provider
-   */
-  private getDefaultBaseUrl(provider: EmbeddingProvider): string {
-    switch (provider) {
-      case 'ollama':
-        return 'http://localhost:11434/v1';
-      case 'llamacpp':
-        return 'http://localhost:8080/v1';
-      case 'azure':
-        return 'https://api.openai.com/v1'; // Azure uses different format
-      case 'jina':
-        return 'https://api.jina.ai/v1';
-      default:
-        return 'https://api.openai.com/v1';
-    }
   }
 
   /**
@@ -131,10 +110,6 @@ export class EmbeddingGenerator {
     }
   }
 
-  /**
-   * Create embedding config from memo config
-   * Supports multiple providers with appropriate defaults
-   */
   static fromMemoConfig(config: {
     embedding: {
       provider?: string;
@@ -145,94 +120,14 @@ export class EmbeddingGenerator {
   }): EmbeddingConfig | null {
     const { embedding } = config;
     const provider = (embedding.provider as EmbeddingProvider) || 'openai';
+    const descriptor = EMBEDDING_REGISTRY.get(provider);
 
-    // Get API key based on provider
-    let apiKey: string | undefined;
-    if (provider === 'ollama' || provider === 'llamacpp') {
-      // Local providers don't require an API key
-      apiKey = undefined;
-    } else if (provider === 'jina') {
-      apiKey = process.env.JINA_API_KEY;
-      if (!apiKey) {
-        return null;
-      }
-    } else {
-      // OpenAI, Azure, etc. need API key from environment
-      apiKey = process.env.OPENAI_API_KEY || process.env.AZURE_API_KEY;
-      if (!apiKey && provider !== 'custom') {
-        return null;
-      }
-    }
+    const apiKey = descriptor?.apiKeyEnv ? process.env[descriptor.apiKeyEnv] : undefined;
+    if (descriptor?.requiresApiKey && !apiKey) return null;
 
-    // Get model with provider-specific defaults
-    const model = embedding.model || EmbeddingGenerator.getDefaultModel(provider);
+    const model = embedding.model ?? descriptor?.defaultModel ?? 'text-embedding-3-small';
+    const dimensions = embedding.dimensions ?? lookupDimensions(model);
 
-    // Get dimensions - either from config or detect automatically later
-    let dimensions = embedding.dimensions;
-    if (!dimensions) {
-      dimensions = EmbeddingGenerator.getDefaultDimensions(model);
-    }
-
-    return {
-      provider,
-      model,
-      dimensions,
-      baseUrl: embedding.base_url,
-      apiKey,
-    };
-  }
-
-  /**
-   * Get default model for provider
-   */
-  private static getDefaultModel(provider: EmbeddingProvider): string {
-    switch (provider) {
-      case 'ollama':
-        return 'mxbai-embed-large';
-      case 'llamacpp':
-        return 'local-model';
-      case 'azure':
-        return 'text-embedding-ada-002';
-      case 'jina':
-        return 'jina-embeddings-v3';
-      default:
-        return 'text-embedding-3-small';
-    }
-  }
-
-  /**
-   * Get default dimensions for known models
-   */
-  private static getDefaultDimensions(model: string): number {
-    const modelDimensions: Record<string, number> = {
-      // OpenAI
-      'text-embedding-3-small': 1536,
-      'text-embedding-3-large': 3072,
-      'text-embedding-ada-002': 1536,
-      // Ollama popular models
-      'mxbai-embed-large': 1024,
-      'nomic-embed-text': 768,
-      'all-minilm': 384,
-      'all-mpnet-base-v2': 768,
-      // Jina
-      'jina-embeddings-v3': 1024,
-      'jina-embeddings-v2-base-en': 768,
-      'jina-embeddings-v2-small-en': 512,
-    };
-
-    // Try exact match first
-    if (modelDimensions[model]) {
-      return modelDimensions[model];
-    }
-
-    // Try partial match
-    for (const [key, dim] of Object.entries(modelDimensions)) {
-      if (model.includes(key)) {
-        return dim;
-      }
-    }
-
-    // Default fallback
-    return 1536;
+    return { provider, model, dimensions, baseUrl: embedding.base_url, apiKey };
   }
 }

@@ -4,7 +4,8 @@
  */
 
 import { loadConfig } from '../config';
-import { findRepoRoot, loadAll } from '../core/store';
+import { findRepoRoot } from '../core/dir-resolver';
+import { loadAll } from '../core/memory-loader';
 import { TextEngine } from '../engines/text-engine';
 import { EmbeddingGenerator } from '../core/embedding';
 import type { MemoryFile } from '../types';

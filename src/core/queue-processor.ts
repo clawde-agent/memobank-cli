@@ -1,7 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { loadFile, writeMemory, resolveProjectId } from './store';
+import { resolveProjectId } from './dir-resolver';
+import { loadFile } from './memory-loader';
+import { writeMemory } from './store';
 import { deduplicate } from './dedup';
 import { incrementalEdgeUpdate } from '../engines/memory-graph';
 import type { PendingEntry } from './store';

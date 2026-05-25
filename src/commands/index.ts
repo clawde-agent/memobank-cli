@@ -3,7 +3,8 @@
  * Build or update the search index
  */
 
-import { loadAll, findRepoRoot } from '../core/store';
+import { findRepoRoot } from '../core/dir-resolver';
+import { loadAll } from '../core/memory-loader';
 import { loadConfig } from '../config';
 import { EmbeddingGenerator } from '../core/embedding';
 
