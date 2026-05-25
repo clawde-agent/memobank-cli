@@ -6,11 +6,18 @@ and in the right order.
 
 ## What is evaluated
 
-- **Session start** — runs `memo recall` before any code exploration
-- **Bug fix lesson** — writes a `lesson` memory immediately after a non-obvious fix
-- **Pre-compact** — captures session state before `/compact` erases context
-- **Stale memory** — runs `memo correct` when a recalled memory contradicts current code
-- **Architecture decision** — writes a `decision` memory before implementing a tech choice
+All 8 triggers from the skill's trigger table are covered:
+
+| #   | Eval                  | Trigger covered                                                        |
+| --- | --------------------- | ---------------------------------------------------------------------- |
+| 01  | Session start         | `memo map` + `memo recall --code` before any file exploration          |
+| 02  | Bug fix lesson        | `memo write lesson` immediately after a non-obvious fix                |
+| 03  | Pre-compact           | `memo capture` + `memo process-queue` before `/compact` erases context |
+| 04  | Stale memory          | `memo correct` when a recalled memory contradicts current code         |
+| 05  | Architecture decision | `memo write decision` before implementing a tech choice                |
+| 06  | Workflow discovery    | `memo write workflow` after a repeatable process is found              |
+| 07  | Architecture mapping  | `memo write architecture` after tracing system structure               |
+| 08  | Study promotion       | `memo study` when a lesson has been recalled 3+ times                  |
 
 ## Running the evals
 
@@ -49,7 +56,7 @@ npx promptfoo@latest eval -c skills/memobank/evals/promptfooconfig.yaml \
 # Validate config
 npx promptfoo@latest validate config -c skills/memobank/evals/promptfooconfig.yaml
 
-# Run all 5 evals (output to JSON for CI)
+# Run all 8 evals (output to JSON for CI)
 npx promptfoo@latest eval \
   -c skills/memobank/evals/promptfooconfig.yaml \
   -o skills/memobank/evals/output.json \
@@ -58,6 +65,16 @@ npx promptfoo@latest eval \
 # Or use the npm script
 npm run test:evals
 ```
+
+### Windows (pi-node PATH workaround)
+
+If `npx` resolves to pi's broken node instead of system Node, use the helper script:
+
+```powershell
+.\run-evals.ps1
+```
+
+(`run-evals.ps1` at the repo root calls `C:\Program Files\nodejs\npx.cmd` directly.)
 
 ### View results
 
@@ -99,11 +116,14 @@ Each test uses two tiers:
 The `icontains` weight is 3× the `llm-rubric` weight, so command presence dominates the score.
 A model that mentions the command but gets the ordering wrong still passes with a lower score.
 
+Evals 01 and 03 (timing-critical behaviors) use `threshold: 0.7`. All others use `threshold: 0.5`.
+`not-icontains` assertions enforce `must_not` conditions for wrong-type and stop-hook-excuse failures.
+
 ## Files
 
-| File                                                      | Purpose                                        |
-| --------------------------------------------------------- | ---------------------------------------------- |
-| `promptfooconfig.yaml`                                    | Executable eval suite (promptfoo)              |
-| `prompts/skill-behavior.json`                             | Chat-format prompt with inlined skill protocol |
-| `output.json`                                             | Last eval run results (gitignored)             |
-| `01-session-start.json` … `05-architecture-decision.json` | Human-readable spec / design reference         |
+| File                                                | Purpose                                        |
+| --------------------------------------------------- | ---------------------------------------------- |
+| `promptfooconfig.yaml`                              | Executable eval suite (promptfoo)              |
+| `prompts/skill-behavior.json`                       | Chat-format prompt with inlined skill protocol |
+| `output.json`                                       | Last eval run results (gitignored)             |
+| `01-session-start.json` … `08-study-promotion.json` | Human-readable spec / design reference         |

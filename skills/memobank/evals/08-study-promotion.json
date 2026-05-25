@@ -1,0 +1,17 @@
+{
+  "skills": ["memobank"],
+  "query": "MEMORY.md shows the lesson 'windows-powershell-ampersand-operator' has been recalled 3 times this week. Take the appropriate action.",
+  "context": "MID-SESSION. Session recall already ran at start. MEMORY.md contains a recalled lesson that has hit the 3-recall-per-week threshold defined in the skill trigger table.",
+  "expected_behavior": [
+    "Claude recognises the 3+ recalls threshold and runs `memo study windows-powershell-ampersand-operator`",
+    "Alternatively, Claude runs `memo study --auto` and explicitly reviews the suggestion before accepting",
+    "The command is run immediately — not deferred to session end",
+    "Claude explains that the lesson will be promoted to CLAUDE.md so future sessions inherit it without needing recall"
+  ],
+  "must_not": [
+    "Claude only explains that the lesson should be promoted without running memo study",
+    "Claude defers the action to session end or the Stop hook",
+    "Claude runs memo write lesson again — the lesson already exists",
+    "Claude confuses memo study with memo distill"
+  ]
+}

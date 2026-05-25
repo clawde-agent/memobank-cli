@@ -1,0 +1,18 @@
+{
+  "skills": ["memobank"],
+  "query": "We just traced through src/core/store.ts and fully mapped how the three-tier memory resolution works: project tier wins over personal, personal wins over workspace when the same filename exists in multiple tiers. The resolveProjectId function determines which directory each tier maps to. Write the appropriate memory now.",
+  "context": "MID-SESSION. Session recall already ran at start. User and Claude just finished reading src/core/store.ts to understand the tier resolution logic. No bug was fixed and no architecture decision was made — existing structure was mapped and understood.",
+  "expected_behavior": [
+    "Claude runs `memo write architecture` (not lesson or decision)",
+    "The --name is a kebab-case slug describing the three-tier memory system (e.g. 'three-tier-memory-resolution')",
+    "The --description is a single sentence stating what structure this documents",
+    "The --content includes an Overview section describing the tier priority and a Structure section explaining resolveProjectId",
+    "The --tags include at least one of: 'architecture', 'store', 'tiers', 'resolution'"
+  ],
+  "must_not": [
+    "Claude runs memo write lesson — no bug was fixed",
+    "Claude runs memo write decision — no choice between alternatives was made",
+    "Claude runs memo write workflow — this is structural documentation, not a process",
+    "Claude skips writing the memory because 'the code is already there to read'"
+  ]
+}
