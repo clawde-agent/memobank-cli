@@ -196,7 +196,7 @@ function makeTempHome(): { home: string; settingsPath: string; cleanup: () => vo
 }
 
 describe('installClaudeCode — Stop hook', () => {
-  it('writes Stop hook for memo process-queue --background', async () => {
+  it('writes Stop hook with capture --auto and process-queue', async () => {
     const { settingsPath, cleanup } = makeTempHome();
     await installClaudeCode('/fake/repo');
     const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as ClaudeCodeSettings;
@@ -204,7 +204,11 @@ describe('installClaudeCode — Stop hook', () => {
     expect(stopHooks).toBeDefined();
     expect(
       stopHooks!.some((h) =>
-        h.hooks?.some((cmd) => cmd.command?.includes('process-queue --background'))
+        h.hooks?.some(
+          (cmd) =>
+            cmd.command?.includes('memo capture --auto') &&
+            cmd.command?.includes('process-queue --background')
+        )
       )
     ).toBe(true);
     cleanup();
@@ -235,7 +239,7 @@ describe('installClaudeCode — Stop hook', () => {
     cleanup();
   });
 
-  it('does not add duplicate Stop hook if already present', async () => {
+  it('upgrades old process-queue-only hook to the combined hook without duplicates', async () => {
     const { settingsPath, cleanup } = makeTempHome();
     fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
     fs.writeFileSync(
@@ -256,6 +260,26 @@ describe('installClaudeCode — Stop hook', () => {
     const stopHooks = settings.hooks?.Stop;
     const count = stopHooks!.filter((h) =>
       h.hooks?.some((cmd) => cmd.command?.includes('process-queue --background'))
+    ).length;
+    expect(count).toBe(1);
+    // Old standalone process-queue hook must be gone; new hook must include capture
+    expect(
+      stopHooks!.some((h) =>
+        h.hooks?.some((cmd) => cmd.command === 'memo process-queue --background')
+      )
+    ).toBe(false);
+    cleanup();
+  });
+
+  it('does not add duplicate Stop hook when combined hook already present', async () => {
+    const { settingsPath, cleanup } = makeTempHome();
+    // Pre-install once, then install again to test idempotency
+    await installClaudeCode('/fake/repo');
+    await installClaudeCode('/fake/repo');
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as ClaudeCodeSettings;
+    const stopHooks = settings.hooks?.Stop;
+    const count = stopHooks!.filter((h) =>
+      h.hooks?.some((cmd) => cmd.command?.includes('memo capture'))
     ).length;
     expect(count).toBe(1);
     cleanup();
