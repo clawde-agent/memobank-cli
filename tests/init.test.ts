@@ -14,14 +14,26 @@ describe('ensureGitignoreFull', () => {
     fs.rmSync(tmpDir, { recursive: true });
   });
 
-  it('creates .gitignore with all 4 memobank entries when file is missing', () => {
+  const ALL_ENTRIES = [
+    '.memobank/.env',
+    '.memobank/meta/access-log.json',
+    '.memobank/meta/access-log.lock',
+    '.memobank/meta/code-index.db',
+    '.memobank/meta/capture-cursor.json',
+    '.memobank/meta/study-suggestions.json',
+    '.memobank/.pending/',
+    '.memobank/.lancedb/',
+    '.memobank/.metadata/',
+    '.memobank/l0/',
+  ];
+
+  it('creates .gitignore with all memobank entries when file is missing', () => {
     ensureGitignoreFull(tmpDir);
 
     const result = fs.readFileSync(path.join(tmpDir, '.gitignore'), 'utf-8');
-    expect(result).toContain('.memobank/meta/access-log.json');
-    expect(result).toContain('.memobank/meta/code-index.db');
-    expect(result).toContain('.memobank/.lancedb/');
-    expect(result).toContain('.memobank/pending/');
+    for (const entry of ALL_ENTRIES) {
+      expect(result).toContain(entry);
+    }
   });
 
   it('appends missing entries to existing .gitignore without duplicating', () => {
@@ -33,13 +45,12 @@ describe('ensureGitignoreFull', () => {
     const count = (result.match(/access-log\.json/g) ?? []).length;
     expect(count).toBe(1);
     expect(result).toContain('.memobank/meta/code-index.db');
-    expect(result).toContain('.memobank/.lancedb/');
-    expect(result).toContain('.memobank/pending/');
+    expect(result).toContain('.memobank/.pending/');
+    expect(result).toContain('.memobank/l0/');
   });
 
   it('does nothing when all entries are already present', () => {
-    const existing =
-      '.memobank/meta/access-log.json\n.memobank/meta/code-index.db\n.memobank/.lancedb/\n.memobank/pending/\n';
+    const existing = ALL_ENTRIES.join('\n') + '\n';
     fs.writeFileSync(path.join(tmpDir, '.gitignore'), existing);
 
     ensureGitignoreFull(tmpDir);

@@ -5,7 +5,7 @@ module.exports = {
   roots: ['<rootDir>/tests'],
   testMatch: ['**/*.test.ts'],
   transform: {
-    '^.+\\.ts$': 'ts-jest',
+    '^.+\\.tsx?$': 'ts-jest',
   },
   collectCoverageFrom: [
     'src/**/*.ts',
@@ -24,7 +24,7 @@ module.exports = {
       statements: 45,
     },
   },
-  moduleFileExtensions: ['ts', 'js', 'json'],
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'json'],
   verbose: true,
   testTimeout: 30000,
 };

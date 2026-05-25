@@ -6,6 +6,7 @@ export interface RerankerDescriptor {
   readonly requiresApiKey: boolean;
   readonly apiKeyEnv?: string;
   readonly defaultModel: string;
+  readonly defaultBaseUrl?: string;
   rerank(
     query: string,
     results: RecallResult[],
@@ -106,6 +107,7 @@ RERANKER_REGISTRY.set('omlx', {
   label: 'oMLX (local, Apple Silicon)',
   requiresApiKey: false,
   defaultModel: 'ModernBERT',
+  defaultBaseUrl: 'http://localhost:8000/v1',
   async rerank(query, results, documents, model, top_n, _apiKey, baseUrl) {
     const base = (baseUrl ?? 'http://localhost:8000/v1').replace(/\/$/, '');
     const response = await fetchWithRetry(`${base}/rerank`, {

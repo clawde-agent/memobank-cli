@@ -24,10 +24,16 @@ export interface QuickInitOptions {
 }
 
 const GITIGNORE_ENTRIES = [
+  '.memobank/.env',
   '.memobank/meta/access-log.json',
+  '.memobank/meta/access-log.lock',
   '.memobank/meta/code-index.db',
+  '.memobank/meta/capture-cursor.json',
+  '.memobank/meta/study-suggestions.json',
+  '.memobank/.pending/',
   '.memobank/.lancedb/',
-  '.memobank/pending/',
+  '.memobank/.metadata/',
+  '.memobank/l0/',
 ];
 
 export function ensureGitignoreFull(gitRoot: string): void {

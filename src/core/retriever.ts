@@ -86,6 +86,7 @@ export async function recall(
         provider: config.reranker.provider,
         model: config.reranker.model,
         top_n: config.reranker.top_n ?? config.memory.top_k,
+        baseUrl: config.reranker.base_url,
       });
     } catch (e) {
       console.warn(`Reranker skipped: ${(e as Error).message}`);
