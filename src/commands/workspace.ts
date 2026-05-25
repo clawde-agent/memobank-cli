@@ -11,7 +11,7 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import matter from 'gray-matter';
 import { loadConfig, writeConfig } from '../config';
-import { resolveProjectId, resolveWorkspaceDir } from '../core/store';
+import { resolveProjectId, resolveWorkspaceDir } from '../core/dir-resolver';
 import { scanFile } from './scan';
 
 const MEMORY_TYPES = ['lesson', 'decision', 'workflow', 'architecture', 'meta'];

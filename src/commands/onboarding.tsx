@@ -10,7 +10,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { findGitRoot } from '../core/store';
+import { findGitRoot } from '../core/dir-resolver';
 import { loadConfig, writeConfig, initConfig } from '../config';
 import { installClaudeCode } from '../platforms/claude-code';
 import { installCodex } from '../platforms/codex';

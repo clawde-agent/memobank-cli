@@ -1,24 +1,19 @@
-/**
- * Retriever module
- * Orchestrates engine search and formats output for MEMORY.md injection
- */
-
 import * as fs from 'fs';
-import type { RecallResult, MemoConfig, MemoryScope, SymbolResult } from '../types';
+import * as path from 'path';
+import type { RecallResult, MemoConfig, MemoryScope, SymbolResult, MemoryFile } from '../types';
 import type { CodeIndex as CodeIndexType } from '../engines/code-index';
 import type { EngineAdapter } from '../engines/engine-adapter';
-import { loadAll, writeMemoryMd, getGlobalDir, resolveWorkspaceDir } from './store';
+import { loadAll } from './memory-loader';
+import { getGlobalDir, resolveWorkspaceDir } from './dir-resolver';
 import { TextEngine } from '../engines/text-engine';
 import { recordAccess, loadAccessLogs, updateStatusOnRecall } from './lifecycle-manager';
 import { rerank } from './reranker';
+import { rank } from './recall-ranker';
 
 function estimateTokenCount(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
-/**
- * Recall memories for a query
- */
 export async function recall(
   query: string,
   repoRoot: string,
@@ -69,37 +64,22 @@ export async function recall(
     }
   }
 
-  let results = await searchEngine.search(query, memories, config.memory.top_k);
+  const rawResults = await searchEngine.search(query, memories, config.memory.top_k);
 
-  // Graph boost: memories linked to symbols reachable from query via call graph
-  if (linkedMemories.length > 0) {
-    const depthMap = new Map(linkedMemories.map((l) => [l.memoryPath, l.minDepth]));
-    results = results.map((r) => {
-      const depth = depthMap.get(r.memory.path);
-      if (depth === undefined) return r;
-      return { ...r, score: Math.min(1.0, r.score + 0.5 / (depth + 1)) };
-    });
-  }
+  const graphScores =
+    linkedMemories.length > 0
+      ? new Map(linkedMemories.map((l) => [l.memoryPath, l.minDepth]))
+      : undefined;
 
-  // Apply access frequency boost
-  results = results.map((result) => {
-    const log = accessLogs[result.memory.path];
-    const accessCount = log?.accessCount ?? 0;
-    const boost = Math.min(1.5, 1.0 + Math.log1p(accessCount) / 10);
-    return { ...result, score: Math.min(1.0, result.score * boost) };
-  });
-  results.sort((a, b) => b.score - a.score);
+  let results = rank(rawResults, { graphScores, accessLogs });
 
   for (const result of results) {
     recordAccess(repoRoot, result.memory.path, query);
   }
-
-  // Update status for recalled memories
   for (const result of results) {
     updateStatusOnRecall(repoRoot, result.memory.path);
   }
 
-  // Apply reranker if configured
   if (config.reranker?.enabled && results.length > 1) {
     try {
       results = await rerank(query, results, {
@@ -108,7 +88,6 @@ export async function recall(
         top_n: config.reranker.top_n ?? config.memory.top_k,
       });
     } catch (e) {
-      // Reranker failure is non-fatal — use original order
       console.warn(`Reranker skipped: ${(e as Error).message}`);
     }
   }
@@ -153,15 +132,9 @@ export async function recall(
 }
 
 function scopeLabel(scope?: MemoryScope): string {
-  if (scope === 'workspace') {
-    return '🌐 workspace';
-  }
-  if (scope === 'project') {
-    return '📁 project';
-  }
-  if (scope === 'personal') {
-    return '👤 personal';
-  }
+  if (scope === 'workspace') return '🌐 workspace';
+  if (scope === 'project') return '📁 project';
+  if (scope === 'personal') return '👤 personal';
   return '';
 }
 
@@ -177,9 +150,6 @@ function formatSymbolResult(result: SymbolResult): string {
   );
 }
 
-/**
- * Format recall results as markdown for MEMORY.md
- */
 function formatResultsAsMarkdown(
   results: RecallResult[],
   query: string,
@@ -200,7 +170,6 @@ function formatResultsAsMarkdown(
       const tagStr = memory.tags.length > 0 ? ` · tags: ${memory.tags.join(', ')}` : '';
       const relativePath = memory.path.replace(/^.*\/memobank\//, '');
 
-      // Show scope label only when results come from both sources
       const showScope = scope === 'all' && memory.scope !== undefined;
       const sourcePart = showScope ? ` | ${scopeLabel(memory.scope)}` : '';
 
@@ -229,9 +198,38 @@ function formatResultsAsMarkdown(
   return markdown;
 }
 
-/**
- * Write recall results to MEMORY.md
- */
+function writeMemoryMd(
+  repoRoot: string,
+  results: Array<{ memory: MemoryFile; score: number }>,
+  query: string,
+  engine: string
+): void {
+  if (!fs.existsSync(repoRoot)) {
+    fs.mkdirSync(repoRoot, { recursive: true });
+  }
+  const filePath = path.join(repoRoot, 'MEMORY.md');
+
+  let markdown = `<!-- Last updated: ${new Date().toISOString()} | query: "${query}" | engine: ${engine} | top ${results.length} -->\n\n`;
+  markdown += `## Recalled Memory\n\n`;
+
+  if (results.length === 0) {
+    markdown += `*No memories found for "${query}"*\n`;
+  } else {
+    for (const result of results) {
+      const { memory } = result;
+      const relativePath = path.relative(repoRoot, memory.path);
+      const confidenceStr = memory.confidence ? ` · ${memory.confidence} confidence` : '';
+      const tagStr = memory.tags.length > 0 ? ` · tags: ${memory.tags.join(', ')}` : '';
+      markdown += `### [${memory.type}] ${memory.name}${confidenceStr}\n`;
+      markdown += `> ${memory.description}\n`;
+      markdown += `> \`${relativePath}\`${tagStr}\n\n`;
+    }
+  }
+  markdown += `---\n`;
+  markdown += `*${results.length} memories · engine: ${engine}*`;
+  fs.writeFileSync(filePath, markdown, 'utf-8');
+}
+
 export function writeRecallResults(
   repoRoot: string,
   results: RecallResult[],

@@ -8,7 +8,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { initConfig } from '../config';
-import { findGitRoot } from '../core/store';
+import { findGitRoot } from '../core/dir-resolver';
 import { detectProjectName, detectPlatforms } from '../core/platform-detector';
 import { installClaudeCode } from '../platforms/claude-code';
 import { installCursor } from '../platforms/cursor';
