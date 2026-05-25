@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
 # memobank skill installer
 #
-# Usage (from repo root):
-#   bash skills/memobank/install.sh
+# Recommended — Claude Code plugin:
+#   claude plugin marketplace add clawde-agent/memobank-cli
+#   claude plugin install memobank@memobank-cli
 #
-# Usage (remote, one-liner):
+# Via skills CLI (skills.sh):
+#   npx skills add clawde-agent/memobank-cli
+#
+# One-liner (review script first):
 #   bash <(curl -fsSL https://raw.githubusercontent.com/clawde-agent/memobank-cli/main/skills/memobank/install.sh)
+#
+# From repo root:
+#   bash skills/memobank/install.sh
 
 set -euo pipefail
 

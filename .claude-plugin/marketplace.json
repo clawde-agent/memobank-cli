@@ -1,0 +1,23 @@
+{
+  "name": "memobank-cli",
+  "description": "Persistent memory system for AI coding agents — recalls and captures knowledge across sessions",
+  "owner": {
+    "name": "clawde-agent",
+    "url": "https://github.com/clawde-agent"
+  },
+  "plugins": [
+    {
+      "name": "memobank",
+      "description": "Recalls and persists coding knowledge across sessions using the memo CLI. Auto-recall at session start, auto-capture at session end, /memobank for on-demand operations.",
+      "version": "0.14.4",
+      "source": {
+        "source": "local",
+        "path": "skills/memobank"
+      },
+      "author": {
+        "name": "clawde-agent",
+        "url": "https://github.com/clawde-agent"
+      }
+    }
+  ]
+}
