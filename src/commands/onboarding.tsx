@@ -22,26 +22,13 @@ import { codeScanCommand } from './code-scan';
 import { detectProjectName, detectPlatforms, type PlatformItem } from '../core/platform-detector';
 import { fetchAvailableModels } from '../core/capture-provider';
 import type { CaptureProviderName } from '../core/capture-provider';
+import { CAPTURE_REGISTRY } from '../core/providers/capture-registry';
+import { EMBEDDING_REGISTRY } from '../core/providers/embedding-registry';
+import type { EmbeddingProvider } from '../core/embedding';
+import { RERANKER_REGISTRY } from '../core/providers/reranker-registry';
+import type { RerankerProvider } from '../core/reranker';
 
 type MultiSelectItem = PlatformItem;
-
-/** Test Ollama connectivity and model availability */
-async function testOllamaConnection(baseUrl: string, model: string): Promise<string | null> {
-  try {
-    const url = baseUrl.replace(/\/$/, '');
-    const res = await fetch(`${url}/api/tags`);
-    if (!res.ok) return `Ollama returned HTTP ${res.status}`;
-    const data = await res.json() as { models?: { name: string }[] };
-    const models = data.models?.map((m: { name: string }) => m.name) ?? [];
-    const found = models.some((n: string) => n === model || n.startsWith(`${model}:`));
-    if (!found) {
-      return `Model "${model}" not found — run: ollama pull ${model}`;
-    }
-    return null; // success
-  } catch {
-    return `Cannot reach Ollama at ${baseUrl} — run: ollama serve`;
-  }
-}
 
 /** Check if Claude Code has auto-memory explicitly disabled */
 function isAutoMemoryDisabled(): boolean {
@@ -111,15 +98,11 @@ async function runSetup(state: OnboardingState, gitRoot: string): Promise<{ line
 
   // 1a. Write capture config if a provider was selected
   if (state.captureProvider) {
-    const DEFAULT_CAPTURE_MODEL: Record<string, string> = {
-      anthropic: 'claude-haiku-4-5', openai: 'gpt-4o-mini',
-      gemini: 'gemini-2.0-flash', openrouter: 'openai/gpt-4o-mini', ollama: 'llama3.2',
-      llamacpp: 'local-model',
-    };
+    const capDescriptor = CAPTURE_REGISTRY.get(state.captureProvider as CaptureProviderName);
     const config = loadConfig(repoRoot);
     config.capture = {
-      provider: state.captureProvider as import('../types').CaptureProviderName,
-      model: state.captureModel || DEFAULT_CAPTURE_MODEL[state.captureProvider] || 'unknown',
+      provider: state.captureProvider as CaptureProviderName,
+      model: state.captureModel || capDescriptor?.defaultModel || 'unknown',
       ...(state.captureBaseUrl ? { base_url: state.captureBaseUrl } : {}),
     };
     writeConfig(repoRoot, config);
@@ -169,37 +152,25 @@ async function runSetup(state: OnboardingState, gitRoot: string): Promise<{ line
   if (state.searchEngine === 'lancedb') {
     const config = loadConfig(repoRoot);
     config.embedding.engine = 'lancedb';
-    if (state.embeddingProvider === 'ollama') {
-      const rawUrl = (state.embeddingUrl || 'http://localhost:11434').replace(/\/v1\/?$/, '').replace(/\/$/, '');
-      // Normalize for OpenAI-compatible SDK: always store with /v1 suffix.
-      const ollamaUrl = rawUrl + '/v1';
-      const ollamaModel = state.embeddingModel || 'mxbai-embed-large';
-      config.embedding.provider = 'ollama';
-      config.embedding.base_url = ollamaUrl;
-      config.embedding.model = ollamaModel;
-      config.embedding.dimensions = 1024;
-      // Test connectivity using the base URL (without /v1) via Ollama's native API.
-      const ollamaErr = await testOllamaConnection(rawUrl, ollamaModel);
-      if (ollamaErr) {
-        summaryLines.push(`⚠  Ollama: ${ollamaErr}`);
-      } else {
-        summaryLines.push(`✓ Ollama connected, model "${ollamaModel}" ready`);
+    const embDescriptor = EMBEDDING_REGISTRY.get(state.embeddingProvider as EmbeddingProvider);
+    if (embDescriptor) {
+      config.embedding.provider = state.embeddingProvider;
+      const model = state.embeddingModel || embDescriptor.defaultModel;
+      config.embedding.model = model;
+      config.embedding.dimensions = embDescriptor.defaultDimensions;
+      if (!embDescriptor.requiresApiKey) {
+        const rawUrl = (state.embeddingUrl || embDescriptor.defaultBaseUrl)
+          .replace(/\/v1\/?$/, '').replace(/\/$/, '');
+        config.embedding.base_url = rawUrl + '/v1';
+        const connErr = await embDescriptor.testConnection?.(rawUrl, model);
+        if (connErr) {
+          summaryLines.push(`⚠  ${embDescriptor.label}: ${connErr}`);
+        } else if (embDescriptor.testConnection) {
+          summaryLines.push(`✓ ${embDescriptor.label} connected, model "${model}" ready`);
+        } else {
+          summaryLines.push(`${embDescriptor.label} embedding at ${rawUrl}`);
+        }
       }
-    } else if (state.embeddingProvider === 'llamacpp') {
-      const rawUrl = (state.embeddingUrl || 'http://localhost:8080').replace(/\/v1\/?$/, '').replace(/\/$/, '');
-      config.embedding.provider = 'llamacpp';
-      config.embedding.base_url = rawUrl + '/v1';
-      config.embedding.model = state.embeddingModel || 'local-model';
-      config.embedding.dimensions = 1024;
-      summaryLines.push(`llama.cpp embedding at ${rawUrl}`);
-    } else if (state.embeddingProvider === 'openai') {
-      config.embedding.provider = 'openai';
-      config.embedding.model = 'text-embedding-3-small';
-      config.embedding.dimensions = 1536;
-    } else if (state.embeddingProvider === 'jina') {
-      config.embedding.provider = 'jina';
-      config.embedding.model = 'jina-embeddings-v3';
-      config.embedding.dimensions = 1024;
     }
     writeConfig(repoRoot, config);
   }
@@ -208,7 +179,7 @@ async function runSetup(state: OnboardingState, gitRoot: string): Promise<{ line
     const config = loadConfig(repoRoot);
     config.reranker = {
       enabled: true,
-      provider: state.rerankerProvider as 'jina' | 'cohere',
+      provider: state.rerankerProvider as RerankerProvider,
     };
     writeConfig(repoRoot, config);
     summaryLines.push(`Reranker: ${state.rerankerProvider}`);
@@ -344,23 +315,13 @@ export async function onboardingCommand(): Promise<void> {
     );
   }
 
-  const FALLBACK_MODELS: Record<string, string[]> = {
-    anthropic:  ['claude-haiku-4-5', 'claude-sonnet-4-5', 'claude-opus-4-5'],
-    openai:     ['gpt-4o-mini', 'gpt-4o', 'o3-mini'],
-    gemini:     ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'],
-    openrouter: ['openai/gpt-4o-mini', 'anthropic/claude-3-5-haiku', 'google/gemini-2.0-flash'],
-    ollama:     ['llama3.2', 'llama3.1', 'mistral', 'phi4'],
-    llamacpp:   ['local-model'],
-  };
-
   async function fetchModelsForOnboarding(
     provider: string,
     apiKey?: string,
     baseUrl?: string
   ): Promise<SelectItem[]> {
     const models = await fetchAvailableModels(provider as CaptureProviderName, apiKey, baseUrl);
-    const list = models.length > 0 ? models : (FALLBACK_MODELS[provider] ?? []);
-    return list.map((m) => ({ label: m, value: m }));
+    return models.map((m) => ({ label: m, value: m }));
   }
 
   function OnboardingApp() {
@@ -448,21 +409,14 @@ export async function onboardingCommand(): Promise<void> {
         React.createElement(Text, { bold: true }, 'Capture LLM provider'),
         React.createElement(Text, { dimColor: true }, '  Powers AI memory extraction after each session'),
         React.createElement(SelectInput, {
-          items: [
-            { label: 'Anthropic (Claude)', value: 'anthropic' },
-            { label: 'OpenAI', value: 'openai' },
-            { label: 'OpenRouter (access 200+ models)', value: 'openrouter' },
-            { label: 'Ollama (local, no API key)', value: 'ollama' },
-            { label: 'llama.cpp (local, no API key)', value: 'llamacpp' },
-            { label: 'Gemini (Google)', value: 'gemini' },
-          ],
+          items: [...CAPTURE_REGISTRY.values()].map(d => ({ label: d.label, value: d.name })),
           onSelect: (item: { label: string; value: unknown }) => {
             const provider = String(item.value);
-            const isLocal = provider === 'ollama' || provider === 'llamacpp';
+            const descriptor = CAPTURE_REGISTRY.get(provider as CaptureProviderName);
             setState(s => ({
               ...s,
               captureProvider: provider,
-              step: isLocal ? 'capture-base-url' : 'capture-key',
+              step: descriptor?.requiresApiKey ? 'capture-key' : 'capture-base-url',
             }));
           },
         }),
@@ -477,12 +431,9 @@ export async function onboardingCommand(): Promise<void> {
           onSubmit: async (value: string) => {
             const key = value.trim();
             if (!key) return;
-            const envKey =
-              state.captureProvider === 'anthropic'  ? 'ANTHROPIC_API_KEY' :
-              state.captureProvider === 'openrouter' ? 'OPENROUTER_API_KEY' :
-              state.captureProvider === 'gemini'     ? 'GEMINI_API_KEY' :
-              'OPENAI_API_KEY';
-            if (state.captureProvider === 'openrouter') {
+            const capDescriptor = CAPTURE_REGISTRY.get(state.captureProvider as CaptureProviderName);
+            const envKey = capDescriptor?.apiKeyEnv ?? 'OPENAI_API_KEY';
+            if (capDescriptor?.requiresBaseUrlStep) {
               setState(s => ({
                 ...s,
                 step: 'capture-base-url',
@@ -503,29 +454,18 @@ export async function onboardingCommand(): Promise<void> {
 
       state.step === 'capture-base-url' ? React.createElement(Box, { flexDirection: 'column' },
         React.createElement(Text, { bold: true }, 'Base URL'),
-        React.createElement(Text, { dimColor: true },
-          state.captureProvider === 'ollama'
-            ? '  Ollama endpoint (default: http://localhost:11434/v1)'
-            : state.captureProvider === 'llamacpp'
-            ? '  llama.cpp server endpoint (default: http://localhost:8080/v1)'
-            : '  OpenRouter endpoint (default: https://openrouter.ai/api/v1)'
-        ),
+        React.createElement(Text, { dimColor: true }, (() => {
+          const d = CAPTURE_REGISTRY.get(state.captureProvider as CaptureProviderName);
+          return `  ${d?.label ?? state.captureProvider} endpoint (default: ${d?.defaultBaseUrl ?? ''})`;
+        })()),
         React.createElement(TextInput, {
-          value: captureBaseUrlInput || (
-            state.captureProvider === 'ollama' ? 'http://localhost:11434/v1' :
-            state.captureProvider === 'llamacpp' ? 'http://localhost:8080/v1' :
-            'https://openrouter.ai/api/v1'
-          ),
+          value: captureBaseUrlInput || CAPTURE_REGISTRY.get(state.captureProvider as CaptureProviderName)?.defaultBaseUrl || '',
           onChange: setCaptureBaseUrlInput,
           onSubmit: async (value: string) => {
-            const baseUrl = value.trim() || (
-              state.captureProvider === 'ollama' ? 'http://localhost:11434/v1' :
-              state.captureProvider === 'llamacpp' ? 'http://localhost:8080/v1' :
-              'https://openrouter.ai/api/v1'
-            );
-            const apiKey = state.captureProvider === 'openrouter'
-              ? state.collectedKeys['OPENROUTER_API_KEY']
-              : undefined;
+            const capDescriptor = CAPTURE_REGISTRY.get(state.captureProvider as CaptureProviderName);
+            const baseUrl = value.trim() || capDescriptor?.defaultBaseUrl || '';
+            const envKey = capDescriptor?.apiKeyEnv;
+            const apiKey = envKey ? state.collectedKeys[envKey] : undefined;
             const models = await fetchModelsForOnboarding(state.captureProvider, apiKey, baseUrl);
             setCaptureModelItems(models);
             setState(s => ({ ...s, step: 'capture-model', captureBaseUrl: baseUrl }));
@@ -548,7 +488,7 @@ export async function onboardingCommand(): Promise<void> {
                 value: '',
                 onChange: () => {},
                 onSubmit: (value: string) => {
-                  const model = value.trim() || (FALLBACK_MODELS[state.captureProvider]?.[0] ?? '');
+                  const model = value.trim() || (CAPTURE_REGISTRY.get(state.captureProvider as CaptureProviderName)?.fallbackModels[0] ?? '');
                   setState(s => ({ ...s, captureModel: model, step: 'platforms' }));
                 },
               }),
@@ -638,21 +578,18 @@ export async function onboardingCommand(): Promise<void> {
       state.step === 'embedding-provider' ? React.createElement(Box, { flexDirection: 'column' },
         React.createElement(Text, { bold: true }, 'Embedding provider:'),
         React.createElement(SelectInput, {
-          items: [
-            { label: 'Ollama (local, no API key needed)', value: 'ollama' },
-            { label: 'llama.cpp (local, no API key needed)', value: 'llamacpp' },
-            { label: 'OpenAI (cloud, requires API key)', value: 'openai' },
-            { label: 'Jina AI (cloud, requires API key)', value: 'jina' },
-          ],
+          items: [...EMBEDDING_REGISTRY.values()]
+            .filter(d => d.showInWizard)
+            .map(d => ({ label: d.label, value: d.name })),
           onSelect: (item: { label: string; value: unknown }) => {
             const provider = String(item.value);
-            const isLocal = provider === 'ollama' || provider === 'llamacpp';
-            const envKey = provider === 'openai' ? 'OPENAI_API_KEY' : 'JINA_API_KEY';
-            const alreadyHaveKey = !isLocal && Boolean(state.collectedKeys[envKey]);
+            const embDesc = EMBEDDING_REGISTRY.get(provider as EmbeddingProvider);
+            const envKey = embDesc?.apiKeyEnv;
+            const alreadyHaveKey = embDesc?.requiresApiKey && envKey && Boolean(state.collectedKeys[envKey]);
             setState(s => ({
               ...s,
               embeddingProvider: provider,
-              step: isLocal ? 'ollama-url' : alreadyHaveKey ? 'reranker' : 'embedding-key',
+              step: !embDesc?.requiresApiKey ? 'ollama-url' : alreadyHaveKey ? 'reranker' : 'embedding-key',
             }));
           },
         }),
@@ -660,39 +597,36 @@ export async function onboardingCommand(): Promise<void> {
 
       state.step === 'ollama-url' ? React.createElement(Box, { flexDirection: 'column' },
         React.createElement(Text, null,
-          state.embeddingProvider === 'llamacpp' ? 'llama.cpp server base URL:' : 'Ollama base URL:'
+          `${EMBEDDING_REGISTRY.get(state.embeddingProvider as EmbeddingProvider)?.label ?? state.embeddingProvider} base URL:`
         ),
-        React.createElement(Text, { dimColor: true },
-          state.embeddingProvider === 'llamacpp'
-            ? '  (default: http://localhost:8080 — press Enter to confirm)'
-            : '  (default: http://localhost:11434 — press Enter to confirm)'
-        ),
+        React.createElement(Text, { dimColor: true }, (() => {
+          const defaultBase = (EMBEDDING_REGISTRY.get(state.embeddingProvider as EmbeddingProvider)?.defaultBaseUrl ?? '')
+            .replace(/\/v1\/?$/, '');
+          return `  (default: ${defaultBase} — press Enter to confirm)`;
+        })()),
         React.createElement(TextInput, {
           value: ollamaUrlInput,
           onChange: setOllamaUrlInput,
           onSubmit: (value: string) => {
-            const defaultUrl = state.embeddingProvider === 'llamacpp'
-              ? 'http://localhost:8080'
-              : 'http://localhost:11434';
-            setState(s => ({ ...s, step: 'ollama-model', embeddingUrl: value || defaultUrl }));
+            const defaultBase = (EMBEDDING_REGISTRY.get(state.embeddingProvider as EmbeddingProvider)?.defaultBaseUrl ?? '')
+              .replace(/\/v1\/?$/, '');
+            setState(s => ({ ...s, step: 'ollama-model', embeddingUrl: value || defaultBase }));
           },
         }),
       ) : null,
 
       state.step === 'ollama-model' ? React.createElement(Box, { flexDirection: 'column' },
         React.createElement(Text, null,
-          state.embeddingProvider === 'llamacpp' ? 'llama.cpp embedding model name:' : 'Ollama embedding model:'
+          `${EMBEDDING_REGISTRY.get(state.embeddingProvider as EmbeddingProvider)?.label ?? state.embeddingProvider} embedding model:`
         ),
         React.createElement(Text, { dimColor: true },
-          state.embeddingProvider === 'llamacpp'
-            ? '  Name passed to the API (server uses its loaded model regardless)'
-            : '  (default: mxbai-embed-large — run `ollama pull mxbai-embed-large` to install)'
+          `  (default: ${EMBEDDING_REGISTRY.get(state.embeddingProvider as EmbeddingProvider)?.defaultModel ?? 'local-model'})`
         ),
         React.createElement(TextInput, {
           value: ollamaModelInput,
           onChange: setOllamaModelInput,
           onSubmit: (value: string) => {
-            const defaultModel = state.embeddingProvider === 'llamacpp' ? 'local-model' : 'mxbai-embed-large';
+            const defaultModel = EMBEDDING_REGISTRY.get(state.embeddingProvider as EmbeddingProvider)?.defaultModel ?? 'local-model';
             setState(s => ({ ...s, step: 'reranker', embeddingModel: value || defaultModel }));
           },
         }),
@@ -700,7 +634,7 @@ export async function onboardingCommand(): Promise<void> {
 
       state.step === 'embedding-key' ? React.createElement(Box, { flexDirection: 'column' },
         React.createElement(Text, { bold: true },
-          `${state.embeddingProvider === 'openai' ? 'OpenAI' : 'Jina AI'} API key (for embeddings)`
+          `${EMBEDDING_REGISTRY.get(state.embeddingProvider as EmbeddingProvider)?.label ?? state.embeddingProvider} API key (for embeddings)`
         ),
         React.createElement(Text, { dimColor: true }, '  Saved to .memobank/.env — press Enter to skip'),
         React.createElement(TextInput, {
@@ -708,11 +642,11 @@ export async function onboardingCommand(): Promise<void> {
           onChange: setEmbeddingKeyInput,
           onSubmit: (value: string) => {
             const key = value.trim();
-            const envKey = state.embeddingProvider === 'openai' ? 'OPENAI_API_KEY' : 'JINA_API_KEY';
+            const envKey = EMBEDDING_REGISTRY.get(state.embeddingProvider as EmbeddingProvider)?.apiKeyEnv ?? '';
             setState(s => ({
               ...s,
               step: 'reranker',
-              collectedKeys: key ? { ...s.collectedKeys, [envKey]: key } : s.collectedKeys,
+              collectedKeys: key && envKey ? { ...s.collectedKeys, [envKey]: key } : s.collectedKeys,
             }));
           },
         }),
@@ -750,13 +684,26 @@ export async function onboardingCommand(): Promise<void> {
       state.step === 'reranker-provider' ? React.createElement(Box, { flexDirection: 'column' },
         React.createElement(Text, { bold: true }, 'Reranker provider:'),
         React.createElement(SelectInput, {
-          items: [
-            { label: 'Jina AI', value: 'jina' },
-            { label: 'Cohere', value: 'cohere' },
-          ],
+          items: [...RERANKER_REGISTRY.values()].map(d => ({ label: d.label, value: d.name })),
           onSelect: (item: { label: string; value: unknown }) => {
             const provider = String(item.value);
-            const keyVar = provider === 'jina' ? 'JINA_API_KEY' : 'COHERE_API_KEY';
+            const rerankDesc = RERANKER_REGISTRY.get(provider as RerankerProvider);
+            if (!rerankDesc?.requiresApiKey) {
+              if (setupRunning.current) return;
+              setupRunning.current = true;
+              const finalState = { ...state, step: 'done' as Step, enableReranker: true, rerankerProvider: provider };
+              setState(finalState);
+              runSetup(finalState, gitRoot).then(({ lines, autoMemoryWarning: warn }) => {
+                setSummary(lines);
+                setAutoMemoryWarning(warn);
+                setDone(true);
+              }).catch((err: Error) => {
+                setSummary([`Setup failed: ${err.message}`]);
+                setDone(true);
+              });
+              return;
+            }
+            const keyVar = rerankDesc.apiKeyEnv ?? '';
             const alreadyHaveKey = Boolean(state.collectedKeys[keyVar]);
             if (alreadyHaveKey) {
               if (setupRunning.current) return;
@@ -779,7 +726,7 @@ export async function onboardingCommand(): Promise<void> {
       ) : null,
 
       state.step === 'reranker-key' ? React.createElement(Box, { flexDirection: 'column' },
-        React.createElement(Text, { bold: true }, `${state.rerankerProvider === 'jina' ? 'JINA_API_KEY' : 'COHERE_API_KEY'}:`),
+        React.createElement(Text, { bold: true }, `${RERANKER_REGISTRY.get(state.rerankerProvider as RerankerProvider)?.apiKeyEnv ?? state.rerankerProvider}:`),
         React.createElement(Text, { dimColor: true }, '  Saved to .memobank/.env — press Enter to skip'),
         React.createElement(TextInput, {
           value: rerankerKeyInput,
@@ -788,7 +735,7 @@ export async function onboardingCommand(): Promise<void> {
             if (setupRunning.current) return;
             setupRunning.current = true;
             const key = value.trim();
-            const keyVar = state.rerankerProvider === 'jina' ? 'JINA_API_KEY' : 'COHERE_API_KEY';
+            const keyVar = RERANKER_REGISTRY.get(state.rerankerProvider as RerankerProvider)?.apiKeyEnv ?? '';
             const finalState = {
               ...state,
               step: 'done' as Step,

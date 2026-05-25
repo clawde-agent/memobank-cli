@@ -22,25 +22,26 @@ export const CAPTURE_REGISTRY = new Map<CaptureProviderName, CaptureProviderDesc
 
 function lazyAnthropicFactory(): (k: string, m: string) => CaptureProvider {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return (
-    require('./anthropic') as { createAnthropicProvider: (k: string, m: string) => CaptureProvider }
-  ).createAnthropicProvider;
+  const mod = require('./anthropic') as {
+    createAnthropicProvider: (k: string, m: string) => CaptureProvider;
+  };
+  return mod.createAnthropicProvider;
 }
 
 function lazyOpenAICompatFactory(): (k: string, m: string, b?: string) => CaptureProvider {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return (
-    require('./openai-compat') as {
-      createOpenAICompatProvider: (k: string, m: string, b?: string) => CaptureProvider;
-    }
-  ).createOpenAICompatProvider;
+  const mod = require('./openai-compat') as {
+    createOpenAICompatProvider: (k: string, m: string, b?: string) => CaptureProvider;
+  };
+  return mod.createOpenAICompatProvider;
 }
 
 function lazyGeminiFactory(): (k: string, m: string) => CaptureProvider {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return (
-    require('./gemini') as { createGeminiProvider: (k: string, m: string) => CaptureProvider }
-  ).createGeminiProvider;
+  const mod = require('./gemini') as {
+    createGeminiProvider: (k: string, m: string) => CaptureProvider;
+  };
+  return mod.createGeminiProvider;
 }
 
 async function fetchOpenAICompatModels(

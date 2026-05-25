@@ -80,14 +80,18 @@ EMBEDDING_REGISTRY.set('ollama', {
   defaultModel: 'mxbai-embed-large',
   defaultBaseUrl: 'http://localhost:11434/v1',
   defaultDimensions: 1024,
-  async testConnection(baseUrl) {
+  async testConnection(baseUrl, model) {
     try {
       const base = baseUrl.replace(/\/v1\/?$/, '').replace(/\/$/, '');
       const res = await fetch(`${base}/api/tags`);
-      if (!res.ok) return `Ollama not reachable at ${baseUrl}`;
+      if (!res.ok) return `Ollama returned HTTP ${res.status}`;
+      const data = (await res.json()) as { models?: { name: string }[] };
+      const names = (data.models ?? []).map((m) => m.name);
+      const found = names.some((n) => n === model || n.startsWith(`${model}:`));
+      if (!found) return `Model "${model}" not found — run: ollama pull ${model}`;
       return null;
     } catch {
-      return `Cannot connect to Ollama at ${baseUrl}`;
+      return `Cannot reach Ollama at ${baseUrl} — run: ollama serve`;
     }
   },
 });
