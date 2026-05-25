@@ -1,0 +1,16 @@
+{
+  "skills": ["memobank"],
+  "query": "/compact",
+  "context": "The conversation is very long. The user has typed /compact to compress the context window. Several architectural decisions and one non-obvious bug fix have been discussed during this session but not yet written to memory.",
+  "expected_behavior": [
+    "Before the context is compacted, Claude runs `memo capture --auto --silent`",
+    "Claude also runs `memo process-queue` to drain the pending queue",
+    "Claude runs these commands before /compact executes, not after",
+    "Claude does not skip this step even though the Stop hook will fire at session end"
+  ],
+  "must_not": [
+    "Claude lets /compact run without first capturing session learnings",
+    "Claude says the Stop hook will handle it and skips the pre-compact capture",
+    "Claude runs memo capture after the context has already been compacted"
+  ]
+}
