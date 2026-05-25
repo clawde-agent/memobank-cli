@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { findRepoRoot, writeMemory } from '../core/store';
+import { findRepoRoot } from '../core/dir-resolver';
+import { writeMemory } from '../core/store';
 import { scanFile, detectLanguage, SUPPORTED_EXTENSIONS } from '../core/code-scanner';
 import { CodeIndex } from '../engines/code-index';
 import { buildMemoryGraph } from '../engines/memory-graph';

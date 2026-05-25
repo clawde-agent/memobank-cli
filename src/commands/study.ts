@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
 import matter from 'gray-matter';
-import { findRepoRoot } from '../core/store';
+import { findRepoRoot } from '../core/dir-resolver';
 
 export interface StudyOptions {
   if?: string;

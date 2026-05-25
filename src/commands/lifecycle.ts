@@ -3,8 +3,8 @@
  * Analyze and manage memory lifecycle (tiers, archival, corrections)
  */
 
-import { findRepoRoot } from '../core/store';
-import type { TierConfig } from '../core/lifecycle-manager';
+import { findRepoRoot } from '../core/dir-resolver';
+import type { TierConfig } from '../core/lifecycle-engine';
 import {
   analyzeLifecycle,
   generateLifecycleReport,

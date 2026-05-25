@@ -6,7 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { findRepoRoot } from '../core/store';
+import { findRepoRoot } from '../core/dir-resolver';
 import { writeMemory } from '../core/store';
 import type { MemoryType, Confidence } from '../types';
 import {

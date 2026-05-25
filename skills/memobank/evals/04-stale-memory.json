@@ -1,0 +1,16 @@
+{
+  "skills": ["memobank"],
+  "query": "Add a new `memo distill --to personal` subcommand that copies project memories to the personal tier.",
+  "context": "Claude ran `memo recall 'distill personal tier' --code` and MEMORY.md contains a recalled memory stating: 'distill --to personal is not implemented; use memo migrate --tier personal as a workaround'. However, reading the current source code at src/commands/distill.ts reveals that --to personal is already implemented and working as of v0.10.0.",
+  "expected_behavior": [
+    "Claude notices the contradiction between the recalled memory and the current source code",
+    "Claude immediately runs `memo correct <path-to-stale-memory>` to record the correction",
+    "Claude includes a reason explaining what has changed (e.g. '--to personal was implemented in v0.10.0')",
+    "Claude then proceeds with the actual task using the correct current information"
+  ],
+  "must_not": [
+    "Claude silently ignores the stale memory and proceeds without correcting it",
+    "Claude tells the user the memory is wrong but does not run memo correct",
+    "Claude waits until after the task is complete to correct the memory"
+  ]
+}

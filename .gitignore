@@ -109,6 +109,11 @@ temp/
 test-memobank/
 
 # ======================
+# Eval output (generated, not source)
+# ======================
+skills/memobank/evals/output.json
+
+# ======================
 # Memobank project memory directory
 # ======================
 # Each contributor's .memobank/ is private to their local environment.
@@ -117,7 +122,7 @@ test-memobank/
 # ======================
 # Claude Code / agent tooling
 # ======================
-.claude/settings.local.json
+.claude/
 .agents/
 # skills-lock.json is tracked (contributor lockfile)
 

@@ -3,12 +3,12 @@ import * as path from 'path';
 import matter from 'gray-matter';
 import {
   findRepoRoot,
-  loadAll,
   getGlobalDir,
   getWorkspaceDir,
   resolveWorkspaceDir,
   resolveProjectId,
-} from '../core/store';
+} from '../core/dir-resolver';
+import { loadAll } from '../core/memory-loader';
 import { loadConfig } from '../config';
 import { distillToWorkspace, distillToPersonal } from '../core/distiller';
 import { synthesizeScenes } from '../core/scene-synthesizer';

@@ -5,7 +5,8 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { findRepoRoot, loadAll } from '../core/store';
+import { findRepoRoot } from '../core/dir-resolver';
+import { loadAll } from '../core/memory-loader';
 import { readSceneIndex } from '../core/scene-index';
 import { generateSceneNavigation, stripSceneNavigation } from '../core/scene-navigation';
 import { loadConfig } from '../config';

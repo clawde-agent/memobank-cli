@@ -6,6 +6,7 @@
 
 import type { ExtractionResult, MemoConfig, CaptureProviderName, CaptureConfig } from '../types';
 export type { CaptureProviderName, CaptureConfig } from '../types';
+import { CAPTURE_REGISTRY } from './providers/capture-registry';
 
 export interface CaptureProvider {
   extract(sessionText: string): Promise<ExtractionResult[]>;
@@ -73,40 +74,16 @@ export function validateExtractionResult(raw: unknown): ExtractionResult | null 
   return raw as ExtractionResult;
 }
 
-// ---------------------------------------------------------------------------
-// Key env var map
-// ---------------------------------------------------------------------------
-const KEY_ENV: Record<CaptureProviderName, string | undefined> = {
-  anthropic: 'ANTHROPIC_API_KEY',
-  openai: 'OPENAI_API_KEY',
-  gemini: 'GEMINI_API_KEY',
-  openrouter: 'OPENROUTER_API_KEY',
-  ollama: undefined,
-  llamacpp: undefined,
-};
-
-const DEFAULT_MODEL: Record<CaptureProviderName, string> = {
-  anthropic: 'claude-haiku-4-5',
-  openai: 'gpt-4o-mini',
-  openrouter: 'openai/gpt-4o-mini',
-  ollama: 'llama3.2',
-  gemini: 'gemini-2.0-flash',
-  llamacpp: 'local-model',
-};
-
 export function captureConfigFromMemoConfig(config: MemoConfig): CaptureConfig | null {
   const cap = config.capture;
-  if (!cap?.provider) {
-    return null;
-  }
-  const keyVar = KEY_ENV[cap.provider];
-  const apiKey = keyVar ? process.env[keyVar] : undefined;
-  if (keyVar && !apiKey) {
-    return null;
-  }
+  if (!cap?.provider) return null;
+  const descriptor = CAPTURE_REGISTRY.get(cap.provider);
+  if (!descriptor) return null;
+  const apiKey = descriptor.apiKeyEnv ? process.env[descriptor.apiKeyEnv] : undefined;
+  if (descriptor.requiresApiKey && !apiKey) return null;
   return {
     provider: cap.provider,
-    model: cap.model || DEFAULT_MODEL[cap.provider],
+    model: cap.model || descriptor.defaultModel,
     apiKey,
     baseUrl: cap.base_url,
   };
@@ -115,116 +92,25 @@ export function captureConfigFromMemoConfig(config: MemoConfig): CaptureConfig |
 // ---------------------------------------------------------------------------
 // Model listing — used by onboarding to populate select lists
 // ---------------------------------------------------------------------------
-const ANTHROPIC_CURATED: string[] = [
-  'claude-haiku-4-5',
-  'claude-sonnet-4-5',
-  'claude-opus-4-5',
-  'claude-3-5-haiku-20241022',
-  'claude-3-5-sonnet-20241022',
-];
-
 export async function fetchAvailableModels(
   provider: CaptureProviderName,
   apiKey?: string,
   baseUrl?: string
 ): Promise<string[]> {
-  try {
-    if (provider === 'anthropic') {
-      return ANTHROPIC_CURATED;
-    }
-
-    if (provider === 'ollama') {
-      const base = (baseUrl ?? 'http://localhost:11434').replace(/\/v1\/?$/, '').replace(/\/$/, '');
-      const res = await fetch(`${base}/api/tags`);
-      if (!res.ok) {
-        return [];
-      }
-      const data = (await res.json()) as { models?: { name: string }[] };
-      return (data.models ?? []).map((m: { name: string }) => m.name);
-    }
-
-    if (provider === 'llamacpp') {
-      // llama-server loads a single model at startup; no listing API available.
-      return [];
-    }
-
-    if (provider === 'gemini') {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-      );
-      if (!res.ok) {
-        return [];
-      }
-      const data = (await res.json()) as {
-        models?: { name: string; supportedGenerationMethods?: string[] }[];
-      };
-      return (data.models ?? [])
-        .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
-        .map((m) => m.name.replace('models/', ''));
-    }
-
-    // openai / openrouter — OpenAI-compatible /v1/models endpoint
-    const base =
-      baseUrl ??
-      (provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : 'https://api.openai.com/v1');
-    const res = await fetch(`${base.replace(/\/$/, '')}/models`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-    if (!res.ok) {
-      return [];
-    }
-    const data = (await res.json()) as { data?: { id: string; context_length?: number }[] };
-    const models = data.data ?? [];
-
-    if (provider === 'openrouter') {
-      return models
-        .sort((a, b) => (b.context_length ?? 0) - (a.context_length ?? 0))
-        .slice(0, 20)
-        .map((m) => m.id);
-    }
-
-    return models
-      .map((m) => m.id)
-      .filter((id) => /^(gpt-|o\d)/.test(id))
-      .sort();
-  } catch {
-    return [];
-  }
+  const descriptor = CAPTURE_REGISTRY.get(provider);
+  if (!descriptor) return [];
+  const models = await descriptor.fetchModels(apiKey, baseUrl);
+  return models.length > 0 ? models : descriptor.fallbackModels;
 }
 
 // ---------------------------------------------------------------------------
-// Factory — lazy-loads provider modules to avoid pulling in optional SDKs
+// Factory — delegates to registry descriptor to lazy-load provider modules
 // ---------------------------------------------------------------------------
 export function createCaptureProvider(config: CaptureConfig): CaptureProvider | null {
   try {
-    switch (config.provider) {
-      case 'anthropic': {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { createAnthropicProvider } = require('./providers/anthropic') as {
-          createAnthropicProvider: (k: string, m: string) => CaptureProvider;
-        };
-        return createAnthropicProvider(config.apiKey!, config.model);
-      }
-      case 'openai':
-      case 'openrouter':
-      case 'ollama':
-      case 'llamacpp': {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { createOpenAICompatProvider } = require('./providers/openai-compat') as {
-          createOpenAICompatProvider: (k: string, m: string, b?: string) => CaptureProvider;
-        };
-        return createOpenAICompatProvider(config.apiKey ?? '', config.model, config.baseUrl);
-      }
-      case 'gemini': {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { createGeminiProvider } = require('./providers/gemini') as {
-          createGeminiProvider: (k: string, m: string) => CaptureProvider;
-        };
-        return createGeminiProvider(config.apiKey!, config.model);
-      }
-      default:
-        return null;
-    }
+    const descriptor = CAPTURE_REGISTRY.get(config.provider);
+    if (!descriptor) return null;
+    return descriptor.create(config);
   } catch {
     return null;
   }

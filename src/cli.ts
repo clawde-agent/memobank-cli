@@ -33,7 +33,7 @@ import type { DistillOptions } from './commands/distill';
 import { processQueueCommand } from './commands/process-queue';
 import { skillFeedbackCommand } from './commands/skill-feedback';
 import { codeScanCommand } from './commands/code-scan';
-import { findRepoRoot } from './core/store';
+import { findRepoRoot } from './core/dir-resolver';
 import { loadConfig } from './config';
 import type { MemoryType, IndexedLanguage } from './types';
 import * as fs from 'fs';
