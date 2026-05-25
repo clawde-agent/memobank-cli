@@ -6,7 +6,8 @@
 
 import { OpenAI } from 'openai';
 
-export type EmbeddingProvider = 'openai' | 'azure' | 'ollama' | 'llamacpp' | 'jina' | 'custom';
+import type { EmbeddingProvider } from '../types';
+export type { EmbeddingProvider };
 
 export interface EmbeddingConfig {
   provider: EmbeddingProvider;
