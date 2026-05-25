@@ -1,0 +1,18 @@
+{
+  "skills": ["memobank"],
+  "query": "Let's go with text-engine as the default search engine instead of lancedb. Zero external dependencies is more important than vector similarity for most users — lancedb should remain opt-in.",
+  "context": "The user has just made a confirmed architectural decision after discussing trade-offs with Claude. The decision will be reflected in the default config written by memo init.",
+  "expected_behavior": [
+    "Claude immediately runs `memo write decision` after the user confirms the choice",
+    "The decision name is a kebab-case slug (e.g. 'text-engine-as-default-search')",
+    "The decision description is a single sentence stating what was decided",
+    "The decision content includes a Context section explaining the trade-off, a Decision section, an Alternatives Considered section (lancedb), and a Consequences section",
+    "The tags include at least one of: 'search', 'engine', 'architecture', 'dependencies'",
+    "Claude writes the decision before proceeding to implement the config change"
+  ],
+  "must_not": [
+    "Claude implements the config change without writing a decision memory",
+    "Claude writes a lesson instead of a decision for an architectural choice",
+    "Claude defers writing the decision until after the implementation is complete"
+  ]
+}

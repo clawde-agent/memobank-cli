@@ -19,7 +19,8 @@
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "prepare": "husky",
-    "postinstall": "node scripts/postinstall.js"
+    "postinstall": "node scripts/postinstall.js",
+    "test:evals": "npx promptfoo@latest eval -c skills/memobank/evals/promptfooconfig.yaml -o skills/memobank/evals/output.json --no-cache --no-share"
   },
   "keywords": [
     "memory",

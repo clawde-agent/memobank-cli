@@ -1,0 +1,18 @@
+{
+  "skills": ["memobank"],
+  "query": "The Stop hook wasn't saving memories on Windows. I traced it to the && operator — PowerShell 5.1 doesn't support &&, so if memo capture failed, process-queue never ran. Fixed it by switching to ; which always runs the next command.",
+  "context": "Claude has just helped the user diagnose and fix the bug. The fix has been applied to src/platforms/claude-code.ts.",
+  "expected_behavior": [
+    "Claude immediately runs `memo write lesson` after confirming the fix",
+    "The lesson name is a kebab-case slug describing the bug (e.g. 'windows-powershell-ampersand-operator')",
+    "The lesson description is a single sentence stating the root cause",
+    "The lesson content includes a Problem section, Root Cause section, and Solution section",
+    "The lesson tags include at least one of: 'windows', 'powershell', 'hooks', 'platform'",
+    "The --content flag contains the full lesson body as a markdown string"
+  ],
+  "must_not": [
+    "Claude skips writing the lesson and moves on to the next task",
+    "Claude writes the lesson after a long delay or only when prompted",
+    "Claude writes a lesson that describes the fix without identifying the root cause"
+  ]
+}

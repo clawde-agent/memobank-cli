@@ -1,0 +1,17 @@
+{
+  "skills": ["memobank"],
+  "query": "I need to refactor the queue processor to fix a deduplication bug. The Jaccard similarity threshold isn't filtering close-enough duplicates.",
+  "context": "User's first message in a new session. Project has .memobank/ initialized.",
+  "expected_behavior": [
+    "Before any file edits or grep commands, Claude runs `memo map` to get a memory inventory",
+    "Claude runs `memo recall` with a topic related to the task (e.g. 'deduplication', 'queue processor', or 'Jaccard') before touching any code",
+    "Claude uses the `--code` flag with memo recall to surface linked code symbols",
+    "Claude reads MEMORY.md after recall to pick up past decisions",
+    "Only after the recall step does Claude begin exploring or editing source files"
+  ],
+  "must_not": [
+    "Claude edits or reads source files before running memo recall",
+    "Claude skips memo map and goes directly to coding",
+    "Claude runs memo recall after already proposing a fix"
+  ]
+}

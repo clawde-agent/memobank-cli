@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as childProcess from 'child_process';
-import { findRepoRoot } from '../core/store';
+import { findRepoRoot } from '../core/dir-resolver';
 import { processQueue } from '../core/queue-processor';
 
 export interface ProcessQueueOptions {

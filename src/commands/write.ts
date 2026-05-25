@@ -7,7 +7,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { execFileSync } from 'child_process';
-import { writeMemory, findRepoRoot, assertRepoRootMatchesCwd } from '../core/store';
+import { findRepoRoot, assertRepoRootMatchesCwd } from '../core/dir-resolver';
+import { writeMemory } from '../core/store';
 import type { MemoryType, Confidence } from '../types';
 import {
   generateMemoryFile,
@@ -299,7 +300,7 @@ export async function writeMemoryCommand(
         const { engine, warning } = await selectEngine('lancedb', repoRoot, embedCfg);
         if (warning) return; // unavailable
         if (engine.index) {
-          const { loadFile } = await import('../core/store');
+          const { loadFile } = await import('../core/memory-loader');
           const mem = loadFile(filePath);
           await engine.index([mem], true);
         }

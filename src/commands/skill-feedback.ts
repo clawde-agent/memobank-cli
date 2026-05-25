@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { loadAll } from '../core/store';
+import { loadAll } from '../core/memory-loader';
 import { loadAccessLogs } from '../core/lifecycle-manager';
 
 interface RecallMiss {

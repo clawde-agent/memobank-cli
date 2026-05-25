@@ -3,7 +3,8 @@
  * Print summary of the memory graph
  */
 
-import { loadAll, findRepoRoot } from '../core/store';
+import { findRepoRoot } from '../core/dir-resolver';
+import { loadAll } from '../core/memory-loader';
 import type { MemoryType } from '../types';
 
 export interface MapOptions {

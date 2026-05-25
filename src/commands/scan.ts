@@ -11,7 +11,7 @@ import * as path from 'path';
 import { execSync, execFileSync } from 'child_process';
 import { glob } from 'glob';
 import { scanForSecrets, sanitize } from '../core/sanitizer';
-import { findRepoRoot } from '../core/store';
+import { findRepoRoot } from '../core/dir-resolver';
 
 export interface ScanResult {
   file: string;
