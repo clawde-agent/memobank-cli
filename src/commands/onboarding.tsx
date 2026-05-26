@@ -52,6 +52,7 @@ type Step =
   | 'project-name'
   | 'project-dir'
   | 'capture-provider'
+  | 'capture-detecting'
   | 'capture-key'
   | 'capture-base-url'
   | 'capture-model'
@@ -448,13 +449,33 @@ export async function onboardingCommand(): Promise<void> {
           onSelect: (item: { label: string; value: unknown }) => {
             const provider = String(item.value);
             const descriptor = CAPTURE_REGISTRY.get(provider as CaptureProviderName);
+            const isLocal = !descriptor?.requiresApiKey;
+            const defaultUrl = descriptor?.defaultBaseUrl ?? '';
             setState(s => ({
               ...s,
               captureProvider: provider,
-              step: descriptor?.requiresApiKey ? 'capture-key' : 'capture-base-url',
+              captureBaseUrl: isLocal ? defaultUrl : '',
+              step: isLocal ? 'capture-detecting' : 'capture-key',
             }));
+            if (isLocal) {
+              fetchModelsForOnboarding(provider, undefined, defaultUrl)
+                .then((models) => {
+                  if (models.length > 0) {
+                    setCaptureModelItems(models);
+                    setState(s => ({ ...s, captureBaseUrl: defaultUrl, step: 'capture-model' }));
+                  } else {
+                    setState(s => ({ ...s, step: 'capture-base-url' }));
+                  }
+                })
+                .catch(() => setState(s => ({ ...s, step: 'capture-base-url' })));
+            }
           },
         }),
+      ) : null,
+
+      state.step === 'capture-detecting' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, { dimColor: true },
+          `  Probing ${state.captureBaseUrl} for available models…`),
       ) : null,
 
       state.step === 'capture-key' ? React.createElement(Box, { flexDirection: 'column' },
