@@ -58,7 +58,6 @@ type Step =
   | 'workspace-local-path'
   | 'search-engine'
   | 'embedding-provider'
-  | 'embedding-detecting'
   | 'ollama-url'
   | 'ollama-model'
   | 'embedding-key'
@@ -481,11 +480,6 @@ export async function onboardingCommand(): Promise<void> {
           `  Probing ${state.captureBaseUrl} for available models…`),
       ) : null,
 
-      state.step === 'embedding-detecting' ? React.createElement(Box, { flexDirection: 'column' },
-        React.createElement(Text, { dimColor: true },
-          `  Probing ${state.embeddingUrl} for available models…`),
-      ) : null,
-
       state.step === 'capture-key' ? React.createElement(Box, { flexDirection: 'column' },
         React.createElement(Text, { bold: true }, `${state.captureProvider} API key`),
         React.createElement(Text, { dimColor: true }, '  Saved to .memobank/.env (not committed)'),
@@ -652,32 +646,21 @@ export async function onboardingCommand(): Promise<void> {
             const embDesc = EMBEDDING_REGISTRY.get(provider as EmbeddingProvider);
             const envKey = embDesc?.apiKeyEnv;
             const alreadyHaveKey = embDesc?.requiresApiKey && envKey && Boolean(state.collectedKeys[envKey]);
-            if (!embDesc?.requiresApiKey && embDesc?.fetchModels) {
-              const defaultUrl = embDesc.defaultBaseUrl ?? 'http://localhost:11434/v1';
-              const bareDefault = defaultUrl.replace(/\/v1\/?$/, '').replace(/\/$/, '');
-              setState(s => ({ ...s, embeddingProvider: provider, embeddingUrl: bareDefault, step: 'embedding-detecting' }));
-              embDesc.fetchModels(defaultUrl).then((fetched) => {
-                if (fetched.length > 0) {
-                  setEmbeddingModelItems(fetched.map((m) => ({ label: m, value: m })));
-                  setState(s => ({ ...s, step: 'ollama-model' }));
-                } else {
-                  setOllamaUrlInput(bareDefault);
-                  setState(s => ({ ...s, step: 'ollama-url' }));
-                }
-              }).catch(() => {
-                setOllamaUrlInput(bareDefault);
-                setState(s => ({ ...s, step: 'ollama-url' }));
-              });
-            } else {
+            if (!embDesc?.requiresApiKey) {
+              // Always show the URL step first for local providers so the user
+              // can confirm the correct port before model names are fetched.
+              // (Auto-detecting before URL confirmation shows models from
+              // whichever server happens to be on the default port, which is
+              // often an LLM instance rather than an embedding instance.)
               const defaultUrl = embDesc?.defaultBaseUrl ?? 'http://localhost:11434/v1';
               const bareDefault = defaultUrl.replace(/\/v1\/?$/, '').replace(/\/$/, '');
-              if (!embDesc?.requiresApiKey) {
-                setOllamaUrlInput(bareDefault);
-              }
+              setOllamaUrlInput(bareDefault);
+              setState(s => ({ ...s, embeddingProvider: provider, embeddingUrl: bareDefault, step: 'ollama-url' }));
+            } else {
               setState(s => ({
                 ...s,
                 embeddingProvider: provider,
-                step: !embDesc?.requiresApiKey ? 'ollama-url' : alreadyHaveKey ? 'reranker' : 'embedding-key',
+                step: alreadyHaveKey ? 'reranker' : 'embedding-key',
               }));
             }
           },
