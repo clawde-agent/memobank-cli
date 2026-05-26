@@ -120,6 +120,25 @@ EMBEDDING_REGISTRY.set('llamacpp', {
   defaultModel: 'local-model',
   defaultBaseUrl: 'http://localhost:8080/v1',
   defaultDimensions: 1536,
+  async testConnection(baseUrl) {
+    try {
+      const res = await fetch(`${baseUrl.replace(/\/$/, '')}/models`);
+      if (!res.ok) return `llama.cpp not reachable at ${baseUrl}`;
+      return null;
+    } catch {
+      return `Cannot connect to llama.cpp at ${baseUrl}`;
+    }
+  },
+  async fetchModels(baseUrl) {
+    try {
+      const res = await fetch(`${baseUrl.replace(/\/$/, '')}/models`);
+      if (!res.ok) return [];
+      const data = (await res.json()) as { data?: { id: string }[] };
+      return (data.data ?? []).map((m) => m.id).filter(Boolean);
+    } catch {
+      return [];
+    }
+  },
 });
 
 // ---------------------------------------------------------------------------

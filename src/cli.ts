@@ -35,6 +35,8 @@ import { distillCommand } from './commands/distill';
 import type { DistillOptions } from './commands/distill';
 import { processQueueCommand } from './commands/process-queue';
 import { skillFeedbackCommand } from './commands/skill-feedback';
+import { purgeCommand } from './commands/purge';
+import type { PurgeOptions } from './commands/purge';
 import { codeScanCommand } from './commands/code-scan';
 import { codeContextCommand } from './commands/code-context';
 import { findRepoRoot } from './core/dir-resolver';
@@ -651,6 +653,43 @@ program
     try {
       const repoRoot = findRepoRoot(process.cwd(), options.repo);
       await skillFeedbackCommand(repoRoot);
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+// Purge command — bulk-delete memories matching filter criteria
+program
+  .command('purge')
+  .description('Bulk-delete memory files matching filter criteria (use --dry-run first)')
+  .option('--before <date>', 'Delete memories created before this ISO date (e.g. 2026-05-27)')
+  .option('--after <date>', 'Delete memories created after this ISO date')
+  .option('--project <id>', 'Delete memories whose frontmatter project field matches this value')
+  .option('--type <type>', 'Filter by type: lesson|decision|workflow|architecture')
+  .option('--status <status>', 'Filter by status: experimental|active|needs-review|deprecated')
+  .option('--tag <tag>', 'Delete memories that have this tag')
+  .option(
+    '--name-pattern <regex>',
+    'Delete memories whose name matches this regex (case-insensitive)'
+  )
+  .option('--dry-run', 'Preview what would be deleted without removing any files')
+  .option('--yes', 'Skip confirmation and execute deletion')
+  .option('--repo <path>', 'Memobank repository path')
+  .action(async (options) => {
+    try {
+      purgeCommand({
+        before: options.before as PurgeOptions['before'],
+        after: options.after as PurgeOptions['after'],
+        project: options.project as PurgeOptions['project'],
+        type: options.type as PurgeOptions['type'],
+        status: options.status as PurgeOptions['status'],
+        tag: options.tag as PurgeOptions['tag'],
+        namePattern: options.namePattern as PurgeOptions['namePattern'],
+        dryRun: options.dryRun as boolean | undefined,
+        yes: options.yes as boolean | undefined,
+        repo: options.repo as string | undefined,
+      });
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`);
       process.exit(1);

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-05-27
+
+### Added
+
+- **`memo purge`** — bulk-delete memory files by filter criteria with mandatory dry-run/confirmation workflow. Filters: `--before <date>`, `--after <date>`, `--project <id>`, `--type`, `--status`, `--tag`, `--name-pattern <regex>`. Filters combine with AND logic. Requires `--dry-run` to preview, then `--yes` to execute. Primary use case: cleaning up eval/test contamination from a specific date range or project.
+- **`MEMOBANK_DISABLED` env var** — setting `MEMOBANK_DISABLED=true` or `MEMOBANK_DISABLED=1` makes `writePending` and `writeMemory` no-ops. Eval harnesses and test runners can set this to prevent writes from polluting `.memobank/` during simulated sessions.
+- **llamacpp embedding provider: `testConnection` + `fetchModels`** — the llama.cpp entry in the embedding registry now implements live connectivity checks and model listing, consistent with other local-model providers.
+
 ## [0.18.0] - 2026-05-26
 
 ### Fixed
