@@ -217,7 +217,7 @@ export async function runSetup(state: OnboardingState, gitRoot: string): Promise
   }
 
   // Write all runtime-generated paths to the project root .gitignore
-  ensureGitignoreFull(gitRoot);
+  ensureGitignoreFull(gitRoot, state.projectDir);
   summaryLines.push('✓ .gitignore updated');
 
   // Auto-run code indexing so recall --code works immediately after setup.
