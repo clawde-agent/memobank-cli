@@ -400,6 +400,7 @@ program
   .option('--path <path>', 'Memory file path')
   .option('--reset-epoch', 'Reset team epoch to now (use after team handoff)')
   .option('--scan', 'Run full lifecycle scan — auto-update status on all memories')
+  .option('--prune', 'Delete all deprecated memories and clean orphaned access logs')
   .option('--repo <path>', 'Memobank repository path')
   .action(async (action, options) => {
     try {
@@ -417,11 +418,13 @@ program
               !options.archive &&
               !options.delete &&
               !options.flagged &&
+              !options.prune &&
               !options.resetEpoch &&
               !options.scan),
           archive: options.archive,
           delete: options.delete,
           flagged: options.flagged,
+          prune: options.prune,
           tier: options.tier,
           resetEpoch: options.resetEpoch,
           scan: options.scan,

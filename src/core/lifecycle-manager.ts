@@ -398,6 +398,35 @@ export function updateStatusOnRecall(repoRoot: string, memoryPath: string): void
   }
 }
 
+export function pruneOrphanedAccessLogs(repoRoot: string): void {
+  const logs = loadAccessLogs(repoRoot);
+  let changed = false;
+  for (const memoryPath of Object.keys(logs)) {
+    if (!fs.existsSync(memoryPath)) {
+      delete logs[memoryPath];
+      changed = true;
+    }
+  }
+  if (changed) saveAccessLogs(repoRoot, logs);
+}
+
+export function pruneDeprecatedMemories(repoRoot: string): number {
+  const memories = loadAll(repoRoot);
+  let count = 0;
+  for (const memory of memories) {
+    if (memory.status === 'deprecated') {
+      try {
+        fs.unlinkSync(memory.path);
+        count++;
+      } catch {
+        // non-fatal — file may already be gone
+      }
+    }
+  }
+  pruneOrphanedAccessLogs(repoRoot);
+  return count;
+}
+
 export function runLifecycleScan(repoRoot: string, globalDir?: string): void {
   const config = loadConfig(repoRoot);
   const lc = config.lifecycle!;
@@ -425,6 +454,8 @@ export function runLifecycleScan(repoRoot: string, globalDir?: string): void {
       updateMemoryStatus(memory.path, nextStatus);
     }
   }
+
+  pruneOrphanedAccessLogs(repoRoot);
 }
 
 export function resetEpoch(repoRoot: string): void {

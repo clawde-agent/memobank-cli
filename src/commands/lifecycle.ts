@@ -9,6 +9,7 @@ import {
   analyzeLifecycle,
   generateLifecycleReport,
   getFlaggedMemories,
+  pruneDeprecatedMemories,
   recordCorrection,
   resetEpoch,
   runLifecycleScan,
@@ -20,6 +21,7 @@ export interface LifecycleOptions {
   archive?: boolean;
   delete?: boolean;
   flagged?: boolean;
+  prune?: boolean;
   tier?: 'core' | 'working' | 'peripheral';
   resetEpoch?: boolean;
   scan?: boolean;
@@ -41,6 +43,14 @@ export function lifecycleCommand(options: LifecycleOptions = {}): void {
   if (options.resetEpoch) {
     resetEpoch(repoRoot);
     console.log('✓ Epoch reset. epochAccessCount zeroed for all memories.');
+    return;
+  }
+
+  if (options.prune) {
+    const count = pruneDeprecatedMemories(repoRoot);
+    console.log(
+      `✓ Pruned ${count} deprecated memor${count === 1 ? 'y' : 'ies'} and cleaned orphaned access logs.`
+    );
     return;
   }
 
