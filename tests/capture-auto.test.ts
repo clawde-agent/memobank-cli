@@ -18,3 +18,40 @@ describe('capture --auto', () => {
     ).resolves.not.toThrow();
   });
 });
+
+describe('capture --auto session snapshot', () => {
+  it('generateSessionSummary returns a valid PendingEntry with correct fields', async () => {
+    const { generateSessionSummary } = await import('../src/commands/capture');
+    const tmpRepo = path.join(os.tmpdir(), `snap-test-${Date.now()}`);
+    await fs.mkdir(path.join(tmpRepo, 'meta'), { recursive: true });
+    await fs.writeFile(path.join(tmpRepo, 'meta', 'config.yaml'), 'project:\n  name: test\n');
+
+    const entry = generateSessionSummary({
+      branch: 'feat/my-feature',
+      lastCommit: 'abc1234 add something',
+      gitStatus: 'M src/foo.ts',
+      extractedNames: ['my-lesson', 'my-decision'],
+      repoRoot: tmpRepo,
+    });
+
+    expect(entry).not.toBeNull();
+    expect(entry!.candidates[0].type).toBe('workflow');
+    expect(entry!.candidates[0].name).toMatch(/^session-\d{4}-\d{2}-\d{2}-feat-my-feature$/);
+    expect(entry!.candidates[0].tags).toContain('session');
+    expect(entry!.candidates[0].content).toContain('feat/my-feature');
+    expect(entry!.candidates[0].content).toContain('my-lesson');
+    await fs.rm(tmpRepo, { recursive: true });
+  });
+
+  it('returns null when branch, gitStatus, and extractedNames are all empty', async () => {
+    const { generateSessionSummary } = await import('../src/commands/capture');
+    const result = generateSessionSummary({
+      branch: '',
+      lastCommit: '',
+      gitStatus: '',
+      extractedNames: [],
+      repoRoot: os.tmpdir(),
+    });
+    expect(result).toBeNull();
+  });
+});

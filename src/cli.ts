@@ -9,6 +9,9 @@ import { Command } from 'commander';
 import { installCommand } from './commands/install';
 import type { RecallOptions } from './commands/recall';
 import { recallCommand } from './commands/recall';
+import { remember } from './commands/remember';
+import type { RememberOptions } from './commands/remember';
+import { updateMemoryCommand } from './commands/update-memory';
 import { search } from './commands/search';
 import { capture } from './commands/capture';
 import { writeMemoryCommand } from './commands/write';
@@ -148,9 +151,47 @@ program
   .option('--code', 'Enable dual-track recall: search memories + code symbols', false)
   .option('--refs <symbol>', 'Show callers of a symbol from the code index')
   .option('--silent', 'Suppress stdout output')
+  .option('--hook-input', 'Read query from stdin JSON (Claude Code UserPromptSubmit hook)')
   .action(async (query: string, options: RecallOptions) => {
     try {
       await recallCommand(query, options);
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+// Remember command — Memorize structured knowledge mid-session (no LLM extraction)
+program
+  .command('remember')
+  .description('Memorize structured knowledge mid-session (no LLM extraction)')
+  .requiredOption('--name <slug>', 'Memory name in kebab-case')
+  .requiredOption('--description <text>', 'One-line summary')
+  .requiredOption('--content <markdown>', 'Markdown body')
+  .option('--type <type>', 'Memory type (lesson|decision|workflow|architecture)', 'lesson')
+  .option('--tags <csv>', 'Comma-separated tags')
+  .option('--code-refs <csv>', 'Comma-separated code refs (e.g. src/core/store.ts::writePending)')
+  .option('--repo <path>', 'Memobank repository path')
+  .action(async (options: RememberOptions & { codeRefs?: string }) => {
+    try {
+      await remember({ ...options });
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+// Update command — update the body of an existing memory by name
+program
+  .command('update')
+  .description('Update the body of an existing memory by name')
+  .requiredOption('--name <slug>', 'Memory name to update')
+  .requiredOption('--content <markdown>', 'New markdown body')
+  .option('--repo <path>', 'Memobank repository path')
+  .action(async (options: { name: string; content: string; repo?: string }) => {
+    try {
+      await updateMemoryCommand(options);
+      console.log(`✓ Updated: ${options.name}`);
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`);
       process.exit(1);

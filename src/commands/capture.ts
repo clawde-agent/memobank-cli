@@ -174,6 +174,19 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
         updateMemoryContent(repoRoot, targetName, updatedContent);
       }
 
+      // Session snapshot — deterministic, no LLM required
+      const extractedNames = [...toWrite.map((c) => c.name), ...toUpdate.map((u) => u.targetName)];
+      const snapshot = generateSessionSummary({
+        branch: gitBranch,
+        lastCommit: gitLastCommit,
+        gitStatus,
+        extractedNames,
+        repoRoot,
+      });
+      if (snapshot) {
+        writePending(repoRoot, snapshot);
+      }
+
       await markSessionProcessed(metaDir, sessionId);
     }
 
@@ -267,4 +280,62 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
   if (config.embedding.engine === 'lancedb') {
     console.log('Run: memo index --incremental to update LanceDB');
   }
+}
+
+export interface SessionSummaryInput {
+  branch: string;
+  lastCommit: string;
+  gitStatus: string;
+  extractedNames: string[];
+  repoRoot: string;
+}
+
+export function generateSessionSummary(input: SessionSummaryInput): PendingEntry | null {
+  const { branch, lastCommit, gitStatus, extractedNames } = input;
+
+  if (!branch && extractedNames.length === 0 && !gitStatus) return null;
+
+  const date = new Date().toISOString().slice(0, 10);
+  const branchSlug = branch
+    .replace(/[^a-z0-9]/gi, '-')
+    .replace(/-+/g, '-')
+    .toLowerCase();
+  const name = `session-${date}${branchSlug ? '-' + branchSlug : ''}`;
+
+  const sections: string[] = [
+    `## Session`,
+    `**Date**: ${date}`,
+    branch ? `**Branch**: ${branch}` : '',
+    lastCommit ? `**Last Commit**: ${lastCommit}` : '',
+  ].filter(Boolean);
+
+  if (gitStatus) {
+    sections.push('', '## Files Changed', gitStatus);
+  }
+
+  if (extractedNames.length > 0) {
+    sections.push('', '## Memories Extracted');
+    extractedNames.forEach((n) => sections.push(`- ${n}`));
+  }
+
+  sections.push('', '## Unfinished Work');
+  sections.push(gitStatus ? gitStatus : '(none — clean session)');
+
+  const content = sections.join('\n');
+
+  return {
+    id: `SNAP-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    timestamp: new Date().toISOString(),
+    projectId: resolveProjectId(input.repoRoot),
+    candidates: [
+      {
+        name,
+        type: 'workflow',
+        description: `Session snapshot: ${branch || '(no branch)'} ${date}`,
+        tags: ['session', ...(branchSlug ? [branchSlug] : []), date],
+        confidence: 'high',
+        content,
+      },
+    ],
+  };
 }
