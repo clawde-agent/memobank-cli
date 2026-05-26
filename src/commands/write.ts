@@ -179,12 +179,11 @@ export async function writeMemoryCommand(
         const idx = new CodeIndex(dbPath);
         const syms = idx.search(options.symbol, 1);
         idx.close();
-        if (syms.length > 0 && syms[0].symbol.hash) {
-          memoryData.codeRefs = [syms[0].symbol.hash];
+        if (syms.length > 0) {
+          const sym = syms[0].symbol;
+          memoryData.codeRefs = [`${sym.file}::${sym.qualifiedName}`];
           if (!options.silent) {
-            console.log(
-              `✓ Anchored to symbol: ${syms[0].symbol.qualifiedName} (${syms[0].symbol.hash.slice(0, 8)})`
-            );
+            console.log(`✓ Anchored to symbol: ${sym.file}::${sym.qualifiedName}`);
           }
         } else {
           if (!options.silent) {
