@@ -28,16 +28,14 @@ describe('budgetResults', () => {
   });
 
   it('trims from the end when total tokens exceed budget', () => {
-    // Create results where body is large enough to exceed a tight budget
-    const longBody = 'x'.repeat(5000);
+    // budgetResults costs based on header line (name + description + path) only.
+    // With overhead=50 and ~10 tokens per header, budget=60 fits exactly one result.
     const results = [
-      makeResult('first', longBody),
-      makeResult('second', longBody),
-      makeResult('third', longBody),
+      makeResult('first', 'body'),
+      makeResult('second', 'body'),
+      makeResult('third', 'body'),
     ];
-    // Budget = 1000 tokens ≈ 4000 chars — only "first" should fit
-    const kept = budgetResults(results, 1000);
-    // Each result costs ~1300+ tokens approximated; budget=1000 fits only one
+    const kept = budgetResults(results, 60);
     expect(kept).toHaveLength(1);
     expect(kept[0].memory.name).toBe('first');
   });
