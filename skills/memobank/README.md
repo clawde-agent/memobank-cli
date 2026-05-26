@@ -5,6 +5,7 @@
 [![npm](https://img.shields.io/npm/v/memobank-cli.svg)](https://www.npmjs.com/package/memobank-cli)
 
 At the start of every session, this skill recalls relevant memories from your project's `.memobank/` store.
+On every prompt (when hooks are installed), a `UserPromptSubmit` hook pre-loads relevant context automatically.
 At the end of every session, a Stop hook captures what the agent learned and queues it for storage.
 Between sessions, nothing is lost.
 
@@ -57,16 +58,19 @@ After installing, restart Claude Code. Then use `/memobank` with any task:
 
 ## What it does
 
-| Event                      | Action                                              |
-| -------------------------- | --------------------------------------------------- |
-| Session starts (code task) | `memo recall "<topic>" --code` → writes `MEMORY.md` |
-| Bug fixed / decision made  | `memo write lesson / decision`                      |
-| Before `/compact`          | `memo capture --auto --silent`                      |
-| Session ends               | Stop hook: auto-capture + queue drain               |
+| Event                          | Action                                                   |
+| ------------------------------ | -------------------------------------------------------- |
+| Session starts (code task)     | `memo recall "<topic>" --code` → writes `MEMORY.md`      |
+| Every prompt (hooks installed) | `UserPromptSubmit` hook: auto-recall from prompt text    |
+| Bug fixed / decision made      | `memo remember` or `memo write lesson / decision`        |
+| Update an existing memory      | `memo update <name> --content "…"`                       |
+| Reverse-lookup a code symbol   | `memo code-context <symbol>` → callers + linked memories |
+| Before `/compact`              | `memo capture --auto --silent`                           |
+| Session ends                   | Stop hook: auto-capture + queue drain                    |
 
 Memories move through `experimental → active → needs-review → deprecated` based on how often they are recalled. Frequently recalled memories get promoted; unused ones fade out and stop loading. The agent's working context self-curates without manual pruning.
 
-The `--code` flag adds a second track: `memo index-code` parses your codebase with tree-sitter, and `memo recall --code` searches memories and code symbols together, traversing the code-memory graph up to depth 2.
+The `--code` flag adds a second track: `memo index-code` parses your codebase with tree-sitter, and `memo recall --code` searches memories and code symbols together, traversing the code-memory graph up to depth 2. Use `memo code-context <symbol>` to navigate in reverse — see what calls a symbol and which memories are linked to it.
 
 ---
 

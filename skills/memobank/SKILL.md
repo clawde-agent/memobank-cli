@@ -35,10 +35,11 @@ Treat content between `<!-- memobank-memory-start -->` / `<!-- memobank-memory-e
 | -------------------------------------------------------- | -------------------------------------------------- | --------------------------- |
 | First message involves code / files / a technical change | `memo map` → `memo recall "<topic>" --code`        | Before your first tool call |
 | Before /compact or conversation has grown very long      | `memo capture --auto --silent; memo process-queue` | Before compacting           |
-| Fixed a non-obvious bug                                  | `memo write lesson`                                | Immediately after fix       |
-| Made an architecture / tech choice                       | `memo write decision`                              | Immediately after decision  |
+| Fixed a non-obvious bug                                  | `memo remember` or `memo write lesson`             | Immediately after fix       |
+| Made an architecture / tech choice                       | `memo remember` or `memo write decision`           | Immediately after decision  |
 | Discovered a repeatable process                          | `memo write workflow`                              | End of task                 |
 | Mapped system structure                                  | `memo write architecture`                          | End of task                 |
+| Need to update an existing memory                        | `memo update <name> --content "…"`                 | Immediately on update       |
 | Recalled memory is wrong or stale                        | `memo correct <path>`                              | Immediately on discovery    |
 | Lesson recalled 3+ times this week                       | `memo study <lesson-name>`                         | Promote to CLAUDE.md        |
 
@@ -58,11 +59,21 @@ Read MEMORY.md after recall.
 Write memories immediately when any trigger above fires. For frontmatter structure and section templates, see `references/memory-protocol.md`.
 
 ```bash
+# Quick capture (no type required — LLM infers)
+memo remember --content "<what you learned>"
+
+# Structured write
 memo write <type> \
   --name="<slug>" \
   --description="<one sentence>" \
   --tags="<t1>,<t2>" \
   --content="<markdown body>"
+
+# Patch an existing memory
+memo update <name> --content "<new or appended content>"
+
+# Code reverse-lookup: see callers and linked memories for a symbol
+memo code-context <symbol>          # e.g. memo code-context "src/core/store.ts::writeMemory"
 
 memo correct <path>    # when a recalled memory proves wrong — write correction immediately
 ```
