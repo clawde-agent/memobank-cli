@@ -36,6 +36,7 @@ import type { DistillOptions } from './commands/distill';
 import { processQueueCommand } from './commands/process-queue';
 import { skillFeedbackCommand } from './commands/skill-feedback';
 import { codeScanCommand } from './commands/code-scan';
+import { codeContextCommand } from './commands/code-context';
 import { findRepoRoot } from './core/dir-resolver';
 import { loadConfig } from './config';
 import type { MemoryType, IndexedLanguage } from './types';
@@ -587,6 +588,24 @@ program
         repo: options.repo,
         incremental: !!options.incremental,
         files: Array.isArray(options.incremental) ? options.incremental : undefined,
+      });
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+// Code-context command
+program
+  .command('code-context <symbol>')
+  .description('Show callers and linked memories for a code symbol')
+  .option('--repo <path>', 'Memobank repository path')
+  .option('--format <fmt>', 'Output format: text (default) or json')
+  .action(async (symbol: string, options) => {
+    try {
+      await codeContextCommand(symbol, {
+        repo: options.repo as string | undefined,
+        format: options.format as 'text' | 'json' | undefined,
       });
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`);
