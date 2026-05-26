@@ -2,6 +2,9 @@ import * as path from 'path';
 import * as childProcess from 'child_process';
 import { findRepoRoot } from '../core/dir-resolver';
 import { processQueue } from '../core/queue-processor';
+import { loadConfig } from '../config';
+import { captureConfigFromMemoConfig, createCaptureProvider } from '../core/capture-provider';
+import { createDedupLLM } from '../core/dedup';
 
 export interface ProcessQueueOptions {
   background: boolean;
@@ -22,7 +25,11 @@ export async function runProcessQueue(
   }
 
   try {
-    await processQueue(memoBankDir);
+    const config = loadConfig(memoBankDir);
+    const captureConfig = captureConfigFromMemoConfig(config);
+    const provider = captureConfig ? createCaptureProvider(captureConfig) : null;
+    const llm = captureConfig && provider ? createDedupLLM(captureConfig) : undefined;
+    await processQueue(memoBankDir, llm);
     return 0;
   } catch (err) {
     console.error(`process-queue failed: ${(err as Error).message}`);

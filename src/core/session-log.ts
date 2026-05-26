@@ -43,10 +43,20 @@ function buildEntryBlock(entry: SessionLogEntry): string {
 export function appendToSessionLog(repoRoot: string, entry: SessionLogEntry): void {
   if (!entry.branch && entry.extractedNames.length === 0 && !entry.gitStatus) return;
 
-  const logDir = path.join(repoRoot, 'workflow');
+  const logDir = path.join(repoRoot, 'meta');
   fs.mkdirSync(logDir, { recursive: true });
 
   const logPath = path.join(logDir, 'sessions.md');
+
+  // Migrate from old location (.memobank/workflow/sessions.md) on first write
+  const oldPath = path.join(repoRoot, 'workflow', 'sessions.md');
+  if (fs.existsSync(oldPath) && !fs.existsSync(logPath)) {
+    try {
+      fs.renameSync(oldPath, logPath);
+    } catch {
+      /* non-fatal: old file stays, new one will be created */
+    }
+  }
   const existing = fs.existsSync(logPath) ? fs.readFileSync(logPath, 'utf-8') : '';
 
   let entries: string[] = [];

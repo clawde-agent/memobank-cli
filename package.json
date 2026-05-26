@@ -1,6 +1,6 @@
 {
   "name": "memobank-cli",
-  "version": "0.17.0",
+  "version": "0.18.0",
   "description": "Persistent memory for AI coding sessions — Git-native, human-readable, safe to share",
   "main": "./dist/cli.js",
   "bin": {
@@ -47,7 +47,6 @@
   },
   "homepage": "https://github.com/clawde-agent/memobank-cli#readme",
   "dependencies": {
-    "apache-arrow": "^21.1.0",
     "chalk": "^5.3.0",
     "commander": "^14.0.3",
     "glob": "^13.0.6",
@@ -84,6 +83,7 @@
   "optionalDependencies": {
     "@lancedb/core": "^0.15.0",
     "@lancedb/lancedb": "^0.29.0",
+    "apache-arrow": "18.1.0",
     "better-sqlite3": "^12.10.0",
     "openai": "^6.33.0",
     "tree-sitter": "^0.25.0",
@@ -94,6 +94,14 @@
     "tree-sitter-rust": "^0.24.0",
     "tree-sitter-typescript": "^0.23.2",
     "tree-sitter-yaml": "^0.5.0"
+  },
+  "overrides": {
+    "tree-sitter-rust": {
+      "tree-sitter": "$tree-sitter"
+    },
+    "tree-sitter-typescript": {
+      "tree-sitter": "$tree-sitter"
+    }
   },
   "engines": {
     "node": "22.x"

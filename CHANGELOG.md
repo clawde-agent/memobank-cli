@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-05-26
+
+### Fixed
+
+- **LLM dedup never activated** — `dedupLLMBatch` and `deduplicate` were always called without the LLM callback, causing ambiguous pairs (Jaccard 0.4–0.8) to always pass through as new memories. Both call sites in `capture --auto` and `processQueue` now wire up `createDedupLLM()` using the configured capture provider.
+- **Cursor truncation causes session re-processing** — `capture-cursor.json` used a count-based cap of 100 entries (`slice(-100)`), silently dropping old session IDs. Those sessions would be re-processed on the next `capture --auto`, producing duplicate memories. Replaced with 180-day time-based pruning; old `processedSessions` array format is automatically migrated.
+- **`sessions.md` warning on every recall/map** — `appendToSessionLog` wrote to `.memobank/workflow/sessions.md`, which `loadFromDir` would pick up and fail to parse (no YAML frontmatter). File is now written to `.memobank/meta/sessions.md` (outside scanned type dirs). Existing files at the old path are migrated automatically on first write.
+- **Cross-project content extraction** — extraction prompts had no knowledge of the current project. Generic patterns from other libraries (Stripe, Supabase, auth) mentioned incidentally in a session could be saved as project memories. Session text now starts with `[PROJECT: <name>]` and both prompts are updated to use this context for relevance filtering.
+- **npm install peer dependency warnings** — `apache-arrow` moved from `dependencies` to `optionalDependencies` at version `18.1.0` (matching `@lancedb/lancedb` peer range). Added `overrides` for `tree-sitter-rust` and `tree-sitter-typescript` to resolve ERESOLVE warnings.
+
 ## [0.17.0] - 2026-05-26
 
 ### Fixed

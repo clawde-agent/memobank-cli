@@ -5,11 +5,12 @@ import { resolveProjectId } from './dir-resolver';
 import { loadFile } from './memory-loader';
 import { writeMemory } from './store';
 import { deduplicate } from './dedup';
+import type { DedupBatchLLM } from './dedup';
 import { incrementalEdgeUpdate } from '../engines/memory-graph';
-import type { PendingEntry } from './store';
+import type { PendingEntry, PendingCandidate } from './store';
 import type { MemoryFile } from '../types';
 
-export async function processQueue(memoBankDir: string): Promise<void> {
+export async function processQueue(memoBankDir: string, llm?: DedupBatchLLM): Promise<void> {
   const pendingDir = path.join(memoBankDir, '.pending');
   if (!fs.existsSync(pendingDir)) {
     return;
@@ -56,7 +57,15 @@ export async function processQueue(memoBankDir: string): Promise<void> {
       continue;
     }
 
-    const { toWrite } = await deduplicate(entry.candidates, existing);
+    // Wrap DedupBatchLLM → DedupLLM (binary DUPLICATE/KEEP_BOTH)
+    type Pair = { candidate: PendingCandidate; existing: MemoryFile };
+    const simpleLlm = llm
+      ? async (pairs: Pair[]): Promise<Array<'DUPLICATE' | 'KEEP_BOTH'>> => {
+          const decisions = await llm(pairs);
+          return decisions.map((d) => (d.action === 'skip' ? 'DUPLICATE' : 'KEEP_BOTH'));
+        }
+      : undefined;
+    const { toWrite } = await deduplicate(entry.candidates, existing, simpleLlm);
     for (const candidate of toWrite) {
       const created = new Date().toISOString();
       // `created` is not in PendingCandidate — injected at write time

@@ -52,7 +52,7 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
 
     const metaDir = path.join(repoRoot, 'meta');
     const cursor = await readCursor(metaDir);
-    const unprocessed = await findUnprocessedSessions(cwd, cursor.processedSessions);
+    const unprocessed = await findUnprocessedSessions(cwd, Object.keys(cursor.processed));
 
     if (unprocessed.length === 0) {
       log('No new sessions to capture');
@@ -84,7 +84,10 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
       let gitStatus = '';
       let gitBranch = '';
       let gitLastCommit = '';
-      let contextForExtraction = sanitized;
+      const projectLabel = config.project.description
+        ? `${config.project.name} — ${config.project.description}`
+        : config.project.name;
+      let contextForExtraction = `[PROJECT: ${projectLabel}]\n\n${sanitized}`;
       try {
         const { execSync } = await import('child_process');
         gitStatus = execSync('git status --short', { cwd, encoding: 'utf-8' }).trim();
@@ -138,7 +141,7 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
         continue;
       }
 
-      const { dedupLLMBatch } = await import('../core/dedup');
+      const { dedupLLMBatch, createDedupLLM } = await import('../core/dedup');
       const { loadAll } = await import('../core/memory-loader');
       const existingMemories = loadAll(repoRoot, 'project');
 
@@ -151,7 +154,12 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
         content: item.content,
       }));
 
-      const { toWrite, toSkip, toUpdate } = await dedupLLMBatch(candidates, existingMemories);
+      const dedupLLM = captureConfig ? createDedupLLM(captureConfig) : undefined;
+      const { toWrite, toSkip, toUpdate } = await dedupLLMBatch(
+        candidates,
+        existingMemories,
+        dedupLLM
+      );
 
       log(
         `Session ${sessionId}: ${toWrite.length} new, ${toSkip.length} skipped, ${toUpdate.length} updates`
@@ -187,7 +195,10 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
       await markSessionProcessed(metaDir, sessionId);
     }
 
-    await processQueue(repoRoot);
+    const { createDedupLLM: createDedupLLMFinal } = await import('../core/dedup');
+    const finalCaptureConfig = captureConfigFromMemoConfig(config);
+    const finalDedupLLM = finalCaptureConfig ? createDedupLLMFinal(finalCaptureConfig) : undefined;
+    await processQueue(repoRoot, finalDedupLLM);
     return;
   } else if (options.session) {
     try {
@@ -208,13 +219,17 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
 
   // 2. Sanitize
   const sanitized = sanitize(sessionText);
+  const projectLabelSession = config.project.description
+    ? `${config.project.name} — ${config.project.description}`
+    : config.project.name;
+  const sessionContext = `[PROJECT: ${projectLabelSession}]\n\n${sanitized}`;
 
   // 3. Extract memories via LLM (provider config takes precedence; falls back to smart-extractor)
   const captureConfig = captureConfigFromMemoConfig(config);
   const captureProvider = captureConfig ? createCaptureProvider(captureConfig) : null;
   const extracted = captureProvider
-    ? await captureProvider.extract(sanitized)
-    : await extract(sanitized, process.env.ANTHROPIC_API_KEY);
+    ? await captureProvider.extract(sessionContext)
+    : await extract(sessionContext, process.env.ANTHROPIC_API_KEY);
 
   if (extracted.length === 0) {
     console.log('No memories extracted from session');
@@ -265,7 +280,9 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
   };
 
   writePending(repoRoot, entry);
-  await processQueue(repoRoot);
+  const { createDedupLLM: createDedupLLMSession } = await import('../core/dedup');
+  const sessionDedupLLM = captureConfig ? createDedupLLMSession(captureConfig) : undefined;
+  await processQueue(repoRoot, sessionDedupLLM);
 
   // 6. Print summary
   console.log(`\n📝 Captured up to ${highValueMemories.length} high-value memories`);
