@@ -125,6 +125,7 @@ export interface ExtractionResult {
   tags: string[];
   confidence: Confidence;
   content: string;
+  codeRefs?: string[];
 }
 
 export interface MemoryNodeInput {

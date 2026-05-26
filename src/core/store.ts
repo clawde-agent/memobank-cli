@@ -11,6 +11,7 @@ export interface PendingCandidate {
   tags: string[];
   confidence: Confidence;
   content: string;
+  codeRefs?: string[];
 }
 
 export interface PendingEntry {

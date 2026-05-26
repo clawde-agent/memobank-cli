@@ -15,8 +15,14 @@ Return a JSON array. Each item must follow this exact schema:
   "description": "one sentence summary",
   "tags": ["tag1", "tag2"],
   "confidence": "low|medium|high",
-  "content": "markdown body with the full insight"
+  "content": "markdown body with the full insight",
+  "code_refs": ["src/path/to/file.ts::symbolName"]
 }
+
+For each memory, if the session text mentions specific source files or functions, include them as
+"code_refs". Use format "src/path/to/file.ts" (file-level) or "src/path/to/file.ts::symbolName"
+(symbol-level). Example: "src/core/store.ts::writePending", "src/engines/code-index.ts".
+Only include refs you are confident about — omit the field entirely if uncertain.
 
 ## Priority criteria
 
@@ -174,7 +180,9 @@ export async function extract(
       return [];
     }
 
-    const extracted = JSON.parse(jsonMatch[0]) as ExtractionResult[];
+    const extracted = (
+      JSON.parse(jsonMatch[0]) as Array<ExtractionResult & { code_refs?: string[] }>
+    ).map((item) => ({ ...item, codeRefs: item.code_refs }));
 
     // Validate and filter
     return extracted.filter((item) => {
