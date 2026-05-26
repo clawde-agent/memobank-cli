@@ -10,38 +10,7 @@ export async function deduplicate(
   existing: MemoryFile[],
   llm?: DedupLLM
 ): Promise<{ toWrite: PendingCandidate[]; toSkip: PendingCandidate[] }> {
-  const toWrite: PendingCandidate[] = [];
-  const toSkip: PendingCandidate[] = [];
-  const ambiguous: Array<{ candidate: PendingCandidate; existing: MemoryFile }> = [];
-
-  for (const candidate of candidates) {
-    // Stage 1: exact name match
-    if (existing.some((e) => e.name === candidate.name)) {
-      toSkip.push(candidate);
-      continue;
-    }
-
-    // Stage 1: Jaccard on name + description
-    const candidateText = `${candidate.name} ${candidate.description}`;
-    let maxScore = 0;
-    let closestExisting: MemoryFile | undefined;
-
-    for (const e of existing) {
-      const score = jaccard(candidateText, `${e.name} ${e.description}`);
-      if (score > maxScore) {
-        maxScore = score;
-        closestExisting = e;
-      }
-    }
-
-    if (maxScore >= 0.8) {
-      toSkip.push(candidate);
-    } else if (maxScore >= 0.4 && closestExisting) {
-      ambiguous.push({ candidate, existing: closestExisting });
-    } else {
-      toWrite.push(candidate);
-    }
-  }
+  const { toWrite, toSkip, ambiguous } = jaccardPartition(candidates, existing);
 
   // Stage 2: LLM for ambiguous pairs
   if (ambiguous.length > 0) {
@@ -64,7 +33,6 @@ export async function deduplicate(
         }
       }
     } else {
-      // No LLM configured — KEEP_BOTH
       for (const { candidate } of ambiguous) {
         toWrite.push(candidate);
       }
@@ -216,19 +184,21 @@ function looksLikeInjection(text: string): boolean {
   return INJECTION_PATTERNS.some((p) => p.test(normalized));
 }
 
-export async function dedupLLMBatch(
-  candidates: PendingCandidate[],
-  existing: MemoryFile[],
-  llm?: DedupBatchLLM
-): Promise<DedupBatchResult> {
+interface PartitionResult {
+  toWrite: PendingCandidate[];
+  toSkip: PendingCandidate[];
+  ambiguous: Array<{ candidate: PendingCandidate; existing: MemoryFile }>;
+}
+
+function jaccardPartition(candidates: PendingCandidate[], existing: MemoryFile[]): PartitionResult {
   const toWrite: PendingCandidate[] = [];
   const toSkip: PendingCandidate[] = [];
-  const toUpdate: DedupBatchResult['toUpdate'] = [];
   const ambiguous: Array<{ candidate: PendingCandidate; existing: MemoryFile }> = [];
 
   for (const candidate of candidates) {
-    const combinedText = `${candidate.name} ${candidate.description} ${candidate.content}`;
-    if (looksLikeInjection(combinedText)) {
+    // Injection guard — unified for both deduplicate() and dedupLLMBatch()
+    const combined = `${candidate.name} ${candidate.description} ${candidate.content}`;
+    if (looksLikeInjection(combined)) {
       toSkip.push(candidate);
       continue;
     }
@@ -238,9 +208,9 @@ export async function dedupLLMBatch(
       continue;
     }
 
+    const candidateText = `${candidate.name} ${candidate.description}`;
     let maxScore = 0;
     let closestExisting: MemoryFile | undefined;
-    const candidateText = `${candidate.name} ${candidate.description}`;
     for (const e of existing) {
       const score = jaccard(candidateText, `${e.name} ${e.description}`);
       if (score > maxScore) {
@@ -257,6 +227,17 @@ export async function dedupLLMBatch(
       toWrite.push(candidate);
     }
   }
+
+  return { toWrite, toSkip, ambiguous };
+}
+
+export async function dedupLLMBatch(
+  candidates: PendingCandidate[],
+  existing: MemoryFile[],
+  llm?: DedupBatchLLM
+): Promise<DedupBatchResult> {
+  const toUpdate: DedupBatchResult['toUpdate'] = [];
+  const { toWrite, toSkip, ambiguous } = jaccardPartition(candidates, existing);
 
   if (ambiguous.length > 0 && llm) {
     try {
