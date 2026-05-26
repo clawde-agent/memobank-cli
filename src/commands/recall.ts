@@ -31,6 +31,7 @@ export interface RecallOptions {
   code?: boolean;
   refs?: string;
   silent?: boolean;
+  hookInput?: boolean;
 }
 
 export async function selectEngine(
@@ -111,7 +112,34 @@ function printStudyHint(repoRoot: string, silent: boolean): void {
   }
 }
 
+async function readHookPrompt(): Promise<string> {
+  return new Promise((resolve) => {
+    let data = '';
+    const timeout = setTimeout(() => resolve(''), 3000);
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk: string) => {
+      data += chunk;
+    });
+    process.stdin.on('end', () => {
+      clearTimeout(timeout);
+      try {
+        const parsed = JSON.parse(data) as Record<string, unknown>;
+        resolve(typeof parsed.prompt === 'string' ? parsed.prompt : '');
+      } catch {
+        resolve('');
+      }
+    });
+  });
+}
+
 export async function recallCommand(query: string, options: RecallOptions): Promise<void> {
+  // Hook input mode: read query from stdin JSON (Claude Code UserPromptSubmit hook)
+  if (options.hookInput) {
+    const hookPrompt = await readHookPrompt();
+    if (!hookPrompt.trim()) return;
+    return recallCommand(hookPrompt, { ...options, hookInput: false });
+  }
+
   // Validate query
   if (!query || !query.trim()) {
     throw new Error('Query cannot be empty');

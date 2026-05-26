@@ -135,6 +135,38 @@ export function installClaudeCode(
     },
   ];
 
+  // UserPromptSubmit hook: auto-recall on every user message.
+  // Remove existing memobank UserPromptSubmit hooks before re-adding (idempotent).
+  const isWindowsUp = os.platform() === 'win32';
+  const UP_HOOK_CMD = isWindowsUp
+    ? 'powershell -c "memo recall --hook-input --silent --top 3"'
+    : 'memo recall --hook-input --silent --top 3';
+
+  if (hookMap.UserPromptSubmit) {
+    hookMap.UserPromptSubmit = hookMap.UserPromptSubmit.filter(
+      (h: HookMatcher) =>
+        !h.hooks?.some(
+          (cmd: HookCommand) =>
+            cmd.type === 'command' && cmd.command?.includes('memo recall --hook-input')
+        )
+    );
+    if (hookMap.UserPromptSubmit.length === 0) delete hookMap.UserPromptSubmit;
+  }
+
+  hookMap.UserPromptSubmit = [
+    ...(hookMap.UserPromptSubmit ?? []),
+    {
+      matcher: '',
+      hooks: [
+        {
+          type: 'command',
+          command: UP_HOOK_CMD,
+          timeout: 10,
+        },
+      ],
+    },
+  ];
+
   // Write settings
   try {
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
