@@ -9,8 +9,11 @@ A persistent memory system for AI coding agents. It captures structured knowledg
 **Memory**: A structured piece of knowledge extracted from a coding session — a lesson, decision, workflow, or architecture note. Stored as a Markdown file with YAML frontmatter.
 _Avoid_: Note, entry, record, snippet
 
-**Capture**: The act of extracting Memories from a raw session transcript using an LLM. Produces `ExtractionResult[]` which are then written to the pending queue.
+**Capture**: The act of extracting Memories from a raw session transcript using an LLM. Produces `ExtractionResult[]` which are then written to the pending queue. Triggered by `memo capture --auto` at session end.
 _Avoid_: Extract, ingest, parse, analyze
+
+**Memorize**: The act of an AI agent directly writing a Memory during active reasoning — no LLM extraction step. The agent supplies structured content (name, description, body) and the CLI writes it to the pending queue immediately. CLI command: `memo remember`. Distinguished from Capture in that the agent IS the author, not the subject of extraction.
+_Avoid_: Instant capture, quick capture, inline capture
 
 **Recall**: The act of retrieving the most relevant Memories for a given query. Ranks results using keyword scoring, tag matching, and optional vector similarity.
 _Avoid_: Search, fetch, look up, query
@@ -37,3 +40,17 @@ _Avoid_: Provider config, provider definition, provider entry
 
 **Registry**: A `Map` keyed by Provider name that holds one Descriptor per Provider. One Registry exists per capability (Capture, Embedding, Reranker). Callers do a single lookup instead of branching on provider name.
 _Avoid_: Factory map, provider map, dispatch table
+
+### Session system
+
+**Code Reference** (`code_refs`): A frontmatter field in a Memory that explicitly links it to one or more source files or symbols. Format: `file/path.ts` (file-level) or `file/path.ts::symbolName` (symbol-level). Source of truth for code-memory associations. Populated at Capture time by LLM extraction and at Memorize time by the agent explicitly passing `--code-refs`. Indexed into `symbols.memory_refs` by `memo index-code`.
+_Avoid_: Code link, code annotation, source reference
+
+**Session Snapshot**: A `workflow`-type Memory auto-generated at the end of each session by `capture --auto`. Records branch name, last commit, changed files, the list of Memories extracted in that session, and any unfinished work. Name pattern: `session-<YYYY-MM-DD>-<branch-slug>`. Distinguished from other workflow Memories by `tags: [session]`. Lives in `.memobank/workflow/`.
+_Avoid_: Session summary, session log, session record
+
+**Harness**: An external task-management system (e.g. GSD Redux) that manages planning state via `.planning/STATE.md` and `.planning/phases/XX/.continue-here.md`. memobank treats Harness files as **optional enhancement signals** — memobank operates fully without them. When present, `session_status: idle` in `STATE.md` upgrades Capture input quality by providing `.continue-here.md` as a structured source; all other states (missing file, missing field, `in_progress`, parse error) fall back to transcript extraction silently.
+_Avoid_: Planning system, GSD, task runner
+
+**Planning State** (`STATE.md`): A YAML-frontmatter + Markdown file at `.planning/STATE.md` maintained by the Harness. The "Session Continuity" section in the Markdown body contains two fields memobank reads: `session_status` (`idle` or `in_progress`) and `Resume file` (path to the active `.continue-here.md`). Written by `session-start` skill (`in_progress`) and `context-handover` skill (`idle`). memobank reads this file as a hint only — parse errors are silently ignored.
+_Avoid_: State file, session state, GSD state
