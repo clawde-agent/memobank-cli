@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { readJsonFile } from './fs-utils';
 import { resolveProjectId } from './dir-resolver';
 import { loadFile } from './memory-loader';
 import { writeMemory } from './store';
@@ -42,10 +43,8 @@ export async function processQueue(memoBankDir: string, llm?: DedupBatchLLM): Pr
   for (const file of files) {
     const filePath = path.join(pendingDir, file);
 
-    let entry: PendingEntry;
-    try {
-      entry = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as PendingEntry;
-    } catch {
+    const entry = readJsonFile<PendingEntry | null>(filePath, null);
+    if (!entry) {
       console.warn(`Skipping corrupt pending file: ${file}`);
       fs.unlinkSync(filePath);
       continue;
