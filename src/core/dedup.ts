@@ -1,5 +1,5 @@
 import type { PendingCandidate } from './store';
-import type { MemoryFile } from '../types';
+import type { MemoryFile, CaptureConfig } from '../types';
 
 export type DedupLLM = (
   pairs: Array<{ candidate: PendingCandidate; existing: MemoryFile }>
@@ -114,6 +114,73 @@ function trigrams(text: string): Set<string> {
     result.add(t.slice(i, i + 3));
   }
   return result;
+}
+
+// ─── LLM factory for dedup callbacks ─────────────────────────────────────────
+
+const DEDUP_SYSTEM_PROMPT = `You are a memory deduplication assistant.
+Given pairs of (candidate, existing) memory entries, decide for each pair whether to store, skip, update, or merge.
+
+Return ONLY a JSON array, one object per pair, in order:
+[{ "action": "store" | "skip" | "update" | "merge", "targetName": "<existing name if update/merge>", "updatedContent": "<merged markdown if update/merge>" }]
+
+Rules:
+- "skip": candidate is a duplicate or subset of existing
+- "store": candidate contains genuinely new information
+- "update": candidate has new info that should be merged INTO existing (provide updatedContent)
+- "merge": both have complementary value (provide updatedContent combining both)
+Prefer "skip" when in doubt.`;
+
+export function createDedupLLM(config: CaptureConfig): DedupBatchLLM {
+  return async (items) => {
+    const pairs = items.map(({ candidate, existing }, i) => ({
+      index: i,
+      candidate: { name: candidate.name, description: candidate.description },
+      existing: { name: existing.name, description: existing.description },
+    }));
+
+    const userMessage = `Evaluate these ${pairs.length} candidate/existing pairs:\n${JSON.stringify(pairs, null, 2)}`;
+
+    try {
+      const base = (config.baseUrl ?? 'https://api.openai.com/v1').replace(/\/$/, '');
+      const response = await fetch(`${base}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${config.apiKey ?? 'local'}`,
+        },
+        body: JSON.stringify({
+          model: config.model,
+          max_tokens: 512,
+          messages: [
+            { role: 'system', content: DEDUP_SYSTEM_PROMPT },
+            { role: 'user', content: userMessage },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        return items.map(() => ({ action: 'store' as const }));
+      }
+
+      const data = (await response.json()) as {
+        choices?: { message?: { content?: string } }[];
+      };
+      const rawText = (data.choices?.[0]?.message?.content ?? '')
+        .replace(/<think>[\s\S]*?<\/think>/g, '')
+        .trim();
+      const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) return items.map(() => ({ action: 'store' as const }));
+
+      const parsed = JSON.parse(jsonMatch[0]) as DedupBatchAction[];
+      if (!Array.isArray(parsed) || parsed.length !== items.length) {
+        return items.map(() => ({ action: 'store' as const }));
+      }
+      return parsed;
+    } catch {
+      return items.map(() => ({ action: 'store' as const }));
+    }
+  };
 }
 
 // ─── LLM Batch Dedup for Capture Pipeline ────────────────────────────────────

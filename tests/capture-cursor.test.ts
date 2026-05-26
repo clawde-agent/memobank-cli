@@ -12,7 +12,7 @@ describe('capture-cursor', () => {
     const metaDir = makeTempDir();
     try {
       const cursor = await readCursor(metaDir);
-      expect(cursor.processedSessions).toEqual([]);
+      expect(cursor.processed).toEqual({});
     } finally {
       fs.rmSync(metaDir, { recursive: true });
     }
@@ -24,7 +24,7 @@ describe('capture-cursor', () => {
       const sessionId = 'sess-12345';
       await markSessionProcessed(metaDir, sessionId);
       const cursor = await readCursor(metaDir);
-      expect(cursor.processedSessions).toContain(sessionId);
+      expect(sessionId in cursor.processed).toBe(true);
     } finally {
       fs.rmSync(metaDir, { recursive: true });
     }
@@ -37,25 +37,49 @@ describe('capture-cursor', () => {
       await markSessionProcessed(metaDir, sessionId);
       await markSessionProcessed(metaDir, sessionId);
       const cursor = await readCursor(metaDir);
-      const count = cursor.processedSessions.filter((s: string) => s === sessionId).length;
+      const count = Object.keys(cursor.processed).filter((s) => s === sessionId).length;
       expect(count).toBe(1);
     } finally {
       fs.rmSync(metaDir, { recursive: true });
     }
   });
 
-  it('markSessionProcessed trims to MAX_SESSIONS=100 (sliding window, keeps most recent)', async () => {
+  it('migrates old processedSessions array format to new processed map', async () => {
     const metaDir = makeTempDir();
     try {
-      // Add 150 sessions
-      for (let i = 0; i < 150; i++) {
-        await markSessionProcessed(metaDir, `sess-${i}`);
-      }
+      const cursorPath = path.join(metaDir, 'capture-cursor.json');
+      // Write old format
+      fs.writeFileSync(cursorPath, JSON.stringify({ processedSessions: ['sess-1', 'sess-2'] }));
       const cursor = await readCursor(metaDir);
-      expect(cursor.processedSessions.length).toBe(100);
-      // Should keep the most recent (50-149), not the oldest (0-49)
-      expect(cursor.processedSessions).toContain('sess-149');
-      expect(cursor.processedSessions).not.toContain('sess-0');
+      expect(cursor.processed['sess-1']).toBeDefined();
+      expect(cursor.processed['sess-2']).toBeDefined();
+    } finally {
+      fs.rmSync(metaDir, { recursive: true });
+    }
+  });
+
+  it('prunes sessions older than 180 days on write', async () => {
+    const metaDir = makeTempDir();
+    try {
+      const cursorPath = path.join(metaDir, 'capture-cursor.json');
+      const oldDate = new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString();
+      fs.mkdirSync(metaDir, { recursive: true });
+      fs.writeFileSync(cursorPath, JSON.stringify({ processed: { 'old-sess': oldDate } }));
+      // Writing a new session triggers prune
+      await markSessionProcessed(metaDir, 'new-sess');
+      const cursor = await readCursor(metaDir);
+      expect('old-sess' in cursor.processed).toBe(false);
+      expect('new-sess' in cursor.processed).toBe(true);
+    } finally {
+      fs.rmSync(metaDir, { recursive: true });
+    }
+  });
+
+  it('isSessionProcessed returns false for unknown session', async () => {
+    const metaDir = makeTempDir();
+    try {
+      const result = await isSessionProcessed(metaDir, 'unknown');
+      expect(result).toBe(false);
     } finally {
       fs.rmSync(metaDir, { recursive: true });
     }
@@ -64,11 +88,8 @@ describe('capture-cursor', () => {
   it('readCursor rethrows non-ENOENT errors', async () => {
     const metaDir = makeTempDir();
     try {
-      // Create a directory at the cursor path to cause EISDIR on read
       const cursorPath = path.join(metaDir, 'capture-cursor.json');
       fs.mkdirSync(cursorPath, { recursive: true });
-
-      // readCursor should rethrow the EISDIR error
       await expect(readCursor(metaDir)).rejects.toThrow();
     } finally {
       fs.rmSync(metaDir, { recursive: true });
