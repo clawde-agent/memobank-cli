@@ -140,7 +140,7 @@ program
 
 // Recall command
 program
-  .command('recall <query>')
+  .command('recall [query]')
   .description('Search and display relevant memories (writes to MEMORY.md)')
   .option('--top <number>', 'Number of results to return', '5')
   .option('--engine <engine>', 'Search engine (text|lancedb)', 'text')
@@ -153,9 +153,13 @@ program
   .option('--refs <symbol>', 'Show callers of a symbol from the code index')
   .option('--silent', 'Suppress stdout output')
   .option('--hook-input', 'Read query from stdin JSON (Claude Code UserPromptSubmit hook)')
-  .action(async (query: string, options: RecallOptions) => {
+  .action(async (query: string | undefined, options: RecallOptions) => {
     try {
-      await recallCommand(query, options);
+      if (!query && !options.hookInput) {
+        console.error('Error: missing required argument: query');
+        process.exit(1);
+      }
+      await recallCommand(query ?? '', options);
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`);
       process.exit(1);
