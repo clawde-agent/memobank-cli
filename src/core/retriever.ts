@@ -187,6 +187,9 @@ function formatResultsAsMarkdown(
       }
 
       markdown += `> ${memory.description}\n`;
+      if (memory.codeRefs && memory.codeRefs.length > 0) {
+        markdown += `> refs: ${memory.codeRefs.join(', ')}\n`;
+      }
       markdown += `> \`${relativePath}\`${tagStr}\n\n`;
     }
     markdown += `---\n*To flag a result: memo correct <file> --reason "not relevant"*\n\n`;
@@ -223,6 +226,9 @@ function writeMemoryMd(
       const tagStr = memory.tags.length > 0 ? ` · tags: ${memory.tags.join(', ')}` : '';
       markdown += `### [${memory.type}] ${memory.name}${confidenceStr}\n`;
       markdown += `> ${memory.description}\n`;
+      if (memory.codeRefs && memory.codeRefs.length > 0) {
+        markdown += `> refs: ${memory.codeRefs.join(', ')}\n`;
+      }
       markdown += `> \`${relativePath}\`${tagStr}\n\n`;
     }
   }
