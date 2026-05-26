@@ -658,16 +658,26 @@ export async function onboardingCommand(): Promise<void> {
             const alreadyHaveKey = embDesc?.requiresApiKey && envKey && Boolean(state.collectedKeys[envKey]);
             if (!embDesc?.requiresApiKey && embDesc?.fetchModels) {
               const defaultUrl = embDesc.defaultBaseUrl ?? 'http://localhost:11434/v1';
-              setState(s => ({ ...s, embeddingProvider: provider, embeddingUrl: defaultUrl.replace(/\/v1\/?$/, ''), step: 'embedding-detecting' }));
+              const bareDefault = defaultUrl.replace(/\/v1\/?$/, '').replace(/\/$/, '');
+              setState(s => ({ ...s, embeddingProvider: provider, embeddingUrl: bareDefault, step: 'embedding-detecting' }));
               embDesc.fetchModels(defaultUrl).then((fetched) => {
                 if (fetched.length > 0) {
                   setEmbeddingModelItems(fetched.map((m) => ({ label: m, value: m })));
                   setState(s => ({ ...s, step: 'ollama-model' }));
                 } else {
+                  setOllamaUrlInput(bareDefault);
                   setState(s => ({ ...s, step: 'ollama-url' }));
                 }
-              }).catch(() => setState(s => ({ ...s, step: 'ollama-url' })));
+              }).catch(() => {
+                setOllamaUrlInput(bareDefault);
+                setState(s => ({ ...s, step: 'ollama-url' }));
+              });
             } else {
+              const defaultUrl = embDesc?.defaultBaseUrl ?? 'http://localhost:11434/v1';
+              const bareDefault = defaultUrl.replace(/\/v1\/?$/, '').replace(/\/$/, '');
+              if (!embDesc?.requiresApiKey) {
+                setOllamaUrlInput(bareDefault);
+              }
               setState(s => ({
                 ...s,
                 embeddingProvider: provider,
