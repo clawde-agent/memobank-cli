@@ -32,9 +32,13 @@ Return ONLY a valid JSON array. Each item must match this schema:
 }
 
 Extract only: problems solved, architectural decisions, bug fixes with root cause,
-performance optimisations, security considerations, trade-offs.
-Do NOT extract: file operations, running commands, greetings, trivial changes.
-Max 3 items. If nothing worth extracting, return [].`;
+performance optimisations, security considerations, trade-offs — SPECIFIC to this project.
+Do NOT extract:
+- File operations, running commands, greetings, trivial changes
+- Generic technology patterns or API usage documented in public docs (e.g. standard Stripe/Supabase/auth patterns)
+- Knowledge from other codebases or projects mentioned only in passing
+- Anything a competent engineer would find in official documentation without project-specific context
+Max 3 items. Prefer 0 good memories over 3 mediocre ones. If nothing project-specific worth extracting, return [].`;
 
 // ---------------------------------------------------------------------------
 // Input escaping

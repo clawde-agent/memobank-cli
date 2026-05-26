@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-05-26
+
+### Fixed
+
+- **Capture value filter short-circuit** — the `|| recommendation.shouldCapture` clause in the manual `memo capture` path made the `valueScore >= 0.7` threshold equivalent to `>= 0.5`. Removed the fallback so the threshold is now enforced as intended.
+- **Cross-project memory contamination** — both extraction prompts (`capture-provider` and `smart-extractor`) lacked project-scope constraints, causing generic technology patterns (e.g. standard Stripe, Supabase, auth flows) mentioned in passing to be extracted as project memories. Both prompts now explicitly skip knowledge available in public documentation and knowledge from other codebases mentioned incidentally.
+- **Unbounded extraction in `smart-extractor`** — the Anthropic-direct extraction path had no item limit (`"No fixed limit"`), allowing a single session to produce an arbitrary number of memories. Now capped at 5 items per session, consistent with the `capture-provider` path (Max 3).
+
 ## [0.16.0] - 2026-05-26
 
 ### Added
