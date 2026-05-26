@@ -185,9 +185,16 @@ CAPTURE_REGISTRY.set('llamacpp', {
   defaultBaseUrl: 'http://localhost:8080/v1',
   defaultModel: 'local-model',
   fallbackModels: ['local-model'],
-  async fetchModels(): Promise<string[]> {
-    // llama-server loads a single model at startup; no listing API available.
-    return [];
+  async fetchModels(_apiKey, baseUrl): Promise<string[]> {
+    try {
+      const base = (baseUrl ?? 'http://localhost:8080').replace(/\/v1\/?$/, '').replace(/\/$/, '');
+      const res = await fetch(`${base}/v1/models`);
+      if (!res.ok) return [];
+      const data = (await res.json()) as { data?: { id: string }[] };
+      return (data.data ?? []).map((m) => m.id).filter(Boolean);
+    } catch {
+      return [];
+    }
   },
   create(config) {
     return lazyOpenAICompatFactory()(config.apiKey ?? '', config.model, config.baseUrl);

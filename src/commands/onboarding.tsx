@@ -62,11 +62,13 @@ type Step =
   | 'workspace-local-path'
   | 'search-engine'
   | 'embedding-provider'
+  | 'embedding-detecting'
   | 'ollama-url'
   | 'ollama-model'
   | 'embedding-key'
   | 'reranker'
   | 'reranker-provider'
+  | 'reranker-detecting'
   | 'reranker-base-url'
   | 'reranker-key'
   | 'done';
@@ -352,7 +354,12 @@ export async function onboardingCommand(): Promise<void> {
     apiKey?: string,
     baseUrl?: string
   ): Promise<SelectItem[]> {
-    const models = await fetchAvailableModels(provider as CaptureProviderName, apiKey, baseUrl);
+    // Use raw descriptor.fetchModels (no fallback) so an empty result means
+    // "nothing found" — the caller can then show a text input instead of a
+    // select with only a placeholder entry like 'local-model'.
+    const descriptor = CAPTURE_REGISTRY.get(provider as CaptureProviderName);
+    if (!descriptor) return [];
+    const models = await descriptor.fetchModels(apiKey, baseUrl);
     return models.map((m) => ({ label: m, value: m }));
   }
 
@@ -476,6 +483,11 @@ export async function onboardingCommand(): Promise<void> {
       state.step === 'capture-detecting' ? React.createElement(Box, { flexDirection: 'column' },
         React.createElement(Text, { dimColor: true },
           `  Probing ${state.captureBaseUrl} for available models…`),
+      ) : null,
+
+      state.step === 'embedding-detecting' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, { dimColor: true },
+          `  Probing ${state.embeddingUrl} for available models…`),
       ) : null,
 
       state.step === 'capture-key' ? React.createElement(Box, { flexDirection: 'column' },
@@ -644,11 +656,24 @@ export async function onboardingCommand(): Promise<void> {
             const embDesc = EMBEDDING_REGISTRY.get(provider as EmbeddingProvider);
             const envKey = embDesc?.apiKeyEnv;
             const alreadyHaveKey = embDesc?.requiresApiKey && envKey && Boolean(state.collectedKeys[envKey]);
-            setState(s => ({
-              ...s,
-              embeddingProvider: provider,
-              step: !embDesc?.requiresApiKey ? 'ollama-url' : alreadyHaveKey ? 'reranker' : 'embedding-key',
-            }));
+            if (!embDesc?.requiresApiKey && embDesc?.fetchModels) {
+              const defaultUrl = embDesc.defaultBaseUrl ?? 'http://localhost:11434/v1';
+              setState(s => ({ ...s, embeddingProvider: provider, embeddingUrl: defaultUrl.replace(/\/v1\/?$/, ''), step: 'embedding-detecting' }));
+              embDesc.fetchModels(defaultUrl).then((fetched) => {
+                if (fetched.length > 0) {
+                  setEmbeddingModelItems(fetched.map((m) => ({ label: m, value: m })));
+                  setState(s => ({ ...s, step: 'ollama-model' }));
+                } else {
+                  setState(s => ({ ...s, step: 'ollama-url' }));
+                }
+              }).catch(() => setState(s => ({ ...s, step: 'ollama-url' })));
+            } else {
+              setState(s => ({
+                ...s,
+                embeddingProvider: provider,
+                step: !embDesc?.requiresApiKey ? 'ollama-url' : alreadyHaveKey ? 'reranker' : 'embedding-key',
+              }));
+            }
           },
         }),
       ) : null,
@@ -753,6 +778,11 @@ export async function onboardingCommand(): Promise<void> {
         }),
       ) : null,
 
+      state.step === 'reranker-detecting' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, { dimColor: true },
+          `  Probing ${state.rerankerBaseUrl} for reranker…`),
+      ) : null,
+
       state.step === 'reranker-provider' ? React.createElement(Box, { flexDirection: 'column' },
         React.createElement(Text, { bold: true }, 'Reranker provider:'),
         React.createElement(SelectInput, {
@@ -761,9 +791,29 @@ export async function onboardingCommand(): Promise<void> {
             const provider = String(item.value);
             const rerankDesc = RERANKER_REGISTRY.get(provider as RerankerProvider);
             if (!rerankDesc?.requiresApiKey) {
-              // Local reranker — ask for base URL before finishing
-              setRerankerBaseUrlInput(rerankDesc?.defaultBaseUrl ?? 'http://localhost:8000/v1');
-              setState(s => ({ ...s, enableReranker: true, rerankerProvider: provider, step: 'reranker-base-url' }));
+              const defaultUrl = rerankDesc?.defaultBaseUrl ?? 'http://localhost:8000/v1';
+              setRerankerBaseUrlInput(defaultUrl);
+              setState(s => ({ ...s, enableReranker: true, rerankerProvider: provider, rerankerBaseUrl: defaultUrl, step: 'reranker-detecting' }));
+              // Probe default URL — if reachable, skip URL step
+              fetch(defaultUrl.replace(/\/$/, '') + '/models')
+                .then((res) => {
+                  setState(s => ({
+                    ...s,
+                    step: res.ok ? 'done' : 'reranker-base-url',
+                  }));
+                  if (res.ok) {
+                    const fs2 = { ...state, step: 'done' as Step, enableReranker: true, rerankerProvider: provider, rerankerBaseUrl: defaultUrl };
+                    runSetup(fs2, gitRoot).then(({ lines, autoMemoryWarning: warn }) => {
+                      setSummary(lines);
+                      setAutoMemoryWarning(warn);
+                      setDone(true);
+                    }).catch((err: Error) => {
+                      setSummary([`Setup failed: ${err.message}`]);
+                      setDone(true);
+                    });
+                  }
+                })
+                .catch(() => setState(s => ({ ...s, step: 'reranker-base-url' })));
               return;
             }
             const keyVar = rerankDesc.apiKeyEnv ?? '';
