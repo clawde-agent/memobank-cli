@@ -32,7 +32,7 @@ describe('appendToSessionLog', () => {
     await fs.rm(tmpDir, { recursive: true });
   });
 
-  it('creates workflow/sessions.md with a session entry', () => {
+  it('creates meta/sessions.md with a session entry', () => {
     appendToSessionLog(tmpDir, {
       date: '2026-05-26',
       branch: 'feat/my-feature',
@@ -41,7 +41,7 @@ describe('appendToSessionLog', () => {
       gitStatus: 'M src/foo.ts',
     });
 
-    const content = fsSync.readFileSync(path.join(tmpDir, 'workflow', 'sessions.md'), 'utf-8');
+    const content = fsSync.readFileSync(path.join(tmpDir, 'meta', 'sessions.md'), 'utf-8');
     expect(content).toContain('<!-- memobank session log -->');
     expect(content).toContain('2026-05-26');
     expect(content).toContain('feat/my-feature');
@@ -65,7 +65,7 @@ describe('appendToSessionLog', () => {
       gitStatus: '',
     });
 
-    const content = fsSync.readFileSync(path.join(tmpDir, 'workflow', 'sessions.md'), 'utf-8');
+    const content = fsSync.readFileSync(path.join(tmpDir, 'meta', 'sessions.md'), 'utf-8');
     expect(content.indexOf('2026-05-26')).toBeLessThan(content.indexOf('2026-05-25'));
   });
 
@@ -78,7 +78,7 @@ describe('appendToSessionLog', () => {
       gitStatus: '',
     });
 
-    expect(fsSync.existsSync(path.join(tmpDir, 'workflow', 'sessions.md'))).toBe(false);
+    expect(fsSync.existsSync(path.join(tmpDir, 'meta', 'sessions.md'))).toBe(false);
   });
 
   it('keeps at most 100 entries', () => {
@@ -92,7 +92,7 @@ describe('appendToSessionLog', () => {
       });
     }
 
-    const content = fsSync.readFileSync(path.join(tmpDir, 'workflow', 'sessions.md'), 'utf-8');
+    const content = fsSync.readFileSync(path.join(tmpDir, 'meta', 'sessions.md'), 'utf-8');
     const entryCount = (content.match(/^## /gm) ?? []).length;
     expect(entryCount).toBe(100);
   });
