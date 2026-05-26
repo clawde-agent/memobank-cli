@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-05-26
+
+### Added
+
+- **`memo lifecycle --prune`** — permanently delete all `deprecated` memories and clean orphaned `access-log.json` entries in one command. Useful after `memo lifecycle --scan` has demoted stale memories.
+
+### Fixed
+
+- **`memo index-code --summarize` no longer accumulates dated snapshot files** — each run deletes all previous auto-generated architecture snapshots (`name: project-architecture-snapshot` or `tags: auto-generated`) before writing the new one. Previously every `--summarize` run created an additional dated file that was never cleaned up.
+- **`memo lifecycle --scan` now prunes orphaned access log entries** — when memory files are deleted, their `access-log.json` entries are now removed at the end of every `--scan` run via `pruneOrphanedAccessLogs()`.
+- **Onboarding local model probe** — fixed provider probe for capture, embedding, and reranker local models in the onboarding wizard.
+
 ## [0.12.0] - 2026-05-20
 
 ### Added

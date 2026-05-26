@@ -68,7 +68,7 @@ After installing, restart Claude Code. Then use `/memobank` with any task:
 | Before `/compact`              | `memo capture --auto --silent`                           |
 | Session ends                   | Stop hook: auto-capture + queue drain                    |
 
-Memories move through `experimental → active → needs-review → deprecated` based on how often they are recalled. Frequently recalled memories get promoted; unused ones fade out and stop loading. The agent's working context self-curates without manual pruning.
+Memories move through `experimental → active → needs-review → deprecated` based on how often they are recalled. Frequently recalled memories get promoted; unused ones fade out and stop loading. Run `memo lifecycle --prune` to permanently delete deprecated files and clean stale access log entries. The agent's working context self-curates without manual pruning.
 
 The `--code` flag adds a second track: `memo index-code` parses your codebase with tree-sitter, and `memo recall --code` searches memories and code symbols together, traversing the code-memory graph up to depth 2. Use `memo code-context <symbol>` to navigate in reverse — see what calls a symbol and which memories are linked to it.
 

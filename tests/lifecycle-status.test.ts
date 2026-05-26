@@ -7,6 +7,8 @@ import {
   resetEpoch,
   loadAccessLogs,
   saveAccessLogs,
+  pruneOrphanedAccessLogs,
+  pruneDeprecatedMemories,
 } from '../src/core/lifecycle-manager';
 
 function makeTempRepo(): string {
@@ -106,6 +108,102 @@ describe('runLifecycleScan', () => {
     runLifecycleScan(repo);
     const content = fs.readFileSync(filePath, 'utf-8');
     expect(content).toContain('status: needs-review');
+    fs.rmSync(repo, { recursive: true });
+  });
+});
+
+describe('pruneOrphanedAccessLogs', () => {
+  it('removes access log entries for files that no longer exist', () => {
+    const repo = makeTempRepo();
+    const existingPath = writeTestMemory(repo, 'lesson', '2026-01-01-existing.md', 'active');
+    const ghostPath = path.join(repo, 'lesson', '2026-01-01-deleted.md');
+
+    const logs = loadAccessLogs(repo);
+    logs[existingPath] = {
+      memoryPath: existingPath,
+      lastAccessed: new Date(),
+      accessCount: 1,
+      recallQueries: [],
+      epochAccessCount: 1,
+      team_epoch: new Date().toISOString(),
+    };
+    logs[ghostPath] = {
+      memoryPath: ghostPath,
+      lastAccessed: new Date(),
+      accessCount: 5,
+      recallQueries: [],
+      epochAccessCount: 5,
+      team_epoch: new Date().toISOString(),
+    };
+    saveAccessLogs(repo, logs);
+
+    pruneOrphanedAccessLogs(repo);
+
+    const after = loadAccessLogs(repo);
+    expect(Object.keys(after)).toContain(existingPath);
+    expect(Object.keys(after)).not.toContain(ghostPath);
+
+    fs.rmSync(repo, { recursive: true });
+  });
+
+  it('is a no-op when all access log entries are valid', () => {
+    const repo = makeTempRepo();
+    const filePath = writeTestMemory(repo, 'lesson', '2026-01-01-valid.md', 'active');
+    const logs = loadAccessLogs(repo);
+    logs[filePath] = {
+      memoryPath: filePath,
+      lastAccessed: new Date(),
+      accessCount: 2,
+      recallQueries: [],
+      epochAccessCount: 2,
+      team_epoch: new Date().toISOString(),
+    };
+    saveAccessLogs(repo, logs);
+
+    pruneOrphanedAccessLogs(repo);
+
+    const after = loadAccessLogs(repo);
+    expect(Object.keys(after)).toHaveLength(1);
+    fs.rmSync(repo, { recursive: true });
+  });
+});
+
+describe('pruneDeprecatedMemories', () => {
+  it('deletes all deprecated memories and returns the count', () => {
+    const repo = makeTempRepo();
+    const dep1 = writeTestMemory(repo, 'lesson', '2026-01-01-dep1.md', 'deprecated');
+    const dep2 = writeTestMemory(repo, 'workflow', '2026-01-01-dep2.md', 'deprecated');
+    writeTestMemory(repo, 'lesson', '2026-01-01-active.md', 'active');
+
+    const count = pruneDeprecatedMemories(repo);
+
+    expect(count).toBe(2);
+    expect(fs.existsSync(dep1)).toBe(false);
+    expect(fs.existsSync(dep2)).toBe(false);
+    expect(fs.existsSync(path.join(repo, 'lesson', '2026-01-01-active.md'))).toBe(true);
+
+    fs.rmSync(repo, { recursive: true });
+  });
+
+  it('cleans orphaned access log entries for deleted deprecated memories', () => {
+    const repo = makeTempRepo();
+    const dep = writeTestMemory(repo, 'lesson', '2026-01-01-dep.md', 'deprecated');
+    const logs = loadAccessLogs(repo);
+    logs[dep] = {
+      memoryPath: dep,
+      lastAccessed: new Date(),
+      accessCount: 1,
+      recallQueries: [],
+      epochAccessCount: 1,
+      team_epoch: new Date().toISOString(),
+    };
+    saveAccessLogs(repo, logs);
+
+    pruneDeprecatedMemories(repo);
+
+    const after = loadAccessLogs(repo);
+    expect(Object.keys(after)).not.toContain(dep);
+
     fs.rmSync(repo, { recursive: true });
   });
 });

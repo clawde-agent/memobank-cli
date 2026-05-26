@@ -97,7 +97,8 @@ We switched from npm to pnpm in March 2026. Faster installs, better monorepo sup
 
 - `experimental → active → needs-review → deprecated`, driven by recall frequency
 - Recalled memories get promoted; unused memories drift toward deprecated and stop loading
-- `memo lifecycle --scan` downgrades stale memories on a schedule; `--reset-epoch` restarts decay for team handoffs
+- `memo lifecycle --scan` downgrades stale memories on a schedule; `--prune` permanently deletes all deprecated files and cleans orphaned access logs; `--reset-epoch` restarts decay for team handoffs
+- `memo index-code --summarize` replaces the previous auto-generated architecture snapshot on each run — no stale duplicates accumulate
 - Git diff on `.memobank/` shows which memories are gaining or losing recall — ambient health signal without a dashboard
 
 **Code-memory graph** _(optional, requires `npm install memobank-cli --include=optional`)_
@@ -172,21 +173,22 @@ We switched from npm to pnpm in March 2026. Faster installs, better monorepo sup
 
 ### Management
 
-| Command                        | Description                                                |
-| ------------------------------ | ---------------------------------------------------------- |
-| `memo index`                   | Build/update search index                                  |
-| `memo index-code [path]`       | Index codebase symbols (tree-sitter + SQLite FTS5)         |
-| `memo index-code --summarize`  | Also write architecture snapshot memory after indexing     |
-| `memo index-code --force`      | Re-index all files (ignore hash cache)                     |
-| `memo review`                  | List memories due for review                               |
-| `memo map`                     | Show memory statistics                                     |
-| `memo lifecycle`               | View memory lifecycle report                               |
-| `memo lifecycle --scan`        | Run full status sweep (downgrades stale memories)          |
-| `memo lifecycle --reset-epoch` | Reset epoch for team handoff (new team starts fresh decay) |
-| `memo study --auto`            | Write study suggestions for frequently-recalled memories   |
-| `memo skill-feedback`          | Report recall misses, isolated graph nodes, never-recalled |
-| `memo correct <path>`          | Record a memory correction                                 |
-| `memo scan`                    | Scan for secrets before pushing                            |
+| Command                        | Description                                                                    |
+| ------------------------------ | ------------------------------------------------------------------------------ |
+| `memo index`                   | Build/update search index                                                      |
+| `memo index-code [path]`       | Index codebase symbols (tree-sitter + SQLite FTS5)                             |
+| `memo index-code --summarize`  | Also write architecture snapshot memory after indexing                         |
+| `memo index-code --force`      | Re-index all files (ignore hash cache)                                         |
+| `memo review`                  | List memories due for review                                                   |
+| `memo map`                     | Show memory statistics                                                         |
+| `memo lifecycle`               | View memory lifecycle report                                                   |
+| `memo lifecycle --scan`        | Run full status sweep (downgrades stale memories, prunes orphaned access logs) |
+| `memo lifecycle --prune`       | Delete all deprecated memories and clean orphaned access logs                  |
+| `memo lifecycle --reset-epoch` | Reset epoch for team handoff (new team starts fresh decay)                     |
+| `memo study --auto`            | Write study suggestions for frequently-recalled memories                       |
+| `memo skill-feedback`          | Report recall misses, isolated graph nodes, never-recalled                     |
+| `memo correct <path>`          | Record a memory correction                                                     |
+| `memo scan`                    | Scan for secrets before pushing                                                |
 
 ---
 
@@ -326,23 +328,27 @@ confidence: medium
 
 Every memory has a `status` field that evolves based on how often it is recalled:
 
-| Status         | Meaning                                      | Transition                            |
-| -------------- | -------------------------------------------- | ------------------------------------- |
-| `experimental` | Newly written, unverified                    | Default on creation                   |
-| `active`       | Recalled at least once; trusted              | Promoted on first recall              |
-| `needs-review` | Not recalled in 90 days; may be stale        | Downgraded by `memo lifecycle --scan` |
-| `deprecated`   | Not recalled in 90 days after `needs-review` | Excluded from default recall          |
+| Status         | Meaning                                      | Transition                                                |
+| -------------- | -------------------------------------------- | --------------------------------------------------------- |
+| `experimental` | Newly written, unverified                    | Default on creation                                       |
+| `active`       | Recalled at least once; trusted              | Promoted on first recall                                  |
+| `needs-review` | Not recalled in 90 days; may be stale        | Downgraded by `memo lifecycle --scan`                     |
+| `deprecated`   | Not recalled in 90 days after `needs-review` | Excluded from recall; deleted by `memo lifecycle --prune` |
 
 **Rules:**
 
 - `experimental → active`: recalled ≥ 1 time
 - `needs-review → active`: recalled ≥ 3 times (deliberate re-validation required)
 - `deprecated` memories remain searchable via `memo search --include-deprecated` but are excluded from `memo recall`
+- `memo lifecycle --prune` permanently deletes all deprecated memories and removes orphaned `access-log.json` entries
 - The Git diff on `.memobank/` shows which memories are gaining or losing relevance — your team's ambient health signal
 
 ```bash
 # Manual lifecycle scan (or run in CI)
 memo lifecycle --scan
+
+# Permanently delete deprecated memories and clean access logs
+memo lifecycle --prune
 
 # Configure thresholds in meta/config.yaml
 lifecycle:

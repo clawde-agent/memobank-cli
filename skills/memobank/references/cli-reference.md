@@ -90,7 +90,7 @@ memo map --type <type>                       # filter by type
 
 ```bash
 memo index-code [path]                       # index codebase symbols for recall --code
-memo index-code --summarize                  # write architecture memory after indexing
+memo index-code --summarize                  # write architecture memory after indexing (replaces previous auto-generated snapshot)
 memo index-code --langs ts,go                # limit to specific languages
 memo index-code --force                      # re-index all files (ignore hash cache)
 memo index-code --incremental --files <...>  # hook mode: re-index only specified files (post-commit hook)
@@ -115,7 +115,8 @@ memo index --engine lancedb                  # use vector engine
 
 ```bash
 memo lifecycle                               # view lifecycle report
-memo lifecycle --scan                        # run full scan, downgrade stale memories (CI)
+memo lifecycle --scan                        # run full scan, downgrade stale memories + prune orphaned access logs (CI)
+memo lifecycle --prune                       # delete all deprecated memories and clean orphaned access logs
 memo lifecycle --reset-epoch                 # reset epoch for team handoff
 memo lifecycle --tier <tier>                 # filter by tier (core|working|peripheral)
 memo lifecycle --archive                     # show archival candidates
@@ -132,12 +133,12 @@ memo review --format json                    # output format (text|json, default
 
 **Lifecycle states:** `experimental` → `active` → `needs-review` → `deprecated`
 
-| Status         | Meaning                                                   |
-| -------------- | --------------------------------------------------------- |
-| `experimental` | Newly written; deprecated after 30 days if never recalled |
-| `active`       | Recalled at least once; trusted                           |
-| `needs-review` | Not recalled in 90 days; re-activated by ≥ 3 recalls      |
-| `deprecated`   | Excluded from default recall; still searchable            |
+| Status         | Meaning                                                        |
+| -------------- | -------------------------------------------------------------- |
+| `experimental` | Newly written; deprecated after 30 days if never recalled      |
+| `active`       | Recalled at least once; trusted                                |
+| `needs-review` | Not recalled in 90 days; re-activated by ≥ 3 recalls           |
+| `deprecated`   | Excluded from default recall; permanently removed by `--prune` |
 
 ---
 
