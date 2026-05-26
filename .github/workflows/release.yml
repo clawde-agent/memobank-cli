@@ -5,6 +5,10 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to create GitHub Release for (e.g. v0.18.0)'
+        required: false
 
 jobs:
   publish:
@@ -51,8 +55,10 @@ jobs:
         run: npm publish --access public
 
       - name: Create GitHub Release
+        if: github.ref_type == 'tag' || inputs.tag != ''
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
           generate_release_notes: true
           draft: false
         env:
