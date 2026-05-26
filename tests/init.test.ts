@@ -25,6 +25,9 @@ describe('ensureGitignoreFull', () => {
     '.memobank/.lancedb/',
     '.memobank/.metadata/',
     '.memobank/l0/',
+    '.memobank/meta/recall-misses.json',
+    '.memobank/meta/corrections.json',
+    '.memobank/workflow/sessions.md',
   ];
 
   it('creates .gitignore with all memobank entries when file is missing', () => {
