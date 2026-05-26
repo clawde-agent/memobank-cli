@@ -35,6 +35,9 @@ function gitignoreEntries(projectDir: string): string[] {
     `${projectDir}/.lancedb/`,
     `${projectDir}/.metadata/`,
     `${projectDir}/l0/`,
+    `${projectDir}/meta/recall-misses.json`,
+    `${projectDir}/meta/corrections.json`,
+    `${projectDir}/workflow/sessions.md`,
   ];
 }
 
