@@ -10,6 +10,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { readJsonFile } from '../core/fs-utils';
 import { findGitRoot } from '../core/dir-resolver';
 import { loadConfig, writeConfig, initConfig } from '../config';
 import { installClaudeCode } from '../platforms/claude-code';
@@ -34,13 +35,8 @@ type MultiSelectItem = PlatformItem;
 /** Check if Claude Code has auto-memory explicitly disabled */
 function isAutoMemoryDisabled(): boolean {
   const settingsPath = path.join(process.env.HOME || process.env.USERPROFILE || '', '.claude', 'settings.json');
-  if (!fs.existsSync(settingsPath)) { return false; }
-  try {
-    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-    return settings.autoMemoryEnabled === false;
-  } catch {
-    return false;
-  }
+  const settings = readJsonFile<Record<string, unknown>>(settingsPath, {});
+  return settings.autoMemoryEnabled === false;
 }
 
 /** Get default-selected platform values (detected ones) */
