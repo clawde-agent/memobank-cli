@@ -3,10 +3,9 @@
   "skills": {
     "memobank": {
       "source": "clawde-agent/memobank-cli",
-      "ref": "feat/proactive-recall-skill",
       "sourceType": "github",
       "skillPath": "skills/memobank/SKILL.md",
-      "computedHash": "1675364acd0310eb4c42480396d57bcd61f0760b8b7210225a4252d5f24d1791"
+      "computedHash": "a148fc282e66cea8140807268531d223a24a12973280c176fb74323b16db92a1"
     }
   }
 }

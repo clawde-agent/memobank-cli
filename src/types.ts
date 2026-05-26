@@ -24,7 +24,8 @@ export type CaptureProviderName =
   | 'openrouter'
   | 'ollama'
   | 'llamacpp'
-  | 'omlx';
+  | 'omlx'
+  | 'local';
 
 export interface CaptureConfig {
   provider: CaptureProviderName;
@@ -125,6 +126,7 @@ export interface ExtractionResult {
   tags: string[];
   confidence: Confidence;
   content: string;
+  codeRefs?: string[];
 }
 
 export interface MemoryNodeInput {

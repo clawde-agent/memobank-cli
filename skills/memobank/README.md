@@ -4,9 +4,11 @@
 [![Works with Claude Code](https://img.shields.io/badge/Claude%20Code-skill-blueviolet.svg)](https://claude.ai/code)
 [![npm](https://img.shields.io/npm/v/memobank-cli.svg)](https://www.npmjs.com/package/memobank-cli)
 
-**AI agents forget everything between sessions. memobank teaches them to learn.**
+At the start of every session, this skill recalls relevant memories from your project's `.memobank/` store.
+At the end of every session, a Stop hook captures what the agent learned and queues it for storage.
+Between sessions, nothing is lost.
 
-This skill wires the [`memo` CLI](https://github.com/clawde-agent/memobank-cli) into Claude Code: auto-recall at session start, auto-capture at session end, and `/memobank` for on-demand memory operations.
+The skill pairs with the [`memo` CLI](https://github.com/clawde-agent/memobank-cli) — memories persist in your Git repo, review as PRs, and self-curate via recall-frequency lifecycle scoring.
 
 ---
 
@@ -31,16 +33,7 @@ npx skills add clawde-agent/memobank-cli
 bash <(curl -fsSL https://raw.githubusercontent.com/clawde-agent/memobank-cli/main/skills/memobank/install.sh)
 ```
 
-**Manual**:
-
-```bash
-mkdir -p ~/.claude/skills/memobank
-curl -fsSL https://raw.githubusercontent.com/clawde-agent/memobank-cli/main/skills/memobank/SKILL.md \
-  -o ~/.claude/skills/memobank/SKILL.md
-# see install.sh for full file list
-```
-
-After installing, restart Claude Code. Then:
+After installing, restart Claude Code. Then use `/memobank` with any task:
 
 ```
 /memobank debug the auth flow
@@ -71,17 +64,21 @@ After installing, restart Claude Code. Then:
 | Before `/compact`          | `memo capture --auto --silent`                      |
 | Session ends               | Stop hook: auto-capture + queue drain               |
 
-Memories move through a lifecycle: `experimental → active → needs-review → deprecated`. Frequently recalled knowledge is promoted; unused knowledge fades.
+Memories move through `experimental → active → needs-review → deprecated` based on how often they are recalled. Frequently recalled memories get promoted; unused ones fade out and stop loading. The agent's working context self-curates without manual pruning.
+
+The `--code` flag adds a second track: `memo index-code` parses your codebase with tree-sitter, and `memo recall --code` searches memories and code symbols together, traversing the code-memory graph up to depth 2.
 
 ---
 
-## Three storage tiers
+## Storage tiers
 
 | Tier      | Location                  | Committed?      | Use                      |
 | --------- | ------------------------- | --------------- | ------------------------ |
 | Personal  | `~/.memobank/<project>/`  | No              | Private notes            |
 | Project   | `<repo>/.memobank/`       | Yes             | Team lessons, ADRs       |
 | Workspace | `~/.memobank/_workspace/` | Separate remote | Cross-repo org knowledge |
+
+Recall priority: Project > Personal > Workspace. The project tier travels with the repo — clone it and the team's accumulated knowledge is already there.
 
 ---
 

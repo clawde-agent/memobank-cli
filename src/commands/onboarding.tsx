@@ -19,6 +19,7 @@ import { installQwen } from '../platforms/qwen';
 import { installCursor } from '../platforms/cursor';
 import { workspaceInit } from './workspace';
 import { codeScanCommand } from './code-scan';
+import { ensureGitignoreFull } from './init';
 import { detectProjectName, detectPlatforms, type PlatformItem } from '../core/platform-detector';
 import { fetchAvailableModels } from '../core/capture-provider';
 import type { CaptureProviderName } from '../core/capture-provider';
@@ -51,6 +52,7 @@ type Step =
   | 'project-name'
   | 'project-dir'
   | 'capture-provider'
+  | 'capture-detecting'
   | 'capture-key'
   | 'capture-base-url'
   | 'capture-model'
@@ -65,10 +67,11 @@ type Step =
   | 'embedding-key'
   | 'reranker'
   | 'reranker-provider'
+  | 'reranker-base-url'
   | 'reranker-key'
   | 'done';
 
-interface OnboardingState {
+export interface OnboardingState {
   step: Step;
   projectName: string;
   projectDir: string;
@@ -85,10 +88,11 @@ interface OnboardingState {
   embeddingModel: string;
   enableReranker: boolean;
   rerankerProvider: string;
+  rerankerBaseUrl: string;
   collectedKeys: Record<string, string>;
 }
 
-async function runSetup(state: OnboardingState, gitRoot: string): Promise<{ lines: string[]; autoMemoryWarning: boolean }> {
+export async function runSetup(state: OnboardingState, gitRoot: string): Promise<{ lines: string[]; autoMemoryWarning: boolean }> {
   const repoRoot = path.join(gitRoot, state.projectDir);
   const summaryLines: string[] = [];
   let autoMemoryWarning = false;
@@ -180,6 +184,7 @@ async function runSetup(state: OnboardingState, gitRoot: string): Promise<{ line
     config.reranker = {
       enabled: true,
       provider: state.rerankerProvider as RerankerProvider,
+      ...(state.rerankerBaseUrl ? { base_url: state.rerankerBaseUrl } : {}),
     };
     writeConfig(repoRoot, config);
     summaryLines.push(`Reranker: ${state.rerankerProvider}`);
@@ -198,16 +203,22 @@ async function runSetup(state: OnboardingState, gitRoot: string): Promise<{ line
     summaryLines.push(`API keys (${Object.keys(allKeys).join(', ')}) saved to ${envPath}`);
   }
 
-  // Ensure .env is gitignored inside .memobank/
-  const gitignorePath = path.join(repoRoot, '.gitignore');
-  const existingGitignore = fs.existsSync(gitignorePath) ? fs.readFileSync(gitignorePath, 'utf-8') : '';
-  if (!existingGitignore.includes('.env')) {
+  // Ensure .env is gitignored inside .memobank/ (internal belt-and-suspenders)
+  const internalGitignorePath = path.join(repoRoot, '.gitignore');
+  const existingInternal = fs.existsSync(internalGitignorePath)
+    ? fs.readFileSync(internalGitignorePath, 'utf-8')
+    : '';
+  if (!existingInternal.includes('.env')) {
     fs.writeFileSync(
-      gitignorePath,
-      existingGitignore + (existingGitignore.endsWith('\n') ? '' : '\n') + '.env\n',
+      internalGitignorePath,
+      existingInternal + (existingInternal.endsWith('\n') ? '' : '\n') + '.env\n',
       'utf-8'
     );
   }
+
+  // Write all runtime-generated paths to the project root .gitignore
+  ensureGitignoreFull(gitRoot, state.projectDir);
+  summaryLines.push('✓ .gitignore updated');
 
   // Auto-run code indexing so recall --code works immediately after setup.
   try {
@@ -215,6 +226,27 @@ async function runSetup(state: OnboardingState, gitRoot: string): Promise<{ line
     summaryLines.push('✓ Code index built');
   } catch {
     summaryLines.push('  Tip: run memo index-code to enable code-aware recall');
+  }
+
+  // Detect existing project documentation and suggest capture commands.
+  const DOC_CANDIDATES = [
+    'README.md', 'README.rst', 'CLAUDE.md', 'CONTEXT.md',
+    'ARCHITECTURE.md', 'CONTRIBUTING.md', 'DEVELOPMENT.md',
+  ];
+  const foundDocs = DOC_CANDIDATES.filter((f) => fs.existsSync(path.join(gitRoot, f)));
+  const docsDir = path.join(gitRoot, 'docs');
+  if (fs.existsSync(docsDir)) {
+    try {
+      const extras = fs.readdirSync(docsDir)
+        .filter((f) => f.endsWith('.md'))
+        .slice(0, 4)
+        .map((f) => `docs/${f}`);
+      foundDocs.push(...extras);
+    } catch { /* ignore */ }
+  }
+  if (foundDocs.length > 0) {
+    summaryLines.push(`  Project docs: ${foundDocs.join(', ')}`);
+    summaryLines.push('  Import them: cat <file> | memo capture --session -');
   }
 
   return { lines: summaryLines, autoMemoryWarning };
@@ -342,6 +374,7 @@ export async function onboardingCommand(): Promise<void> {
       embeddingModel: 'mxbai-embed-large',
       enableReranker: false,
       rerankerProvider: '',
+      rerankerBaseUrl: '',
       collectedKeys: {},
     });
     const [nameInput, setNameInput] = useState(defaultName);
@@ -349,6 +382,9 @@ export async function onboardingCommand(): Promise<void> {
     const [captureKeyInput, setCaptureKeyInput] = useState('');
     const [captureBaseUrlInput, setCaptureBaseUrlInput] = useState('');
     const [captureModelItems, setCaptureModelItems] = useState<SelectItem[]>([]);
+    const [captureModelTextInput, setCaptureModelTextInput] = useState('');
+    const [embeddingModelItems, setEmbeddingModelItems] = useState<SelectItem[]>([]);
+    const [rerankerBaseUrlInput, setRerankerBaseUrlInput] = useState('');
     const [workspaceInput, setWorkspaceInput] = useState('');
     const [workspaceLocalPathInput, setWorkspaceLocalPathInput] = useState('');
     const [ollamaUrlInput, setOllamaUrlInput] = useState('http://localhost:11434');
@@ -413,13 +449,33 @@ export async function onboardingCommand(): Promise<void> {
           onSelect: (item: { label: string; value: unknown }) => {
             const provider = String(item.value);
             const descriptor = CAPTURE_REGISTRY.get(provider as CaptureProviderName);
+            const isLocal = !descriptor?.requiresApiKey;
+            const defaultUrl = descriptor?.defaultBaseUrl ?? '';
             setState(s => ({
               ...s,
               captureProvider: provider,
-              step: descriptor?.requiresApiKey ? 'capture-key' : 'capture-base-url',
+              captureBaseUrl: isLocal ? defaultUrl : '',
+              step: isLocal ? 'capture-detecting' : 'capture-key',
             }));
+            if (isLocal) {
+              fetchModelsForOnboarding(provider, undefined, defaultUrl)
+                .then((models) => {
+                  if (models.length > 0) {
+                    setCaptureModelItems(models);
+                    setState(s => ({ ...s, captureBaseUrl: defaultUrl, step: 'capture-model' }));
+                  } else {
+                    setState(s => ({ ...s, step: 'capture-base-url' }));
+                  }
+                })
+                .catch(() => setState(s => ({ ...s, step: 'capture-base-url' })));
+            }
           },
         }),
+      ) : null,
+
+      state.step === 'capture-detecting' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, { dimColor: true },
+          `  Probing ${state.captureBaseUrl} for available models…`),
       ) : null,
 
       state.step === 'capture-key' ? React.createElement(Box, { flexDirection: 'column' },
@@ -483,12 +539,14 @@ export async function onboardingCommand(): Promise<void> {
               },
             })
           : React.createElement(Box, { flexDirection: 'column' },
-              React.createElement(Text, { dimColor: true }, '  (type model name and press Enter)'),
+              React.createElement(Text, { dimColor: true },
+                `  (default: ${CAPTURE_REGISTRY.get(state.captureProvider as CaptureProviderName)?.fallbackModels[0] ?? 'local-model'} — type to override)`
+              ),
               React.createElement(TextInput, {
-                value: '',
-                onChange: () => {},
+                value: captureModelTextInput,
+                onChange: setCaptureModelTextInput,
                 onSubmit: (value: string) => {
-                  const model = value.trim() || (CAPTURE_REGISTRY.get(state.captureProvider as CaptureProviderName)?.fallbackModels[0] ?? '');
+                  const model = value.trim() || (CAPTURE_REGISTRY.get(state.captureProvider as CaptureProviderName)?.fallbackModels[0] ?? 'local-model');
                   setState(s => ({ ...s, captureModel: model, step: 'platforms' }));
                 },
               }),
@@ -607,10 +665,15 @@ export async function onboardingCommand(): Promise<void> {
         React.createElement(TextInput, {
           value: ollamaUrlInput,
           onChange: setOllamaUrlInput,
-          onSubmit: (value: string) => {
-            const defaultBase = (EMBEDDING_REGISTRY.get(state.embeddingProvider as EmbeddingProvider)?.defaultBaseUrl ?? '')
-              .replace(/\/v1\/?$/, '');
-            setState(s => ({ ...s, step: 'ollama-model', embeddingUrl: value || defaultBase }));
+          onSubmit: async (value: string) => {
+            const embDesc = EMBEDDING_REGISTRY.get(state.embeddingProvider as EmbeddingProvider);
+            const defaultBase = (embDesc?.defaultBaseUrl ?? '').replace(/\/v1\/?$/, '');
+            const resolvedUrl = value.trim() || defaultBase;
+            if (embDesc?.fetchModels) {
+              const fetched = await embDesc.fetchModels(resolvedUrl + '/v1');
+              setEmbeddingModelItems(fetched.map((m) => ({ label: m, value: m })));
+            }
+            setState(s => ({ ...s, step: 'ollama-model', embeddingUrl: resolvedUrl }));
           },
         }),
       ) : null,
@@ -619,17 +682,26 @@ export async function onboardingCommand(): Promise<void> {
         React.createElement(Text, null,
           `${EMBEDDING_REGISTRY.get(state.embeddingProvider as EmbeddingProvider)?.label ?? state.embeddingProvider} embedding model:`
         ),
-        React.createElement(Text, { dimColor: true },
-          `  (default: ${EMBEDDING_REGISTRY.get(state.embeddingProvider as EmbeddingProvider)?.defaultModel ?? 'local-model'})`
-        ),
-        React.createElement(TextInput, {
-          value: ollamaModelInput,
-          onChange: setOllamaModelInput,
-          onSubmit: (value: string) => {
-            const defaultModel = EMBEDDING_REGISTRY.get(state.embeddingProvider as EmbeddingProvider)?.defaultModel ?? 'local-model';
-            setState(s => ({ ...s, step: 'reranker', embeddingModel: value || defaultModel }));
-          },
-        }),
+        embeddingModelItems.length > 0
+          ? React.createElement(SelectInput, {
+              items: embeddingModelItems,
+              onSelect: (item: { label: string; value: unknown }) => {
+                setState(s => ({ ...s, step: 'reranker', embeddingModel: String(item.value) }));
+              },
+            })
+          : React.createElement(Box, { flexDirection: 'column' },
+              React.createElement(Text, { dimColor: true },
+                `  (default: ${EMBEDDING_REGISTRY.get(state.embeddingProvider as EmbeddingProvider)?.defaultModel ?? 'local-model'} — type to override)`
+              ),
+              React.createElement(TextInput, {
+                value: ollamaModelInput,
+                onChange: setOllamaModelInput,
+                onSubmit: (value: string) => {
+                  const defaultModel = EMBEDDING_REGISTRY.get(state.embeddingProvider as EmbeddingProvider)?.defaultModel ?? 'local-model';
+                  setState(s => ({ ...s, step: 'reranker', embeddingModel: value || defaultModel }));
+                },
+              }),
+            ),
       ) : null,
 
       state.step === 'embedding-key' ? React.createElement(Box, { flexDirection: 'column' },
@@ -654,7 +726,7 @@ export async function onboardingCommand(): Promise<void> {
 
       state.step === 'reranker' ? React.createElement(Box, { flexDirection: 'column' },
         React.createElement(Text, { bold: true }, 'Enable reranker?'),
-        React.createElement(Text, { dimColor: true }, '  Re-ranks results with AI for better precision (needs Jina or Cohere API key)'),
+        React.createElement(Text, { dimColor: true }, '  Re-ranks results for better precision (Jina/Cohere need API key; oMLX is local, no key needed)'),
         React.createElement(SelectInput, {
           items: [
             { label: 'No', value: 'no' },
@@ -689,18 +761,9 @@ export async function onboardingCommand(): Promise<void> {
             const provider = String(item.value);
             const rerankDesc = RERANKER_REGISTRY.get(provider as RerankerProvider);
             if (!rerankDesc?.requiresApiKey) {
-              if (setupRunning.current) return;
-              setupRunning.current = true;
-              const finalState = { ...state, step: 'done' as Step, enableReranker: true, rerankerProvider: provider };
-              setState(finalState);
-              runSetup(finalState, gitRoot).then(({ lines, autoMemoryWarning: warn }) => {
-                setSummary(lines);
-                setAutoMemoryWarning(warn);
-                setDone(true);
-              }).catch((err: Error) => {
-                setSummary([`Setup failed: ${err.message}`]);
-                setDone(true);
-              });
+              // Local reranker — ask for base URL before finishing
+              setRerankerBaseUrlInput(rerankDesc?.defaultBaseUrl ?? 'http://localhost:8000/v1');
+              setState(s => ({ ...s, enableReranker: true, rerankerProvider: provider, step: 'reranker-base-url' }));
               return;
             }
             const keyVar = rerankDesc.apiKeyEnv ?? '';
@@ -721,6 +784,35 @@ export async function onboardingCommand(): Promise<void> {
             } else {
               setState(s => ({ ...s, step: 'reranker-key', enableReranker: true, rerankerProvider: provider }));
             }
+          },
+        }),
+      ) : null,
+
+      state.step === 'reranker-base-url' ? React.createElement(Box, { flexDirection: 'column' },
+        React.createElement(Text, { bold: true },
+          `${RERANKER_REGISTRY.get(state.rerankerProvider as RerankerProvider)?.label ?? state.rerankerProvider} base URL:`
+        ),
+        React.createElement(Text, { dimColor: true },
+          `  (default: ${RERANKER_REGISTRY.get(state.rerankerProvider as RerankerProvider)?.defaultBaseUrl ?? 'http://localhost:8000/v1'} — press Enter to confirm)`
+        ),
+        React.createElement(TextInput, {
+          value: rerankerBaseUrlInput,
+          onChange: setRerankerBaseUrlInput,
+          onSubmit: (value: string) => {
+            if (setupRunning.current) return;
+            setupRunning.current = true;
+            const rerankDesc = RERANKER_REGISTRY.get(state.rerankerProvider as RerankerProvider);
+            const resolvedUrl = value.trim() || rerankDesc?.defaultBaseUrl || 'http://localhost:8000/v1';
+            const finalState = { ...state, step: 'done' as Step, rerankerBaseUrl: resolvedUrl };
+            setState(finalState);
+            runSetup(finalState, gitRoot).then(({ lines, autoMemoryWarning: warn }) => {
+              setSummary(lines);
+              setAutoMemoryWarning(warn);
+              setDone(true);
+            }).catch((err: Error) => {
+              setSummary([`Setup failed: ${err.message}`]);
+              setDone(true);
+            });
           },
         }),
       ) : null,

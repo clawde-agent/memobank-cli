@@ -13,6 +13,8 @@ export interface EmbeddingProviderDescriptor {
   readonly defaultDimensions: number;
   /** Return null on success or an error message string on failure */
   testConnection?(baseUrl: string, model: string): Promise<string | null>;
+  /** Return list of available model names from the running local service */
+  fetchModels?(baseUrl: string): Promise<string[]>;
 }
 
 export const EMBEDDING_REGISTRY = new Map<EmbeddingProvider, EmbeddingProviderDescriptor>();
@@ -94,6 +96,17 @@ EMBEDDING_REGISTRY.set('ollama', {
       return `Cannot reach Ollama at ${baseUrl} — run: ollama serve`;
     }
   },
+  async fetchModels(baseUrl) {
+    try {
+      const base = baseUrl.replace(/\/v1\/?$/, '').replace(/\/$/, '');
+      const res = await fetch(`${base}/api/tags`);
+      if (!res.ok) return [];
+      const data = (await res.json()) as { models?: { name: string }[] };
+      return (data.models ?? []).map((m) => m.name);
+    } catch {
+      return [];
+    }
+  },
 });
 
 // ---------------------------------------------------------------------------
@@ -154,6 +167,16 @@ EMBEDDING_REGISTRY.set('omlx', {
       return null;
     } catch {
       return `Cannot connect to oMLX at ${baseUrl}`;
+    }
+  },
+  async fetchModels(baseUrl) {
+    try {
+      const res = await fetch(`${baseUrl.replace(/\/$/, '')}/models`);
+      if (!res.ok) return [];
+      const data = (await res.json()) as { data?: { id: string }[] };
+      return (data.data ?? []).map((m) => m.id);
+    } catch {
+      return [];
     }
   },
 });

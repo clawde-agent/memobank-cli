@@ -299,6 +299,50 @@ export class CodeIndex {
     tx();
   }
 
+  linkMemoryByRefs(memoryPath: string, refs: string[]): void {
+    const hashes: string[] = [];
+
+    for (const ref of refs) {
+      const sepIdx = ref.indexOf('::');
+      const filePath = sepIdx === -1 ? ref : ref.slice(0, sepIdx);
+      const symbolName = sepIdx === -1 ? null : ref.slice(sepIdx + 2);
+
+      if (symbolName) {
+        const row = this.db
+          .prepare(
+            `SELECT s.hash FROM symbols s
+             JOIN files f ON s.file_id = f.id
+             WHERE f.path = ? AND s.name = ? AND s.hash IS NOT NULL
+             LIMIT 1`
+          )
+          .get(filePath, symbolName) as { hash: string } | undefined;
+        if (row) hashes.push(row.hash);
+      } else {
+        const rows = this.db
+          .prepare(
+            `SELECT s.hash FROM symbols s
+             JOIN files f ON s.file_id = f.id
+             WHERE f.path = ? AND s.hash IS NOT NULL`
+          )
+          .all(filePath) as { hash: string }[];
+        hashes.push(...rows.map((r) => r.hash));
+      }
+    }
+
+    if (hashes.length === 0) return;
+
+    const tx = this.db.transaction(() => {
+      this.db.prepare('DELETE FROM memory_symbol_refs WHERE memory_path = ?').run(memoryPath);
+      const ins = this.db.prepare(
+        'INSERT OR IGNORE INTO memory_symbol_refs (memory_path, symbol_hash) VALUES (?, ?)'
+      );
+      for (const hash of hashes) {
+        ins.run(memoryPath, hash);
+      }
+    });
+    tx();
+  }
+
   getLinkedMemories(query: string): { memoryPath: string; minDepth: number }[] {
     const MAX_DEPTH = 2;
     // Wrap in quotes for FTS5 phrase safety; strip existing quotes first

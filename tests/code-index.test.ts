@@ -254,4 +254,63 @@ describe('CodeIndex', () => {
       expect(allWithinBound).toBe(true);
     });
   });
+
+  describe('linkMemoryByRefs', () => {
+    it('writes memory_symbol_refs for a file::symbol ref', () => {
+      index.upsertFile('src/core/store.ts', 'typescript', 'h1', Date.now());
+      index.upsertSymbols(
+        'src/core/store.ts',
+        [makeSymbol({ name: 'writePending', qualifiedName: 'writePending', hash: 'hash-wp' })],
+        []
+      );
+      index.linkMemoryByRefs('lesson/2026-01-01-test.md', ['src/core/store.ts::writePending']);
+      const rows = (index as any).db
+        .prepare('SELECT * FROM memory_symbol_refs WHERE memory_path = ?')
+        .all('lesson/2026-01-01-test.md') as { memory_path: string; symbol_hash: string }[];
+      expect(rows).toHaveLength(1);
+      expect(rows[0].symbol_hash).toBe('hash-wp');
+    });
+
+    it('writes memory_symbol_refs for a file-level ref (no symbol name)', () => {
+      index.upsertFile('src/core/store.ts', 'typescript', 'h1', Date.now());
+      index.upsertSymbols(
+        'src/core/store.ts',
+        [
+          makeSymbol({ name: 'writeMemory', qualifiedName: 'writeMemory', hash: 'hash-wm' }),
+          makeSymbol({ name: 'writePending', qualifiedName: 'writePending', hash: 'hash-wp' }),
+        ],
+        []
+      );
+      index.linkMemoryByRefs('lesson/file-ref.md', ['src/core/store.ts']);
+      const rows = (index as any).db
+        .prepare('SELECT symbol_hash FROM memory_symbol_refs WHERE memory_path = ?')
+        .all('lesson/file-ref.md') as { symbol_hash: string }[];
+      expect(rows.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('silently skips refs that do not match any indexed symbol', () => {
+      expect(() => {
+        index.linkMemoryByRefs('lesson/missing.md', ['src/nonexistent.ts::ghost']);
+      }).not.toThrow();
+      const rows = (index as any).db
+        .prepare('SELECT * FROM memory_symbol_refs WHERE memory_path = ?')
+        .all('lesson/missing.md') as unknown[];
+      expect(rows).toHaveLength(0);
+    });
+
+    it('replaces existing refs on re-link (idempotent)', () => {
+      index.upsertFile('src/core/store.ts', 'typescript', 'h1', Date.now());
+      index.upsertSymbols(
+        'src/core/store.ts',
+        [makeSymbol({ name: 'writePending', qualifiedName: 'writePending', hash: 'hash-wp' })],
+        []
+      );
+      index.linkMemoryByRefs('lesson/idem.md', ['src/core/store.ts::writePending']);
+      index.linkMemoryByRefs('lesson/idem.md', ['src/core/store.ts::writePending']);
+      const rows = (index as any).db
+        .prepare('SELECT * FROM memory_symbol_refs WHERE memory_path = ?')
+        .all('lesson/idem.md') as unknown[];
+      expect(rows).toHaveLength(1);
+    });
+  });
 });

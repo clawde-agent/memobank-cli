@@ -355,3 +355,81 @@ describe('writeMemory → linkMemory integration', () => {
     expect(rows[0].symbol_hash).toBe('hash-vt');
   });
 });
+
+describe('writeMemory codeRefs branching', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-store-refs-'));
+    fs.mkdirSync(path.join(tmpDir, 'meta'), { recursive: true });
+    const dbPath = path.join(tmpDir, 'meta', 'code-index.db');
+    const idx = new CodeIndex(dbPath);
+    idx.upsertFile('src/auth.ts', 'typescript', 'h1', Date.now());
+    idx.upsertSymbols(
+      'src/auth.ts',
+      [
+        {
+          name: 'verifyToken',
+          qualifiedName: 'verifyToken',
+          kind: 'function' as const,
+          file: 'src/auth.ts',
+          lineStart: 1,
+          lineEnd: 10,
+          isExported: true,
+          hash: 'hash-vt',
+        },
+      ],
+      []
+    );
+    idx.close();
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  it('uses linkMemoryByRefs when codeRefs are provided', () => {
+    writeMemory(tmpDir, {
+      name: 'explicit-ref-lesson',
+      type: 'lesson',
+      description: 'completely unrelated description xyz',
+      tags: ['auth'],
+      confidence: 'high',
+      status: 'active',
+      created: '2026-01-01',
+      content: 'Some content.',
+      codeRefs: ['src/auth.ts::verifyToken'],
+    });
+    const dbPath = path.join(tmpDir, 'meta', 'code-index.db');
+    const idx = new CodeIndex(dbPath);
+    const rows = (idx as any).db.prepare('SELECT * FROM memory_symbol_refs').all() as {
+      memory_path: string;
+      symbol_hash: string;
+    }[];
+    idx.close();
+    expect(rows.length).toBe(1);
+    expect(rows[0].symbol_hash).toBe('hash-vt');
+  });
+
+  it('falls back to linkMemory (FTS) when codeRefs are absent', () => {
+    writeMemory(tmpDir, {
+      name: 'fts-lesson',
+      type: 'lesson',
+      description: 'verifyToken raises on expired JWT',
+      tags: ['auth'],
+      confidence: 'high',
+      status: 'active',
+      created: '2026-01-01',
+      content: 'Some content.',
+    });
+    const dbPath = path.join(tmpDir, 'meta', 'code-index.db');
+    const idx = new CodeIndex(dbPath);
+    const rows = (idx as any).db.prepare('SELECT * FROM memory_symbol_refs').all() as {
+      memory_path: string;
+      symbol_hash: string;
+    }[];
+    idx.close();
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows[0].symbol_hash).toBe('hash-vt');
+  });
+});

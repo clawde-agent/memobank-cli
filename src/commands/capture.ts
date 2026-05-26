@@ -47,7 +47,7 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
 
   if (options.auto) {
     const { readCursor, markSessionProcessed } = await import('../core/capture-cursor');
-    const { findUnprocessedSessions, parseTranscriptFile, writeL0 } =
+    const { findUnprocessedSessions, parseTranscriptFile } =
       await import('../core/transcript-parser');
 
     const metaDir = path.join(repoRoot, 'meta');
@@ -59,7 +59,11 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
       return;
     }
 
-    const l0Dir = path.join(repoRoot, 'l0');
+    // Clean up any l0/ archives left by older versions of memobank
+    const { rm } = await import('fs/promises');
+    rm(path.join(repoRoot, 'l0'), { recursive: true, force: true }).catch(() => {
+      /* non-fatal */
+    });
 
     for (const { sessionId, file } of unprocessed) {
       log(`Processing session ${sessionId}...`);
@@ -69,11 +73,6 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
         await markSessionProcessed(metaDir, sessionId);
         continue;
       }
-
-      // Write L0 archive (fire-and-forget)
-      writeL0(l0Dir, sessionId, turns).catch(() => {
-        /* silent */
-      });
 
       sessionText = turns
         .map((t) => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.text}`)
@@ -173,6 +172,17 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
         const { updateMemoryContent } = await import('../core/store');
         updateMemoryContent(repoRoot, targetName, updatedContent);
       }
+
+      // Append to rolling session log (workflow/sessions.md)
+      const extractedNames = [...toWrite.map((c) => c.name), ...toUpdate.map((u) => u.targetName)];
+      const { appendToSessionLog } = await import('../core/session-log');
+      appendToSessionLog(repoRoot, {
+        date: new Date().toISOString().slice(0, 10),
+        branch: gitBranch,
+        lastCommit: gitLastCommit,
+        extractedNames,
+        gitStatus,
+      });
 
       await markSessionProcessed(metaDir, sessionId);
     }

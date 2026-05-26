@@ -22,6 +22,17 @@ versioned alongside code, reviewed as PRs, and loaded automatically at session s
 Works with Claude Code, Cursor, Codex, Gemini CLI, and Qwen Code.
 Zero external services required.
 
+Two capabilities set memobank apart from static files and cloud APIs: **lifecycle scoring** — memories auto-promote on recall and decay when unused, so the agent's working context self-curates — and a **code-memory graph** that links code symbols to relevant memories, so `memo recall --code` searches your codebase and memory store together.
+
+|                           | memobank                                    | CLAUDE.md | Cloud APIs | Built-in auto-memory |
+| ------------------------- | ------------------------------------------- | --------- | ---------- | -------------------- |
+| Accumulates over time     | ✅ lifecycle scoring                        | ❌ manual | ✅         | partial              |
+| Team knowledge, versioned | ✅ committed with code                      | ✅ static | ❌         | ❌                   |
+| No external services      | ✅                                          | ✅        | ❌         | ✅                   |
+| Code symbol search        | ✅ tree-sitter index                        | ❌        | ❌         | ❌                   |
+| Works across AI tools     | ✅ Claude Code, Cursor, Codex, Gemini, Qwen | ✅        | varies     | Claude Code only     |
+| Auditable via Git         | ✅ diff + PR review                         | ✅        | ❌         | ❌                   |
+
 ---
 
 ## Get started
@@ -80,47 +91,36 @@ We switched from npm to pnpm in March 2026. Faster installs, better monorepo sup
 
 ---
 
-## Why not just use CLAUDE.md?
-
-CLAUDE.md is great for static rules you write once. memobank handles knowledge that accumulates: lessons learned, decisions made, patterns discovered. The two are complementary: CLAUDE.md for "always do X", memobank for "we learned Y".
-
-## Why not a cloud memory API?
-
-Tools like mem0 or Zep store memories in external services. memobank stores them in your Git repo. No API keys, no vendor lock-in, no data leaves your machine. Memory health is visible in `git diff`. Reviews happen in PRs.
-
-## Why not Claude Code's built-in auto-memory?
-
-Claude Code's auto-memory is personal and machine-local by default. memobank adds the team layer: `.memobank/` is committed alongside your code, so every teammate and every CI run starts with the same shared knowledge. memobank also works with Cursor, Codex, Gemini CLI, and Qwen Code.
-
----
-
 ## Features
 
-**Memory management**
+**Lifecycle scoring** — the agent's working context self-curates
+
+- `experimental → active → needs-review → deprecated`, driven by recall frequency
+- Recalled memories get promoted; unused memories drift toward deprecated and stop loading
+- `memo lifecycle --scan` downgrades stale memories on a schedule; `--reset-epoch` restarts decay for team handoffs
+- Git diff on `.memobank/` shows which memories are gaining or losing recall — ambient health signal without a dashboard
+
+**Code-memory graph** _(optional, requires `npm install memobank-cli --include=optional`)_
+
+- `memo index-code [path]` — parses the codebase with tree-sitter, stores symbols in `.memobank/meta/code-index.db`; incremental via SHA256 hash cache
+- `memo recall "query" --code` — dual-track: memories + code symbols searched in parallel, score-normalized and merged; traverses the memory graph up to depth 2 (RRF-merged)
+- `memo recall --refs <symbol>` — all callers of a function from the call-graph
+- Supports TypeScript, JavaScript, Python, Go, Rust, C#, YAML; `--summarize` writes an architecture snapshot memory after indexing
+
+**Memory types and search**
 
 - Four types: `lesson`, `decision`, `workflow`, `architecture`
-- Status lifecycle: `experimental → active → needs-review → deprecated`
-- Automatic stale memory detection via `memo review`
-
-**Search**
-
-- Default: keyword + tag + recency scoring, zero external dependencies
+- Default search: keyword + tag + recency scoring, no external dependencies
 - Optional: vector search via LanceDB (Ollama, OpenAI, Azure, Jina)
-- Optional: code symbol index via tree-sitter + SQLite FTS5 (`memo recall --code`)
 
-**Code Symbol Index** _(optional, requires `npm install memobank-cli --include=optional`)_
+**Distillation**
 
-- `memo index-code [path]` — parses your codebase with tree-sitter and stores symbols in `.memobank/meta/code-index.db`
-- `memo recall "query" --code` — dual-track recall: searches memories and code symbols in parallel, results score-normalized and merged; also traverses the memory graph for related memories (Path C, RRF-merged)
-- `memo recall --refs <symbol>` — show all callers of a function from the call-graph
-- Supports TypeScript, JavaScript, Python, Go, Rust, YAML, C# (more via the same extension pattern)
-- Incremental: unchanged files are skipped via SHA256 hash cache
-- `--summarize` writes a `project-architecture-snapshot` memory after indexing
-- Code-memory graph: `memo index-code` builds `mentions` edges (symbol → memory via FTS5) and `related_to` edges (memory → memory via tag overlap) stored in `code-index.db`. Recall traverses the graph up to depth 2 to surface adjacent memories.
+- `memo distill --to personal/workspace` — promotes project memories up the tier hierarchy
+- `memo distill --to scenes` — clusters memories by tag similarity, calls LLM once per cluster to write narrative `.memobank/scenes/<topic-YYYY-MM>.md` files; scene navigation is injected into MEMORY.md on every `memo recall`
 
 **Safety**
 
-- Automatic secret redaction before every write (API keys, tokens, credentials)
+- Automatic secret redaction before every write (API keys, tokens, credentials, PII)
 - `memo scan` blocks workspace publish if secrets are detected
 
 **Integrations**
@@ -128,120 +128,6 @@ Claude Code's auto-memory is personal and machine-local by default. memobank add
 - Claude Code — `autoMemoryDirectory` points to `.memobank/`, loads at session start
 - Cursor, Codex, Gemini CLI, Qwen Code — hooks installed via `memo onboarding`
 - Import from Claude Code, Gemini, and Qwen: `memo import --claude`
-
-**Distillation**
-
-- `memo distill --to personal/workspace` — promotes project memories up the tier hierarchy
-- `memo distill --to scenes` — clusters memories by tag similarity and calls LLM once per cluster to write narrative `.memobank/scenes/<topic-YYYY-MM>.md` files; scene navigation is injected into MEMORY.md on every `memo recall`
-
-**Team workflows**
-
-- Workspace tier: cross-repo knowledge synced via separate Git remote
-- Epoch-aware scoring: team knowledge naturally fades during handoffs
-- `memo map` for memory statistics, `memo lifecycle` for health scans
-
----
-
-## 🗂️ Three-Tier Memory Model
-
-Memobank organizes memory into three tiers, each with a distinct scope. The tier determines where files are stored and who can access them, not how they are structured (all tiers share the same file format).
-
-### Tier 1 — Personal (Private)
-
-|                      |                               |
-| -------------------- | ----------------------------- |
-| **Location**         | `~/.memobank/<project-name>/` |
-| **Committed to Git** | Never                         |
-| **Who sees it**      | Only you, on this machine     |
-| **Activate**         | `memo init --global`          |
-
-**Use when:** You want to keep private notes about a project: experiments that didn't pan out, personal shortcuts, machine-specific env quirks. This tier never touches the repo and is never shared.
-
-```
-~/.memobank/my-project/
-├── lesson/
-├── decision/
-├── workflow/
-└── architecture/
-```
-
----
-
-### Tier 2 — Project (Team)
-
-|                      |                                  |
-| -------------------- | -------------------------------- |
-| **Location**         | `<repo-root>/.memobank/`         |
-| **Committed to Git** | Yes — like any other source file |
-| **Who sees it**      | Everyone who clones the repo     |
-| **Activate**         | `memo init` (default)            |
-
-**Use when:** You want the team to share knowledge about this repo. Adding a memory = opening a PR. Reviewing a memory = code review. History = `git log`. No extra commands needed — standard Git workflow handles everything.
-
-```
-your-project/
-├── src/
-├── .memobank/          ← committed alongside code
-│   ├── lesson/
-│   ├── decision/
-│   ├── workflow/
-│   └── architecture/
-└── package.json
-```
-
-**Differentiated use cases vs. personal:**
-
-- Bug post-mortems the whole team should know about → **project**
-- "I personally keep forgetting to run `npm run generate` before building" → **personal**
-- Architecture decision records (ADRs) → **project**
-- Your local dev environment gotcha → **personal**
-
----
-
-### Tier 3 — Workspace (Organization, Optional)
-
-|                      |                                                          |
-| -------------------- | -------------------------------------------------------- |
-| **Location**         | `~/.memobank/_workspace/<workspace-name>/` (local clone) |
-| **Committed to Git** | To a designated remote repo (infra, platform-docs, etc.) |
-| **Who sees it**      | Entire organization, across all repos                    |
-| **Activate**         | `memo workspace init <remote-url>`                       |
-
-**Use when:** You have knowledge that spans multiple repos or services, or belongs to the project but not the codebase: inter-service contracts, company-wide architecture patterns, platform team decisions, business decisions made by a PO or PM, BA requirements analysis, stakeholder agreements, compliance constraints, or any non-code project context. Any existing Git repo (including a wiki or docs repo) can serve as the workspace remote; updates flow through standard PRs.
-
-```
-Organization knowledge (cross-repo):
-  git@github.com:mycompany/platform-docs.git
-    └── .memobank/
-        ├── lesson/       ← "all services must handle 429s with exponential backoff"
-        ├── decision/     ← "we use gRPC for internal, REST for external"
-        └── architecture/ ← "auth service owns all JWT validation"
-```
-
-**Differentiated use cases vs. project:**
-
-- "Redis connection pooling pattern for this service" → **project**
-- "Redis connection pooling pattern for all services" → **workspace**
-- "We switched to Postgres in this repo" → **project**
-- "Our data platform team maintains Postgres, contact @data-infra for schema changes" → **workspace**
-- "PO decided to deprioritise feature X for this quarter" → **workspace**
-- "BA agreed with stakeholders: payments flow must handle partial refunds" → **workspace**
-- "Legal requires GDPR deletion within 30 days across all services" → **workspace**
-
----
-
-### Recall Priority
-
-When `memo recall` runs, all configured tiers are searched and merged into a single ranked list:
-
-```
-Priority (highest → lowest):
-1. Project   — most specific to current context
-2. Personal  — your individual experience
-3. Workspace — broad organizational knowledge
-```
-
-If the same filename exists in multiple tiers, the higher-priority tier's version wins. Each result shows its source tier so you always know where a memory came from.
 
 ---
 
@@ -536,19 +422,7 @@ Creates `.cursor/rules/memobank.mdc` with `alwaysApply: true`
 
 ## 🛡️ Security
 
-Memobank automatically sanitizes secrets before publishing to workspace:
-
-- ✅ API keys and tokens
-- ✅ Passwords and secrets
-- ✅ IP addresses and hostnames
-- ✅ Email addresses and phone numbers (PII)
-- ✅ Database connection strings
-- ✅ Private keys and certificates
-- ✅ JWT tokens
-- ✅ AWS credentials
-- ✅ GitHub/GitLab tokens
-
-`memo workspace publish` runs the same scanner and aborts if secrets are found. There is no automatic stripping; you redact manually.
+memobank redacts 20+ secret patterns (API keys, JWT tokens, AWS credentials, GitHub tokens, database connection strings, PII) before any write. `memo workspace publish` runs the same scanner and aborts if secrets are found — there is no automatic stripping, so you redact before publishing.
 
 ---
 

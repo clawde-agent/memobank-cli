@@ -11,6 +11,7 @@ export interface PendingCandidate {
   tags: string[];
   confidence: Confidence;
   content: string;
+  codeRefs?: string[];
 }
 
 export interface PendingEntry {
@@ -68,7 +69,11 @@ export function writeMemory(repoRoot: string, memory: Omit<MemoryFile, 'path' | 
   try {
     interface CodeIndexModule {
       CodeIndex: {
-        new (dbPath: string): { linkMemory(memPath: string, text: string): void; close(): void };
+        new (dbPath: string): {
+          linkMemory(memPath: string, text: string): void;
+          linkMemoryByRefs(memPath: string, refs: string[]): void;
+          close(): void;
+        };
         getDbPath(repoRoot: string): string;
       };
     }
@@ -77,8 +82,13 @@ export function writeMemory(repoRoot: string, memory: Omit<MemoryFile, 'path' | 
     const dbPath = CodeIndex.getDbPath(repoRoot);
     if (fs.existsSync(dbPath)) {
       const idx = new CodeIndex(dbPath);
+      const memRelPath = path.relative(repoRoot, filePath);
       try {
-        idx.linkMemory(path.relative(repoRoot, filePath), memory.description);
+        if (memory.codeRefs && memory.codeRefs.length > 0) {
+          idx.linkMemoryByRefs(memRelPath, memory.codeRefs);
+        } else {
+          idx.linkMemory(memRelPath, memory.description);
+        }
       } finally {
         idx.close();
       }

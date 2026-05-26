@@ -64,6 +64,7 @@ export function loadConfig(repoRoot: string): MemoConfig {
       search: { ...DEFAULT_CONFIG.search, ...loaded?.search },
       review: { ...DEFAULT_CONFIG.review, ...loaded?.review },
       lifecycle: { ...DEFAULT_LIFECYCLE, ...loaded?.lifecycle },
+      ...(loaded?.capture ? { capture: loaded.capture } : {}),
       ...(loaded?.workspace ? { workspace: loaded.workspace as WorkspaceConfig } : {}),
       ...(loaded?.reranker ? { reranker: loaded.reranker } : {}),
     };

@@ -23,17 +23,28 @@ export interface QuickInitOptions {
   repoRoot?: string; // for testing
 }
 
-const GITIGNORE_ENTRIES = [
-  '.memobank/meta/access-log.json',
-  '.memobank/meta/code-index.db',
-  '.memobank/.lancedb/',
-  '.memobank/pending/',
-];
+function gitignoreEntries(projectDir: string): string[] {
+  return [
+    `${projectDir}/.env`,
+    `${projectDir}/meta/access-log.json`,
+    `${projectDir}/meta/access-log.lock`,
+    `${projectDir}/meta/code-index.db`,
+    `${projectDir}/meta/capture-cursor.json`,
+    `${projectDir}/meta/study-suggestions.json`,
+    `${projectDir}/.pending/`,
+    `${projectDir}/.lancedb/`,
+    `${projectDir}/.metadata/`,
+    `${projectDir}/l0/`,
+    `${projectDir}/meta/recall-misses.json`,
+    `${projectDir}/meta/corrections.json`,
+    `${projectDir}/workflow/sessions.md`,
+  ];
+}
 
-export function ensureGitignoreFull(gitRoot: string): void {
+export function ensureGitignoreFull(gitRoot: string, projectDir: string = '.memobank'): void {
   const gitignorePath = path.join(gitRoot, '.gitignore');
   const content = fs.existsSync(gitignorePath) ? fs.readFileSync(gitignorePath, 'utf-8') : '';
-  const toAdd = GITIGNORE_ENTRIES.filter((entry) => !content.includes(entry));
+  const toAdd = gitignoreEntries(projectDir).filter((entry) => !content.includes(entry));
   if (!toAdd.length) return;
   const block = '\n# memobank\n' + toAdd.join('\n') + '\n';
   if (!content) {

@@ -1,4 +1,13 @@
+import * as fs from 'fs';
 import { extract } from '../src/core/smart-extractor';
+
+describe('SYSTEM_PROMPT schema', () => {
+  it('includes code_refs in the extraction JSON schema', () => {
+    const moduleText = fs.readFileSync('src/core/smart-extractor.ts', 'utf-8');
+    expect(moduleText).toContain('"code_refs"');
+    expect(moduleText).toContain('file.ts::symbolName');
+  });
+});
 
 describe('extract — prompt quality', () => {
   it('returns empty array when no API key', async () => {

@@ -231,7 +231,7 @@ CAPTURE_REGISTRY.set('gemini', {
 // ---------------------------------------------------------------------------
 CAPTURE_REGISTRY.set('omlx', {
   name: 'omlx',
-  label: 'oMLX (local, Apple Silicon)',
+  label: 'oMLX (local)',
   requiresApiKey: false,
   requiresBaseUrlStep: true,
   defaultBaseUrl: 'http://localhost:8000/v1',
@@ -247,6 +247,25 @@ CAPTURE_REGISTRY.set('omlx', {
     } catch {
       return [];
     }
+  },
+  create(config) {
+    return lazyOpenAICompatFactory()(config.apiKey ?? '', config.model, config.baseUrl);
+  },
+});
+
+// ---------------------------------------------------------------------------
+// local  (generic OpenAI-compatible: LM Studio, vLLM, Jan, TabbyAPI, etc.)
+// ---------------------------------------------------------------------------
+CAPTURE_REGISTRY.set('local', {
+  name: 'local',
+  label: 'Local / OpenAI-compatible (LM Studio, vLLM, Jan…)',
+  requiresApiKey: false,
+  requiresBaseUrlStep: true,
+  defaultBaseUrl: 'http://localhost:1234/v1',
+  defaultModel: 'local-model',
+  fallbackModels: ['local-model'],
+  async fetchModels(_apiKey, baseUrl) {
+    return fetchOpenAICompatModels(undefined, baseUrl ?? 'http://localhost:1234/v1');
   },
   create(config) {
     return lazyOpenAICompatFactory()(config.apiKey ?? '', config.model, config.baseUrl);
