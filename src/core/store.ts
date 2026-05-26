@@ -22,6 +22,9 @@ export interface PendingEntry {
 }
 
 export function writePending(memoBankDir: string, entry: PendingEntry): void {
+  if (process.env.MEMOBANK_DISABLED === 'true' || process.env.MEMOBANK_DISABLED === '1') {
+    return;
+  }
   const pendingDir = path.resolve(memoBankDir, '.pending');
   if (!fs.existsSync(pendingDir)) {
     fs.mkdirSync(pendingDir, { recursive: true });
@@ -35,6 +38,9 @@ export function writePending(memoBankDir: string, entry: PendingEntry): void {
 }
 
 export function writeMemory(repoRoot: string, memory: Omit<MemoryFile, 'path' | 'scope'>): string {
+  if (process.env.MEMOBANK_DISABLED === 'true' || process.env.MEMOBANK_DISABLED === '1') {
+    return '';
+  }
   const typeDir = path.join(repoRoot, memory.type);
   if (!fs.existsSync(typeDir)) {
     fs.mkdirSync(typeDir, { recursive: true });
