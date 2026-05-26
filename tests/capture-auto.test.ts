@@ -1,7 +1,9 @@
 import * as fs from 'fs/promises';
+import * as fsSync from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { capture } from '../src/commands/capture';
+import { appendToSessionLog } from '../src/core/session-log';
 
 describe('capture --auto', () => {
   it('exits cleanly when no transcript directory exists', async () => {
@@ -19,39 +21,79 @@ describe('capture --auto', () => {
   });
 });
 
-describe('capture --auto session snapshot', () => {
-  it('generateSessionSummary returns a valid PendingEntry with correct fields', async () => {
-    const { generateSessionSummary } = await import('../src/commands/capture');
-    const tmpRepo = path.join(os.tmpdir(), `snap-test-${Date.now()}`);
-    await fs.mkdir(path.join(tmpRepo, 'meta'), { recursive: true });
-    await fs.writeFile(path.join(tmpRepo, 'meta', 'config.yaml'), 'project:\n  name: test\n');
+describe('appendToSessionLog', () => {
+  let tmpDir: string;
 
-    const entry = generateSessionSummary({
-      branch: 'feat/my-feature',
-      lastCommit: 'abc1234 add something',
-      gitStatus: 'M src/foo.ts',
-      extractedNames: ['my-lesson', 'my-decision'],
-      repoRoot: tmpRepo,
-    });
-
-    expect(entry).not.toBeNull();
-    expect(entry!.candidates[0].type).toBe('workflow');
-    expect(entry!.candidates[0].name).toMatch(/^session-\d{4}-\d{2}-\d{2}-feat-my-feature$/);
-    expect(entry!.candidates[0].tags).toContain('session');
-    expect(entry!.candidates[0].content).toContain('feat/my-feature');
-    expect(entry!.candidates[0].content).toContain('my-lesson');
-    await fs.rm(tmpRepo, { recursive: true });
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'session-log-'));
   });
 
-  it('returns null when branch, gitStatus, and extractedNames are all empty', async () => {
-    const { generateSessionSummary } = await import('../src/commands/capture');
-    const result = generateSessionSummary({
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true });
+  });
+
+  it('creates workflow/sessions.md with a session entry', () => {
+    appendToSessionLog(tmpDir, {
+      date: '2026-05-26',
+      branch: 'feat/my-feature',
+      lastCommit: 'abc1234 add something',
+      extractedNames: ['my-lesson', 'my-decision'],
+      gitStatus: 'M src/foo.ts',
+    });
+
+    const content = fsSync.readFileSync(path.join(tmpDir, 'workflow', 'sessions.md'), 'utf-8');
+    expect(content).toContain('<!-- memobank session log -->');
+    expect(content).toContain('2026-05-26');
+    expect(content).toContain('feat/my-feature');
+    expect(content).toContain('`my-lesson`');
+    expect(content).toContain('`my-decision`');
+  });
+
+  it('prepends new entries (newest first)', () => {
+    appendToSessionLog(tmpDir, {
+      date: '2026-05-25',
+      branch: 'main',
+      lastCommit: 'aaa0001 first',
+      extractedNames: ['old-lesson'],
+      gitStatus: '',
+    });
+    appendToSessionLog(tmpDir, {
+      date: '2026-05-26',
+      branch: 'feat/new',
+      lastCommit: 'bbb0002 second',
+      extractedNames: ['new-lesson'],
+      gitStatus: '',
+    });
+
+    const content = fsSync.readFileSync(path.join(tmpDir, 'workflow', 'sessions.md'), 'utf-8');
+    expect(content.indexOf('2026-05-26')).toBeLessThan(content.indexOf('2026-05-25'));
+  });
+
+  it('skips write when all fields are empty', () => {
+    appendToSessionLog(tmpDir, {
+      date: '2026-05-26',
       branch: '',
       lastCommit: '',
-      gitStatus: '',
       extractedNames: [],
-      repoRoot: os.tmpdir(),
+      gitStatus: '',
     });
-    expect(result).toBeNull();
+
+    expect(fsSync.existsSync(path.join(tmpDir, 'workflow', 'sessions.md'))).toBe(false);
+  });
+
+  it('keeps at most 100 entries', () => {
+    for (let i = 0; i < 105; i++) {
+      appendToSessionLog(tmpDir, {
+        date: '2026-05-26',
+        branch: `branch-${i}`,
+        lastCommit: 'x',
+        extractedNames: [],
+        gitStatus: 'M f.ts',
+      });
+    }
+
+    const content = fsSync.readFileSync(path.join(tmpDir, 'workflow', 'sessions.md'), 'utf-8');
+    const entryCount = (content.match(/^## /gm) ?? []).length;
+    expect(entryCount).toBe(100);
   });
 });
