@@ -5,6 +5,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { readJsonFile } from '../core/fs-utils';
 import { findRepoRoot } from '../core/dir-resolver';
 import { loadAll } from '../core/memory-loader';
 import { readSceneIndex } from '../core/scene-index';
@@ -81,14 +82,8 @@ export async function selectEngine(
 
 function appendRecallMiss(repoRoot: string, query: string, resultCount: number): void {
   const missesPath = path.join(repoRoot, 'meta', 'recall-misses.json');
-  let misses: Array<{ query: string; timestamp: string; result_count: number }> = [];
-  try {
-    if (fs.existsSync(missesPath)) {
-      misses = JSON.parse(fs.readFileSync(missesPath, 'utf-8')) as typeof misses;
-    }
-  } catch {
-    misses = [];
-  }
+  type Miss = { query: string; timestamp: string; result_count: number };
+  const misses = readJsonFile<Miss[]>(missesPath, []);
   misses.push({ query, timestamp: new Date().toISOString(), result_count: resultCount });
   fs.writeFileSync(missesPath, JSON.stringify(misses, null, 2), 'utf-8');
 }
@@ -97,11 +92,8 @@ function printStudyHint(repoRoot: string, silent: boolean): void {
   if (silent) return;
   const suggestionsPath = path.join(repoRoot, 'meta', 'study-suggestions.json');
   try {
-    if (!fs.existsSync(suggestionsPath)) return;
-    const suggestions = JSON.parse(fs.readFileSync(suggestionsPath, 'utf-8')) as Array<{
-      name: string;
-      access_count: number;
-    }>;
+    type Suggestion = { name: string; access_count: number };
+    const suggestions = readJsonFile<Suggestion[]>(suggestionsPath, []);
     if (suggestions.length === 0) return;
     process.stdout.write('\n');
     for (const s of suggestions.slice(0, 3)) {

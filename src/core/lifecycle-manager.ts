@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import matter from 'gray-matter';
+import { readJsonFile, ensureDir } from './fs-utils';
 import type { MemoryFile, Status } from '../types';
 import { loadAll } from './memory-loader';
 import { writeMemory, updateMemoryStatus } from './store';
@@ -27,9 +28,7 @@ function acquireLock(repoRoot: string, timeoutMs: number = 5000): boolean {
   const lockPath = getAccessLogLockPath(repoRoot);
   const lockDir = path.dirname(lockPath);
 
-  if (!fs.existsSync(lockDir)) {
-    fs.mkdirSync(lockDir, { recursive: true });
-  }
+  ensureDir(lockDir);
 
   const startTime = Date.now();
   while (Date.now() - startTime < timeoutMs) {
@@ -106,10 +105,7 @@ export function loadAccessLogs(repoRoot: string): Record<string, AccessLog> {
 
 export function saveAccessLogs(repoRoot: string, logs: Record<string, AccessLog>): void {
   const accessLogPath = getAccessLogPath(repoRoot);
-  const logDir = path.dirname(accessLogPath);
-  if (!fs.existsSync(logDir)) {
-    fs.mkdirSync(logDir, { recursive: true });
-  }
+  ensureDir(path.dirname(accessLogPath));
   fs.writeFileSync(accessLogPath, JSON.stringify(logs, null, 2), 'utf-8');
 }
 
@@ -220,15 +216,7 @@ export interface CorrectionRecord {
 
 export function loadCorrections(repoRoot: string): Record<string, CorrectionRecord> {
   const correctionsPath = getCorrectionsPath(repoRoot);
-  if (!fs.existsSync(correctionsPath)) {
-    return {};
-  }
-  try {
-    return JSON.parse(fs.readFileSync(correctionsPath, 'utf-8'));
-  } catch (error) {
-    console.warn(`Could not load corrections: ${(error as Error).message}`);
-    return {};
-  }
+  return readJsonFile<Record<string, CorrectionRecord>>(correctionsPath, {});
 }
 
 export function saveCorrections(
@@ -236,10 +224,7 @@ export function saveCorrections(
   corrections: Record<string, CorrectionRecord>
 ): void {
   const correctionsPath = getCorrectionsPath(repoRoot);
-  const logDir = path.dirname(correctionsPath);
-  if (!fs.existsSync(logDir)) {
-    fs.mkdirSync(logDir, { recursive: true });
-  }
+  ensureDir(path.dirname(correctionsPath));
   fs.writeFileSync(correctionsPath, JSON.stringify(corrections, null, 2), 'utf-8');
 }
 
@@ -287,9 +272,7 @@ export function archiveMemory(repoRoot: string, memoryPath: string): void {
   const archiveDir = path.join(repoRoot, 'archive');
   const memoryName = path.basename(memoryPath);
   const archivePath = path.join(archiveDir, memoryName);
-  if (!fs.existsSync(archiveDir)) {
-    fs.mkdirSync(archiveDir, { recursive: true });
-  }
+  ensureDir(archiveDir);
   fs.renameSync(memoryPath, archivePath);
   console.log(`Archived: ${memoryName}`);
 }

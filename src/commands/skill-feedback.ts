@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { readJsonFile } from '../core/fs-utils';
 import { loadAll } from '../core/memory-loader';
 import { loadAccessLogs } from '../core/lifecycle-manager';
 
@@ -12,14 +13,7 @@ interface RecallMiss {
 export async function skillFeedbackCommand(repoRoot: string): Promise<void> {
   // 1. Recall misses
   const missesPath = path.join(repoRoot, 'meta', 'recall-misses.json');
-  let misses: RecallMiss[] = [];
-  try {
-    if (fs.existsSync(missesPath)) {
-      misses = JSON.parse(fs.readFileSync(missesPath, 'utf-8'));
-    }
-  } catch {
-    misses = [];
-  }
+  const misses = readJsonFile<RecallMiss[]>(missesPath, []);
 
   // 2. Never-recalled memories (access_count = 0 or absent from access log)
   // loadAll with no scope argument searches all tiers (project + personal + workspace)

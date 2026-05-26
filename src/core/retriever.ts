@@ -14,6 +14,90 @@ function estimateTokenCount(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
+export async function loadCodeIndex(
+  repoRoot: string,
+  withCode: boolean,
+  query?: string,
+  topK?: number
+): Promise<{
+  symbolResults: SymbolResult[];
+  linkedMemories: { memoryPath: string; minDepth: number }[];
+} | null> {
+  if (!withCode) return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { CodeIndex } = require('../engines/code-index') as { CodeIndex: typeof CodeIndexType };
+    const dbPath = CodeIndex.getDbPath(repoRoot);
+    if (!fs.existsSync(dbPath)) return null;
+    const idx = new CodeIndex(dbPath);
+    try {
+      const symbolResults = idx.search(query ?? '', topK ?? 10);
+      const linkedMemories = idx.getLinkedMemories(query ?? '');
+      return { symbolResults, linkedMemories };
+    } finally {
+      idx.close();
+    }
+  } catch {
+    return null;
+  }
+}
+
+function resolveAutoCode(withCode: boolean | 'auto', repoRoot: string): boolean {
+  if (withCode !== 'auto') return withCode;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { CodeIndex } = require('../engines/code-index') as { CodeIndex: typeof CodeIndexType };
+    return fs.existsSync(CodeIndex.getDbPath(repoRoot));
+  } catch {
+    return false;
+  }
+}
+
+function recordAccessBatch(repoRoot: string, results: RecallResult[], query: string): void {
+  for (const result of results) {
+    recordAccess(repoRoot, result.memory.path, query);
+  }
+  for (const result of results) {
+    updateStatusOnRecall(repoRoot, result.memory.path);
+  }
+}
+
+async function applyReranker(
+  query: string,
+  results: RecallResult[],
+  config: MemoConfig
+): Promise<RecallResult[]> {
+  if (!config.reranker?.enabled || results.length <= 1) return results;
+  try {
+    return await rerank(query, results, {
+      provider: config.reranker.provider,
+      model: config.reranker.model,
+      top_n: config.reranker.top_n ?? config.memory.top_k,
+      baseUrl: config.reranker.base_url,
+    });
+  } catch (e) {
+    console.warn(`Reranker skipped: ${(e as Error).message}`);
+    return results;
+  }
+}
+
+export function budgetResults(results: RecallResult[], tokenBudget: number): RecallResult[] {
+  if (results.length === 0) return results;
+
+  // Estimate tokens per-result once to avoid O(n²) full-markdown rebuild on each pop.
+  let runningTokens = 50; // fixed overhead: header + footer (~200 chars / 4)
+  const kept: RecallResult[] = [];
+  for (const result of results) {
+    const { memory } = result;
+    const approxLine = `### ${memory.name}\n> ${memory.description}\n> \`${memory.path}\`\n\n`;
+    const cost = estimateTokenCount(approxLine);
+    if (runningTokens + cost > tokenBudget && kept.length > 0) break;
+    runningTokens += cost;
+    kept.push(result);
+  }
+  return kept;
+}
+
 export async function recall(
   query: string,
   repoRoot: string,
@@ -23,81 +107,30 @@ export async function recall(
   explain: boolean = false,
   withCode: boolean | 'auto' = 'auto'
 ): Promise<{ results: RecallResult[]; markdown: string; symbolResults?: SymbolResult[] }> {
-  const autoCode: boolean =
-    withCode === 'auto'
-      ? (() => {
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const { CodeIndex } = require('../engines/code-index') as {
-              CodeIndex: typeof CodeIndexType;
-            };
-            return fs.existsSync(CodeIndex.getDbPath(repoRoot));
-          } catch {
-            return false;
-          }
-        })()
-      : withCode;
+  const autoCode = resolveAutoCode(withCode, repoRoot);
   const globalDir = getGlobalDir(config.project.name);
   const workspaceDir = config.workspace ? resolveWorkspaceDir(config.workspace) : undefined;
   const memories = loadAll(repoRoot, scope, globalDir, workspaceDir);
   const searchEngine = engine || new TextEngine();
   const accessLogs = loadAccessLogs(repoRoot);
-  let symbolResults: SymbolResult[] | undefined;
 
-  let linkedMemories: { memoryPath: string; minDepth: number }[] = [];
-  if (autoCode) {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { CodeIndex } = require('../engines/code-index') as { CodeIndex: typeof CodeIndexType };
-      const dbPath = CodeIndex.getDbPath(repoRoot);
-      if (fs.existsSync(dbPath)) {
-        const idx = new CodeIndex(dbPath);
-        try {
-          symbolResults = idx.search(query, config.memory.top_k ?? 10);
-          linkedMemories = idx.getLinkedMemories(query);
-        } finally {
-          idx.close();
-        }
-      }
-    } catch {
-      // better-sqlite3 not installed — silently skip
-    }
-  }
+  const codeResult = await loadCodeIndex(repoRoot, autoCode, query, config.memory.top_k);
+  const graphScores = codeResult
+    ? new Map(codeResult.linkedMemories.map((l) => [l.memoryPath, l.minDepth]))
+    : undefined;
 
   const rawResults = await searchEngine.search(query, memories, config.memory.top_k);
-
-  const graphScores =
-    linkedMemories.length > 0
-      ? new Map(linkedMemories.map((l) => [l.memoryPath, l.minDepth]))
-      : undefined;
-
   let results = rank(rawResults, { graphScores, accessLogs });
 
-  for (const result of results) {
-    recordAccess(repoRoot, result.memory.path, query);
-  }
-  for (const result of results) {
-    updateStatusOnRecall(repoRoot, result.memory.path);
-  }
-
-  if (config.reranker?.enabled && results.length > 1) {
-    try {
-      results = await rerank(query, results, {
-        provider: config.reranker.provider,
-        model: config.reranker.model,
-        top_n: config.reranker.top_n ?? config.memory.top_k,
-        baseUrl: config.reranker.base_url,
-      });
-    } catch (e) {
-      console.warn(`Reranker skipped: ${(e as Error).message}`);
-    }
-  }
+  recordAccessBatch(repoRoot, results, query);
+  results = await applyReranker(query, results, config);
 
   if (explain && results.length > 0 && results.every((r) => !r.scoreBreakdown)) {
     console.warn('--explain: score breakdown not available for the current engine.');
   }
 
-  let markdown = formatResultsAsMarkdown(
+  results = budgetResults(results, config.memory.token_budget);
+  const markdown = formatResultsAsMarkdown(
     results,
     query,
     config.embedding.engine,
@@ -105,31 +138,17 @@ export async function recall(
     scope,
     explain
   );
-  let tokenCount = estimateTokenCount(markdown);
 
-  if (tokenCount > config.memory.token_budget) {
-    while (results.length > 0 && tokenCount > config.memory.token_budget) {
-      results.pop();
-      markdown = formatResultsAsMarkdown(
-        results,
-        query,
-        config.embedding.engine,
-        memories.length,
-        scope,
-        explain
-      );
-      tokenCount = estimateTokenCount(markdown);
-    }
+  if (codeResult?.symbolResults && codeResult.symbolResults.length > 0) {
+    const symbolMd = codeResult.symbolResults.map(formatSymbolResult).join('');
+    return {
+      results,
+      markdown: markdown + '\n\n## Code Symbols\n\n' + symbolMd,
+      symbolResults: codeResult.symbolResults,
+    };
   }
 
-  if (symbolResults && symbolResults.length > 0) {
-    markdown += '\n\n## Code Symbols\n\n';
-    for (const sr of symbolResults) {
-      markdown += formatSymbolResult(sr);
-    }
-  }
-
-  return { results, markdown, symbolResults };
+  return { results, markdown, symbolResults: codeResult?.symbolResults };
 }
 
 function scopeLabel(scope?: MemoryScope): string {

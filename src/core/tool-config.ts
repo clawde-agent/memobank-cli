@@ -6,6 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { readJsonFile, ensureDir } from './fs-utils';
 
 export interface ToolConfig {
   name: string;
@@ -31,16 +32,10 @@ export function configureClaudeCode(config: ToolConfig): void {
   const settingsPath = getClaudeSettingsPath(config.scope, config.projectPath);
   const settingsDir = path.dirname(settingsPath);
 
-  // Ensure directory exists
-  if (!fs.existsSync(settingsDir)) {
-    fs.mkdirSync(settingsDir, { recursive: true });
-  }
+  ensureDir(settingsDir);
 
   // Load existing settings or create new
-  let settings: Record<string, unknown> = {};
-  if (fs.existsSync(settingsPath)) {
-    settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-  }
+  const settings = readJsonFile<Record<string, unknown>>(settingsPath, {});
 
   // Get memobank path
   const projectName = config.projectPath ? path.basename(config.projectPath) : 'default';
@@ -75,16 +70,10 @@ export function configureGeminiCli(config: ToolConfig): void {
   const configPath = getGeminiConfigPath(config.scope, config.projectPath);
   const configDir = path.dirname(configPath);
 
-  // Ensure directory exists
-  if (!fs.existsSync(configDir)) {
-    fs.mkdirSync(configDir, { recursive: true });
-  }
+  ensureDir(configDir);
 
   // Load existing config or create new
-  let geminiConfig: Record<string, unknown> = {};
-  if (fs.existsSync(configPath)) {
-    geminiConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-  }
+  const geminiConfig = readJsonFile<Record<string, unknown>>(configPath, {});
 
   // Get memobank path
   const projectName = config.projectPath ? path.basename(config.projectPath) : 'default';
@@ -150,16 +139,10 @@ export function configureQwenCode(config: ToolConfig): void {
   const configPath = getQwenConfigPath(config.scope, config.projectPath);
   const configDir = path.dirname(configPath);
 
-  // Ensure directory exists
-  if (!fs.existsSync(configDir)) {
-    fs.mkdirSync(configDir, { recursive: true });
-  }
+  ensureDir(configDir);
 
   // Load existing config or create new
-  let qwenConfig: Record<string, unknown> = {};
-  if (fs.existsSync(configPath)) {
-    qwenConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-  }
+  const qwenConfig = readJsonFile<Record<string, unknown>>(configPath, {});
 
   // Get memobank path
   const projectName = config.projectPath ? path.basename(config.projectPath) : 'default';
