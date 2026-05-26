@@ -240,9 +240,7 @@ export async function capture(options: CaptureOptions = {}): Promise<void> {
   });
 
   // Filter out low-value memories
-  const highValueMemories = memoriesWithValue.filter(
-    (item) => item.valueScore >= 0.5 || item.recommendation.shouldCapture
-  );
+  const highValueMemories = memoriesWithValue.filter((item) => item.valueScore >= 0.7);
 
   if (highValueMemories.length === 0) {
     console.log('⊘ All memories filtered out due to low value.');
