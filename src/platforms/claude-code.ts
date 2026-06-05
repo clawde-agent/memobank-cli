@@ -8,6 +8,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { findGitRoot } from '../core/dir-resolver';
+import { readJsonFile, ensureDir } from '../core/fs-utils';
 
 /**
  * Hook command types per Claude Code schema
@@ -143,8 +144,7 @@ export function installClaudeCode(
 
   // UserPromptSubmit hook: auto-recall on every user message.
   // Remove existing memobank UserPromptSubmit hooks before re-adding (idempotent).
-  const isWindowsUp = os.platform() === 'win32';
-  const UP_HOOK_CMD = isWindowsUp
+  const UP_HOOK_CMD = isWindows
     ? 'powershell -c "memo recall --hook-input --silent --top 3"'
     : 'memo recall --hook-input --silent --top 3';
 
@@ -185,27 +185,17 @@ export function installClaudeCode(
   // Write autoMemoryDirectory to project-level settings so each project keeps its own
   // isolated memory path. Only do this when repoRoot lives inside a git repo — personal
   // tier directories (~/.memobank/<project>/) have no git root and need no override.
-  const parentDir = path.dirname(repoRoot);
-  const gitRoot = findGitRoot(parentDir);
-  if (fs.existsSync(path.join(gitRoot, '.git'))) {
+  // Search from repoRoot itself (not its parent) so onboarding with projectDir='.'
+  // (repoRoot === gitRoot) resolves correctly instead of silently skipping.
+  // Guard against dotfiles repos at ~ that would pollute global project settings.
+  const gitRoot = findGitRoot(repoRoot);
+  if (gitRoot !== os.homedir() && fs.existsSync(path.join(gitRoot, '.git'))) {
     const projectSettingsDir = path.join(gitRoot, '.claude');
     const projectSettingsPath = path.join(projectSettingsDir, 'settings.local.json');
-    if (!fs.existsSync(projectSettingsDir)) {
-      fs.mkdirSync(projectSettingsDir, { recursive: true });
-    }
-    let projectSettings: Record<string, unknown> = {};
-    if (fs.existsSync(projectSettingsPath)) {
-      try {
-        projectSettings = JSON.parse(fs.readFileSync(projectSettingsPath, 'utf-8')) as Record<
-          string,
-          unknown
-        >;
-      } catch {
-        /* start fresh if file is corrupt */
-      }
-    }
-    projectSettings.autoMemoryDirectory = repoRoot;
     try {
+      ensureDir(projectSettingsDir);
+      const projectSettings = readJsonFile<Record<string, unknown>>(projectSettingsPath, {});
+      projectSettings.autoMemoryDirectory = repoRoot;
       fs.writeFileSync(projectSettingsPath, JSON.stringify(projectSettings, null, 2), 'utf-8');
     } catch (error) {
       console.warn(`Could not write project Claude settings: ${(error as Error).message}`);
