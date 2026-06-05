@@ -7,6 +7,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { findGitRoot } from '../core/dir-resolver';
 
 /**
  * Hook command types per Claude Code schema
@@ -88,6 +89,11 @@ export function installClaudeCode(
     }
   }
 
+  // autoMemoryDirectory must never live in the global settings — it is project-specific.
+  // A stale global value (written by older memobank versions or by tool-config.ts) would
+  // redirect ALL projects to the same directory, breaking per-project isolation.
+  delete settings.autoMemoryDirectory;
+
   // Only set autoMemoryEnabled when the user explicitly agreed during setup.
   // If they chose to keep it off, leave the setting untouched.
   if (enableAutoMemory) {
@@ -167,13 +173,44 @@ export function installClaudeCode(
     },
   ];
 
-  // Write settings
+  // Write global settings
   try {
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
     console.log(`✓ Claude Code: memobank hooks installed`);
-    return Promise.resolve(true);
   } catch (error) {
     console.error(`Could not write Claude settings: ${(error as Error).message}`);
     return Promise.resolve(false);
   }
+
+  // Write autoMemoryDirectory to project-level settings so each project keeps its own
+  // isolated memory path. Only do this when repoRoot lives inside a git repo — personal
+  // tier directories (~/.memobank/<project>/) have no git root and need no override.
+  const parentDir = path.dirname(repoRoot);
+  const gitRoot = findGitRoot(parentDir);
+  if (fs.existsSync(path.join(gitRoot, '.git'))) {
+    const projectSettingsDir = path.join(gitRoot, '.claude');
+    const projectSettingsPath = path.join(projectSettingsDir, 'settings.local.json');
+    if (!fs.existsSync(projectSettingsDir)) {
+      fs.mkdirSync(projectSettingsDir, { recursive: true });
+    }
+    let projectSettings: Record<string, unknown> = {};
+    if (fs.existsSync(projectSettingsPath)) {
+      try {
+        projectSettings = JSON.parse(fs.readFileSync(projectSettingsPath, 'utf-8')) as Record<
+          string,
+          unknown
+        >;
+      } catch {
+        /* start fresh if file is corrupt */
+      }
+    }
+    projectSettings.autoMemoryDirectory = repoRoot;
+    try {
+      fs.writeFileSync(projectSettingsPath, JSON.stringify(projectSettings, null, 2), 'utf-8');
+    } catch (error) {
+      console.warn(`Could not write project Claude settings: ${(error as Error).message}`);
+    }
+  }
+
+  return Promise.resolve(true);
 }
