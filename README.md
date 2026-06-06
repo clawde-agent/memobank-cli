@@ -414,7 +414,7 @@ After running `memo install --all`:
 
 ### Claude Code
 
-Sets `autoMemoryDirectory` in `~/.claude/settings.json` and installs a `Stop` hook that runs `memo process-queue --background` at the end of every session
+Sets `autoMemoryEnabled: true` in `~/.claude/settings.json`, installs Stop and UserPromptSubmit hooks, and writes `autoMemoryDirectory` to `<git-root>/.claude/settings.local.json` (per-project, not global) so each project points to its own `.memobank/` directory.
 
 ### Codex
 
