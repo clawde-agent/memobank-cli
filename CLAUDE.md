@@ -102,6 +102,7 @@ docs/                 # Extended guides (lifecycle, onboarding, memory value)
 - **React/Ink** powers interactive prompts (onboarding wizard, selection menus).
 - **ESLint enforces**: no `any`, explicit return types, `import type` for type-only imports.
 - The `workspace` tier uses a separate Git remote; `memo workspace sync` pulls/pushes it. Secret scan (`memo scan`) must pass before `memo workspace publish`.
+- **`autoMemoryDirectory` must never appear in the global `~/.claude/settings.json`** — it is written exclusively to `<git-root>/.claude/settings.local.json` by `installClaudeCode`. The global setting is always deleted on install. Personal-tier paths (`~/.memobank/`) and dotfiles repos at `~` are guarded and skip the per-project write.
 
 ---
 
