@@ -12,9 +12,10 @@
    deduplicates and writes them to memory files.
 
 3. **Auto-memory integration**: `memo init` (or `memo onboarding`) sets
-   `autoMemoryEnabled: true` in `~/.claude/settings.json`. Claude's native
-   auto-memory writes land in the project's `.memobank/` directory, and
-   `memo capture` picks them up on the next Stop hook fire.
+   `autoMemoryEnabled: true` in `~/.claude/settings.json` and writes
+   `autoMemoryDirectory` to `<git-root>/.claude/settings.local.json` (per-project,
+   not global). Claude's native auto-memory writes land in the project's `.memobank/`
+   directory, and `memo capture` picks them up on the next Stop hook fire.
 
 ---
 
@@ -48,7 +49,9 @@ bash skills/memobank/install.sh
 
 ## Stop hook format (schema-compliant)
 
-After running `memo init --platform claude-code`, your `~/.claude/settings.json` will contain:
+After running `memo init --platform claude-code`, two files are written:
+
+**`~/.claude/settings.json`** (global — hooks + feature flags, no memory path):
 
 ```json
 {
@@ -72,6 +75,16 @@ After running `memo init --platform claude-code`, your `~/.claude/settings.json`
 }
 ```
 
+**`<git-root>/.claude/settings.local.json`** (per-project — memory path only):
+
+```json
+{
+  "autoMemoryDirectory": "/absolute/path/to/your-project/.memobank"
+}
+```
+
+This separation is intentional: the global file is never modified with a memory path, preventing all projects from accidentally sharing one directory.
+
 **Windows note**: `memo init` writes a PowerShell-aware variant automatically:
 
 ```
@@ -80,16 +93,20 @@ powershell -c "memo capture --auto --silent; memo process-queue --background"
 
 ---
 
-## Configure autoMemoryDirectory (optional override)
+## autoMemoryDirectory placement
 
-To point Claude's native auto-memory at a custom directory:
+`memo init` automatically writes `autoMemoryDirectory` to
+`<git-root>/.claude/settings.local.json` (per-project). You don't need to set
+it manually. To override the default path for a project, edit that file:
 
 ```json
 {
-  "autoMemoryEnabled": true,
   "autoMemoryDirectory": "/absolute/path/to/your-project/.memobank"
 }
 ```
+
+**Do not** set `autoMemoryDirectory` in the global `~/.claude/settings.json` —
+it would redirect all projects to the same directory.
 
 ---
 
