@@ -1,0 +1,30 @@
+name: Approve PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to approve'
+        required: true
+        type: number
+
+permissions:
+  pull-requests: write
+
+jobs:
+  approve:
+    name: Approve pull request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Approve PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: ${{ inputs.pr_number }},
+              event: 'APPROVE',
+              body: 'Auto-approved via approve-pr workflow (github-actions bot).'
+            });
+            core.info(`Approved PR #${{ inputs.pr_number }}`);
