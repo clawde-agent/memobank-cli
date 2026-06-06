@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.3] - 2026-06-06
+
+### Fixed
+
+- **`installClaudeCode` no longer overrides global `autoMemoryDirectory`** — stale global values written by older memobank versions would redirect all projects to the same memory directory, breaking per-project isolation. The global setting is now always deleted. Per-project `autoMemoryDirectory` is written to `<git-root>/.claude/settings.local.json` instead (`findGitRoot(repoRoot)`, guarded against dotfiles repos at `~`).
+
+### Changed
+
+- Removed unused `src/core/tool-config.ts` (`configureClaudeCode`, `configureTools`, `detectInstalledTools`) — never imported, replaced by the correct implementation in `src/platforms/claude-code.ts`.
+
+### Dependencies
+
+- `commander` 14.0.3 → 15.0.0
+- `lint-staged` 16.4.0 → 17.0.7
+- `apache-arrow` 18.1.0 → 21.1.0
+- Production deps group (5 updates): `chalk`, `gray-matter`, `ink`, `ink-select-input`, `ink-text-input`
+- Dev deps group (5 updates): `@types/jest`, `@types/node`, `@types/react`, `eslint`, `typescript`
+
 ## [0.19.0] - 2026-05-27
 
 ### Added
