@@ -145,3 +145,4 @@ skills/memobank/evals/output.json
 .memobank/meta/recall-misses.json
 .memobank/meta/corrections.json
 .memobank/workflow/sessions.md
+.harness/phases/*/.continue-here.json

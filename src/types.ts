@@ -7,7 +7,8 @@ export type LlmProvider =
   | 'gemini'
   | 'openrouter'
   | 'llamacpp'
-  | 'omlx';
+  | 'omlx'
+  | 'nvidia';
 export type EmbeddingProvider =
   | 'openai'
   | 'azure'
@@ -15,7 +16,8 @@ export type EmbeddingProvider =
   | 'llamacpp'
   | 'jina'
   | 'custom'
-  | 'omlx';
+  | 'omlx'
+  | 'nvidia';
 export type RerankerProvider = 'jina' | 'cohere' | 'omlx';
 export type CaptureProviderName =
   | 'anthropic'
@@ -25,7 +27,8 @@ export type CaptureProviderName =
   | 'ollama'
   | 'llamacpp'
   | 'omlx'
-  | 'local';
+  | 'local'
+  | 'nvidia';
 
 export interface CaptureConfig {
   provider: CaptureProviderName;

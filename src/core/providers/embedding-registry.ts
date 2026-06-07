@@ -13,8 +13,8 @@ export interface EmbeddingProviderDescriptor {
   readonly defaultDimensions: number;
   /** Return null on success or an error message string on failure */
   testConnection?(baseUrl: string, model: string): Promise<string | null>;
-  /** Return list of available model names from the running local service */
-  fetchModels?(baseUrl: string): Promise<string[]>;
+  /** Return list of available model names from the provider */
+  fetchModels?(baseUrl: string, apiKey?: string): Promise<string[]>;
 }
 
 export const EMBEDDING_REGISTRY = new Map<EmbeddingProvider, EmbeddingProviderDescriptor>();
@@ -33,6 +33,9 @@ const KNOWN_DIMENSIONS: Record<string, number> = {
   'jina-embeddings-v3': 1024,
   'jina-embeddings-v2-base-en': 768,
   'jina-embeddings-v2-small-en': 512,
+  'nvidia/nv-embed-v2': 4096,
+  'nvidia/llama-3.2-nv-embedqa-1b-v2': 2048,
+  'baai/bge-m3': 1024,
 };
 
 export function lookupDimensions(model: string): number {
@@ -55,6 +58,21 @@ EMBEDDING_REGISTRY.set('openai', {
   defaultModel: 'text-embedding-3-small',
   defaultBaseUrl: 'https://api.openai.com/v1',
   defaultDimensions: 1536,
+  async fetchModels(_baseUrl, apiKey) {
+    try {
+      const res = await fetch('https://api.openai.com/v1/models', {
+        headers: { Authorization: `Bearer ${apiKey ?? ''}` },
+      });
+      if (!res.ok) return [];
+      const data = (await res.json()) as { data?: { id: string }[] };
+      return (data.data ?? [])
+        .map((m) => m.id)
+        .filter((id) => id.includes('embedding') || id.includes('embed'))
+        .sort();
+    } catch {
+      return [];
+    }
+  },
 });
 
 // ---------------------------------------------------------------------------
@@ -153,6 +171,14 @@ EMBEDDING_REGISTRY.set('jina', {
   defaultModel: 'jina-embeddings-v3',
   defaultBaseUrl: 'https://api.jina.ai/v1',
   defaultDimensions: 1024,
+  async fetchModels(_baseUrl, _apiKey) {
+    return [
+      'jina-embeddings-v3',
+      'jina-embeddings-v2-base-en',
+      'jina-embeddings-v2-small-en',
+      'jina-colbert-v2',
+    ];
+  },
 });
 
 // ---------------------------------------------------------------------------
@@ -196,6 +222,37 @@ EMBEDDING_REGISTRY.set('omlx', {
       return (data.data ?? []).map((m) => m.id);
     } catch {
       return [];
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// nvidia
+// ---------------------------------------------------------------------------
+EMBEDDING_REGISTRY.set('nvidia', {
+  name: 'nvidia',
+  label: 'NVIDIA NIM',
+  requiresApiKey: true,
+  apiKeyEnv: 'NVIDIA_API_KEY',
+  showInWizard: true,
+  defaultModel: 'nvidia/nv-embed-v2',
+  defaultBaseUrl: 'https://integrate.api.nvidia.com/v1',
+  defaultDimensions: 4096,
+  async fetchModels(_baseUrl, apiKey) {
+    try {
+      const res = await fetch('https://integrate.api.nvidia.com/v1/models', {
+        headers: { Authorization: `Bearer ${apiKey ?? ''}` },
+      });
+      if (!res.ok) return [];
+      const data = (await res.json()) as { data?: { id: string }[] };
+      const embedding = (data.data ?? [])
+        .map((m) => m.id)
+        .filter((id) => id.includes('embed') || id.includes('embedqa') || id.includes('bge'));
+      return embedding.length > 0
+        ? embedding.sort()
+        : ['nvidia/nv-embed-v2', 'nvidia/llama-3.2-nv-embedqa-1b-v2', 'baai/bge-m3'];
+    } catch {
+      return ['nvidia/nv-embed-v2', 'nvidia/llama-3.2-nv-embedqa-1b-v2', 'baai/bge-m3'];
     }
   },
 });

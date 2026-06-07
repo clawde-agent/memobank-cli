@@ -278,3 +278,35 @@ CAPTURE_REGISTRY.set('local', {
     return lazyOpenAICompatFactory()(config.apiKey ?? '', config.model, config.baseUrl);
   },
 });
+
+// ---------------------------------------------------------------------------
+// nvidia
+// ---------------------------------------------------------------------------
+CAPTURE_REGISTRY.set('nvidia', {
+  name: 'nvidia',
+  label: 'NVIDIA NIM',
+  requiresApiKey: true,
+  requiresBaseUrlStep: false,
+  apiKeyEnv: 'NVIDIA_API_KEY',
+  defaultBaseUrl: 'https://integrate.api.nvidia.com/v1',
+  defaultModel: 'meta/llama-3.1-8b-instruct',
+  fallbackModels: [
+    'meta/llama-3.1-8b-instruct',
+    'meta/llama-3.3-70b-instruct',
+    'nvidia/llama-3.1-nemotron-70b-instruct',
+    'mistralai/mistral-large-2407',
+  ],
+  async fetchModels(apiKey, baseUrl) {
+    const base = baseUrl ?? 'https://integrate.api.nvidia.com/v1';
+    const models = await fetchOpenAICompatModels(
+      apiKey,
+      base,
+      (id) => !id.includes('embed') && !id.includes('rerank'),
+    );
+    return models.length > 0 ? models.sort() : this.fallbackModels;
+  },
+  create(config) {
+    const base = config.baseUrl ?? 'https://integrate.api.nvidia.com/v1';
+    return lazyOpenAICompatFactory()(config.apiKey ?? '', config.model, base);
+  },
+});

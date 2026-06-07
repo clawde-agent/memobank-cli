@@ -684,7 +684,9 @@ export async function onboardingCommand(): Promise<void> {
             const defaultBase = (embDesc?.defaultBaseUrl ?? '').replace(/\/v1\/?$/, '');
             const resolvedUrl = value.trim() || defaultBase;
             if (embDesc?.fetchModels) {
-              const fetched = await embDesc.fetchModels(resolvedUrl + '/v1');
+              const envKey = embDesc?.apiKeyEnv;
+              const apiKey = envKey ? state.collectedKeys[envKey] : undefined;
+              const fetched = await embDesc.fetchModels(resolvedUrl + '/v1', apiKey);
               setEmbeddingModelItems(fetched.map((m) => ({ label: m, value: m })));
             }
             setState(s => ({ ...s, step: 'ollama-model', embeddingUrl: resolvedUrl }));
@@ -726,13 +728,19 @@ export async function onboardingCommand(): Promise<void> {
         React.createElement(TextInput, {
           value: embeddingKeyInput,
           onChange: setEmbeddingKeyInput,
-          onSubmit: (value: string) => {
+          onSubmit: async (value: string) => {
             const key = value.trim();
-            const envKey = EMBEDDING_REGISTRY.get(state.embeddingProvider as EmbeddingProvider)?.apiKeyEnv ?? '';
+            const embDesc = EMBEDDING_REGISTRY.get(state.embeddingProvider as EmbeddingProvider);
+            const envKey = embDesc?.apiKeyEnv ?? '';
+            const updatedKeys = key && envKey ? { ...state.collectedKeys, [envKey]: key } : state.collectedKeys;
+            if (embDesc?.fetchModels) {
+              const fetched = await embDesc.fetchModels(embDesc.defaultBaseUrl, key || undefined);
+              setEmbeddingModelItems(fetched.map((m) => ({ label: m, value: m })));
+            }
             setState(s => ({
               ...s,
-              step: 'reranker',
-              collectedKeys: key && envKey ? { ...s.collectedKeys, [envKey]: key } : s.collectedKeys,
+              step: 'ollama-model',
+              collectedKeys: updatedKeys,
             }));
           },
         }),
