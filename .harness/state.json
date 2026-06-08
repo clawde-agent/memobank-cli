@@ -1,0 +1,14 @@
+{
+  "version": "1.0",
+  "session": {
+    "status": "idle",
+    "started_at": null,
+    "last_session": "2026-06-08T00:00:00.000Z"
+  },
+  "position": {
+    "phase": "03-execute",
+    "active_task": "NVIDIA NIM provider + onboarding model selection",
+    "resume_file": ".harness/phases/03-execute/.continue-here.json",
+    "stopped_at": "Committed feat: add NVIDIA NIM provider (8300c80) to main"
+  }
+}
