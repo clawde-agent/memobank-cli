@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-06-08
+
+### Added
+
+- **NVIDIA NIM provider** for LLM capture and embeddings — registered in both the capture and embedding registries (OpenAI-compatible; default embedding model `nvidia/nv-embed-v2` at 4096 dims, live model listing filters out embed/rerank entries for capture).
+- **`fetchModels` for OpenAI and Jina embedding descriptors** — live model listing now works consistently across API-key embedding providers.
+
+### Changed
+
+- **Onboarding TUI migrated from React/Ink to `@clack/prompts`** — replaced the ~892-line React/Ink state machine with a ~300-line sequential async/await flow. All prompt steps (text, password, select, multiselect, confirm, spinner) map directly to `@clack/prompts` primitives. Model selection now runs for all providers — API-key providers fetch live model lists with a spinner before presenting the select; local providers fetch after URL confirmation. Removes the `ink`, `ink-select-input`, `ink-text-input`, `react`, and `@types/react` dependencies.
+
 ## [0.19.3] - 2026-06-06
 
 ### Fixed
