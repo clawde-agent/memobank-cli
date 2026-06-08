@@ -301,7 +301,7 @@ CAPTURE_REGISTRY.set('nvidia', {
     const models = await fetchOpenAICompatModels(
       apiKey,
       base,
-      (id) => !id.includes('embed') && !id.includes('rerank'),
+      (id) => !id.includes('embed') && !id.includes('rerank')
     );
     return models.length > 0 ? models.sort() : this.fallbackModels;
   },
