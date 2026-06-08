@@ -47,15 +47,12 @@
   },
   "homepage": "https://github.com/clawde-agent/memobank-cli#readme",
   "dependencies": {
+    "@clack/prompts": "^1.5.1",
     "chalk": "^5.3.0",
     "commander": "^15.0.0",
     "glob": "^13.0.6",
     "gray-matter": "^4.0.3",
-    "ink": "^7.0.4",
-    "ink-select-input": "^6.2.0",
-    "ink-text-input": "^6.0.0",
-    "js-yaml": "^4.1.0",
-    "react": "^19.2.4"
+    "js-yaml": "^4.1.0"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.0.1",
@@ -65,7 +62,6 @@
     "@types/jest": "^30.0.0",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.5.0",
-    "@types/react": "^19.2.14",
     "@typescript-eslint/eslint-plugin": "^8.57.2",
     "@typescript-eslint/parser": "^8.57.2",
     "ajv": "^8.18.0",
@@ -83,7 +79,7 @@
   "optionalDependencies": {
     "@lancedb/core": "^0.15.0",
     "@lancedb/lancedb": "^0.30.0",
-    "apache-arrow": "21.1.0",
+    "apache-arrow": "18.1.0",
     "better-sqlite3": "^12.10.0",
     "openai": "^6.33.0",
     "tree-sitter": "^0.25.0",
@@ -96,6 +92,7 @@
     "tree-sitter-yaml": "^0.5.0"
   },
   "overrides": {
+    "apache-arrow": "18.1.0",
     "tree-sitter-rust": {
       "tree-sitter": "$tree-sitter"
     },
