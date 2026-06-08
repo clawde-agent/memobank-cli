@@ -1,0 +1,25 @@
+{
+  "harness": {
+    "issue_tracker": "github",
+    "repo": "clawde-agent/memobank-cli",
+    "github_project": {
+      "url": "https://github.com/users/ClydeShen/projects/3",
+      "number": 3,
+      "owner": "ClydeShen"
+    },
+    "labels": {
+      "triage": "status:needs-triage",
+      "needs_info": "status:needs-info",
+      "ready_for_agent": "status:ready-for-agent",
+      "ready_for_human": "status:ready-for-human",
+      "wontfix": "status:wontfix",
+      "needs_prd": "status:needs-prd",
+      "needs_review": "status:needs-review",
+      "in_progress": "status:in-progress",
+      "done": "status:done"
+    },
+    "domain_docs": "single-context",
+    "context_file": "CONTEXT.md",
+    "adr_dir": "docs/adr"
+  }
+}
