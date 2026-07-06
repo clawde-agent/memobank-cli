@@ -57,7 +57,7 @@
   "devDependencies": {
     "@commitlint/cli": "^21.0.1",
     "@commitlint/config-conventional": "^21.0.1",
-    "@lancedb/lancedb": "^0.30.0",
+    "@lancedb/lancedb": "^0.31.0",
     "@types/better-sqlite3": "^7.6.0",
     "@types/jest": "^30.0.0",
     "@types/js-yaml": "^4.0.9",
@@ -78,7 +78,7 @@
   },
   "optionalDependencies": {
     "@lancedb/core": "^0.15.0",
-    "@lancedb/lancedb": "^0.30.0",
+    "@lancedb/lancedb": "^0.31.0",
     "apache-arrow": "18.1.0",
     "better-sqlite3": "^12.10.0",
     "openai": "^6.33.0",
